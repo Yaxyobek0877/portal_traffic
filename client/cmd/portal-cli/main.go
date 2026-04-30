@@ -6,14 +6,14 @@
 //
 // Usage:
 //
-//	# Terminal 1 — host
-//	go run ./cmd/portal-cli \
-//	    -url ws://localhost:18080/ws -mode create -nick alice
+//	# Lokal dev (lokal signal serverga)
+//	go run ./cmd/portal-cli -url ws://localhost:18080/ws -mode create -nick alice
+//	go run ./cmd/portal-cli -url ws://localhost:18080/ws -mode join \
+//	    -nick bob -portal 123456 -code 654321
 //
-//	# Terminal 2 — joiner (using printed ID + code)
-//	go run ./cmd/portal-cli \
-//	    -url ws://localhost:18080/ws -mode join -nick bob \
-//	    -portal 123456 -code 654321
+//	# Produksiya (signaling.1pro.uz orqali)
+//	go run ./cmd/portal-cli -mode create -nick alice
+//	go run ./cmd/portal-cli -mode join -nick bob -portal 123456 -code 654321
 //
 // You should see a "PEER READY" line for each side when the WebRTC
 // connection is fully up, followed by periodic RTT updates.
@@ -31,11 +31,16 @@ import (
 	"time"
 
 	"portal_traffic_client/mesh"
+	"portal_traffic_client/signaling"
 )
 
 func main() {
+	defaultURL := signaling.DefaultURL
+	if v := os.Getenv("PORTAL_SIGNALING_URL"); v != "" {
+		defaultURL = v
+	}
 	var (
-		url    = flag.String("url", "ws://localhost:18080/ws", "signaling WS URL")
+		url    = flag.String("url", defaultURL, "signaling WS URL (env PORTAL_SIGNALING_URL)")
 		mode   = flag.String("mode", "create", "create | join")
 		nick   = flag.String("nick", "tester", "nickname")
 		portal = flag.String("portal", "", "portal ID (for join)")

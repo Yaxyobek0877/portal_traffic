@@ -99,9 +99,9 @@ portal_traffic/
 
 Signal serveri kodi ataylab ushbu repoga kiritilmagan. Portal client
 o'zi sozlangan istalgan signal URL ga ulanadi, shuning uchun server
-deyarli almashtirib qo'yiladigan komponent. Agar siz o'zingizniki ishga
-tushirmoqchi bo'lsangiz, simli protokol to'liq
-[PROTOCOL.md](PROTOCOL.md) va
+deyarli almashtirib qo'yiladigan komponent. Loyiha standart endpointi:
+**`wss://signaling.1pro.uz/ws`**. Agar siz o'zingizniki ishga tushirmoqchi
+bo'lsangiz, simli protokol to'liq [PROTOCOL.md](PROTOCOL.md) va
 [`shared/protocol/messages.go`](shared/protocol/messages.go) da
 hujjatlashtirilgan — mos signal server bir necha yuz qator Go kodi.
 

@@ -117,6 +117,10 @@ Portal client lar siz sozlagan signal serveriga ulanadi. Variantlar:
    export PORTAL_SIGNALING_URL=wss://sizning-host/ws
    ```
 
+Loyiha standart endpointi: `wss://signaling.1pro.uz/ws`. Lokal test
+uchun signal serverini `--http=:18080` bilan ishga tushirib, client ga
+`-url ws://localhost:18080/ws` bering.
+
 ---
 
 ## 5. Build ni tekshirish
