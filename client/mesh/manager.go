@@ -162,6 +162,15 @@ type Manager struct {
 	joinedCode  string // empty when wasOwner
 	wantPortal  bool   // true once we've successfully entered a portal
 
+	// initialErr is fed when the server responds with an error to our
+	// initial portal.create / portal.join, before m.portal is set.
+	// CreatePortal / JoinPortal pick this up so the calling
+	// frontend method returns a clean error rather than relying on
+	// timeout. Buffered so handleSignalingEvent never blocks; once
+	// portal is established we stop pushing here and surface errors
+	// as EventError instead.
+	initialErr chan error
+
 	// proxyHandler is set by the proxy.Forwarder when the user wires
 	// it in. nil means proxy frames are dropped on the floor.
 	proxyHandler ProxyHandler
@@ -194,12 +203,18 @@ func New(cfg Config) *Manager {
 		localServices: make(map[int]ServiceAnnounce),
 		events:        make(chan MeshEvent, 64),
 		closed:        make(chan struct{}),
+		initialErr:    make(chan error, 1),
 	}
 }
 
 // Events returns the consumer-facing event stream. Closes when the
 // manager shuts down.
 func (m *Manager) Events() <-chan MeshEvent { return m.events }
+
+// InitialError returns a channel that receives at most one error if
+// the server rejects our initial portal.create / portal.join. Once
+// the portal is established, errors flow as EventError instead.
+func (m *Manager) InitialError() <-chan error { return m.initialErr }
 
 // Done closes when the manager has fully shut down.
 func (m *Manager) Done() <-chan struct{} { return m.closed }
@@ -493,7 +508,22 @@ func (m *Manager) handleSignalingEvent(ev signaling.Event) {
 
 	case ev.Error != nil:
 		m.logger.Warn("signaling error", "code", ev.Error.Code, "msg", ev.Error.Message)
-		m.emit(MeshEvent{Type: EventError, Err: fmt.Errorf("%s: %s", ev.Error.Code, ev.Error.Message)})
+		err := fmt.Errorf("%s", ev.Error.Message)
+		// If we don't have a portal yet, this is a response to the
+		// initial create/join — route it to whoever is waiting on
+		// initialErr instead of dumping a banner. Once we have a
+		// portal, errors are runtime concerns and become banners.
+		m.mu.RLock()
+		hasPortal := m.portal != nil
+		m.mu.RUnlock()
+		if !hasPortal {
+			select {
+			case m.initialErr <- err:
+			default:
+			}
+			return
+		}
+		m.emit(MeshEvent{Type: EventError, Err: err})
 	}
 }
 

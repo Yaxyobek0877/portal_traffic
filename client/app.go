@@ -576,23 +576,36 @@ func (a *App) nickname() string {
 	return a.nick
 }
 
-// waitPortalReady blocks until the mesh emits PortalReady, then
-// returns the projection.
+// waitPortalReady blocks until the mesh emits PortalReady, the
+// signaling server responds with an error, the deadline expires,
+// or we get torn down. Errors come back fast (the server typically
+// rejects bad portal IDs in ~50ms) so the user isn't left staring
+// at a "Ulanmoqda..." spinner for the full timeout window.
 func (a *App) waitPortalReady(timeout time.Duration) (PortalView, error) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		a.mu.RLock()
-		m := a.mesh
-		a.mu.RUnlock()
-		if m == nil {
-			return PortalView{}, errors.New("mesh tear down")
-		}
+	a.mu.RLock()
+	m := a.mesh
+	a.mu.RUnlock()
+	if m == nil {
+		return PortalView{}, errors.New("mesh tear down")
+	}
+
+	deadline := time.After(timeout)
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	for {
 		if pi := m.Portal(); pi != nil {
 			return portalToView(pi), nil
 		}
-		time.Sleep(50 * time.Millisecond)
+		select {
+		case err := <-m.InitialError():
+			a.tearDown()
+			return PortalView{}, err
+		case <-deadline:
+			a.tearDown()
+			return PortalView{}, errors.New("portal javobi kelmadi (timeout)")
+		case <-tick.C:
+		}
 	}
-	return PortalView{}, errors.New("portal javobi kelmadi (timeout)")
 }
 
 // pumpEvents fans mesh events out to the frontend via Wails event bus.

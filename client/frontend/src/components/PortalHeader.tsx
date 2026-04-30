@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { Copy, QrCode, LogOut, Check, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
@@ -84,61 +85,66 @@ export function PortalHeader({ portal, onLeave }: Props) {
         <LogOut className="w-3.5 h-3.5" /> Chiqish
       </button>
 
-      <AnimatePresence>
-        {qrOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md overflow-y-auto"
-            onClick={() => setQrOpen(false)}
-          >
-            {/* Inner wrapper has min-h-full so the modal centers
-                vertically when content fits; if the window is short,
-                the wrapper scrolls. titlebar-pad keeps content clear
-                of the macOS traffic-light buttons. */}
-            <div className="min-h-full flex items-start sm:items-center justify-center px-6 pb-8 titlebar-pad pt-12">
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0, y: 12 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.9, opacity: 0, y: 12 }}
-                transition={{ type: "spring", stiffness: 320, damping: 26 }}
-                className="bg-[#0d1322] panel rounded-card p-6 flex flex-col items-center gap-4 max-w-sm w-full my-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="bg-white p-3 rounded-lg">
-                  <QRCodeSVG
-                    value={inviteText}
-                    size={200}
-                    bgColor="#ffffff"
-                    fgColor="#0a0e1a"
-                    level="M"
-                    includeMargin={false}
-                  />
-                </div>
-                <div className="text-center w-full">
-                  <div className="text-xs uppercase tracking-widest text-zinc-500 mb-1.5">
-                    ID + KOD
-                  </div>
-                  <div className="font-mono text-xl tracking-wider gradient-text font-semibold break-all">
-                    {portal.portalId} · {portal.code}
-                  </div>
-                  <div className="text-xs text-zinc-500 mt-3 leading-relaxed">
-                    QR ni do'stingizning kamerasiga tutsangiz,<br />
-                    portalga to'g'ridan-to'g'ri kiradi.
-                  </div>
-                </div>
-                <button
-                  onClick={() => setQrOpen(false)}
-                  className="text-xs text-zinc-400 hover:text-white mt-1 px-4 py-1.5 rounded-md hover:bg-white/[0.05]"
+      {/* Modal is rendered via createPortal to document.body. The
+          parent header has a backdrop-filter, which establishes a
+          containing block for descendants — that breaks `position:
+          fixed` and made the QR card render inside the 96px header
+          stripe. Portaling out of that subtree restores viewport
+          coordinates. */}
+      {createPortal(
+        <AnimatePresence>
+          {qrOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md overflow-y-auto"
+              onClick={() => setQrOpen(false)}
+            >
+              <div className="min-h-full flex items-start sm:items-center justify-center px-6 pb-8 titlebar-pad pt-12">
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0, y: 12 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 12 }}
+                  transition={{ type: "spring", stiffness: 320, damping: 26 }}
+                  className="bg-[#0d1322] panel rounded-card p-6 flex flex-col items-center gap-4 max-w-sm w-full my-auto"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  yopish
-                </button>
-              </motion.div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  <div className="bg-white p-3 rounded-lg">
+                    <QRCodeSVG
+                      value={inviteText}
+                      size={200}
+                      bgColor="#ffffff"
+                      fgColor="#0a0e1a"
+                      level="M"
+                      includeMargin={false}
+                    />
+                  </div>
+                  <div className="text-center w-full">
+                    <div className="text-xs uppercase tracking-widest text-zinc-500 mb-1.5">
+                      ID + KOD
+                    </div>
+                    <div className="font-mono text-xl tracking-wider gradient-text font-semibold break-all">
+                      {portal.portalId} · {portal.code}
+                    </div>
+                    <div className="text-xs text-zinc-500 mt-3 leading-relaxed">
+                      QR ni do'stingizning kamerasiga tutsangiz,<br />
+                      portalga to'g'ridan-to'g'ri kiradi.
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setQrOpen(false)}
+                    className="text-xs text-zinc-400 hover:text-white mt-1 px-4 py-1.5 rounded-md hover:bg-white/[0.05]"
+                  >
+                    yopish
+                  </button>
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }
