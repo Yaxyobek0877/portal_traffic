@@ -1,0 +1,50 @@
+# --- Server (private) ----------------------------------------------------
+# The signaling server is deployed to a VPS we control and is intentionally
+# not pushed to public git. Anyone cloning this repo gets the client and
+# the shared protocol package; that's enough to run the app against any
+# compatible signaling endpoint.
+server/
+
+# --- Local dev workspace -------------------------------------------------
+# go.work is convenient locally (lets us hack on shared/, server/, client/
+# with one editor session) but the server reference would break for anyone
+# who clones without server/. Each module's go.mod has the full dependency
+# information needed to build it stand-alone.
+go.work
+go.work.sum
+
+# --- Secrets -------------------------------------------------------------
+*.pem
+*.key
+*.crt
+.env
+.env.local
+.env.*.local
+
+# --- Go build artifacts --------------------------------------------------
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+bin/
+dist/
+build/
+coverage.out
+coverage.html
+
+# --- Node / Wails frontend (Phase 2+) ------------------------------------
+node_modules/
+client/frontend/dist/
+client/build/
+client/.wails/
+
+# --- Editors / OS --------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
