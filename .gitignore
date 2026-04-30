@@ -37,7 +37,13 @@ coverage.html
 
 # --- Node / Wails frontend (Phase 2+) ------------------------------------
 node_modules/
-client/frontend/dist/
+client/frontend/dist/*
+!client/frontend/dist/.gitkeep
+client/frontend/package.json.md5
+client/frontend/tsconfig.tsbuildinfo
+client/frontend/vite.config.d.ts
+client/frontend/vite.config.js
+client/frontend/node_modules/
 client/build/
 client/.wails/
 

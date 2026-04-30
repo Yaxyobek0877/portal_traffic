@@ -45,18 +45,20 @@ o'lchangan RTT ni hisobotlaydi.
 - [ ] Eksponensial backoff bilan avtomatik qayta ulanish (4-bosqichga
       ko'chirildi)
 
-## 3-bosqich — Desktop UI
+## 3-bosqich — Desktop UI ✅
 
-Oddiy foydalanuvchi ko'radigan qismlar.
+Oddiy foydalanuvchi ko'radigan qismlar — Wails + React + TS + Tailwind.
 
-- [ ] Welcome ekrani (animatsiyali wormhole logo, taxallus inputi,
+- [x] Welcome ekrani (animatsiyali wormhole logo, taxallus inputi,
       Yaratish / Qo'shilish tugmalari)
-- [ ] Portal ko'rinishi (sarlavha — ID + kod + QR; peer sidebar;
-      animatsiyali mesh diagrammasi; chat paneli; status bar)
-- [ ] Jonli mesh vizualizatsiyasi (SVG, Framer Motion, ma'lumot oqimida
-      yorishish)
-- [ ] Go backend va React frontend o'rtasida Wails bog'lanishlari
-- [ ] Standart qorong'i mode, parametrlarda yorug' mode tugmasi
+- [x] Portal ko'rinishi (sarlavha — ID + kod + QR + copy; peer sidebar;
+      animatsiyali mesh diagrammasi; chat paneli; servislar paneli;
+      status bar)
+- [x] Jonli mesh vizualizatsiyasi (SVG, Framer Motion, edge ustida pulses)
+- [x] Go backend va React frontend o'rtasida Wails bog'lanishlari
+- [x] Standart qorong'i mode (light mode keyingi versiyada)
+- [x] Servislar paneli — fosh qilish + boshqalarniki bilan ulash UI dan
+- [x] QR kod modal (offline-tarzda generatsiya)
 
 ## 4-bosqich — Sayqal
 

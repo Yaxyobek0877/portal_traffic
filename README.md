@@ -29,11 +29,12 @@ uchun ishlatiladi; undan keyin hamma trafik peer-to-peer oqadi.
 | **Mesh ni jonli ko'rish** | Kim kim bilan ulangani jonli vizual ko'rinishda; haqiqiy vaqtda RTT (ping); NAT-traversal indikatorlari (to'g'ridan-to'g'ri yoki TURN orqali). |
 | **Maxfiyligingizni saqlash** | WebRTC handshake dan keyin signal serveri sizning trafigingizni hech qachon ko'rmaydi. Hamma ma'lumot peer-to-peer oqadi. |
 
-> **Holat:** signal serveri, mesh dvigateli, **app-layer secretbox
-> shifrlash** va **TCP proxy ulanish** tayyor — peer'lar bir-birining
-> lokal portlariga (Minecraft, web, SSH) LAN da bo'lgandek ulanadi.
-> Desktop UI keyingi bosqich — qarang [ROADMAP.md](ROADMAP.md) va
-> [SECURITY-AUDIT.md](SECURITY-AUDIT.md).
+> **Holat:** signal serveri, mesh dvigateli, app-layer secretbox
+> shifrlash, TCP proxy ulanish, **va Wails desktop UI** tayyor.
+> macOS'da `wails build` orqali to'liq dastur quriladi:
+> welcome ekrani → portal yaratish/qo'shilish → jonli mesh diagrammasi
+> + chat + servislar paneli + status bar. Qarang [ROADMAP.md](ROADMAP.md)
+> va [SECURITY-AUDIT.md](SECURITY-AUDIT.md).
 
 ---
 
