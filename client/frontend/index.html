@@ -12,7 +12,13 @@
     <title>Portal</title>
   </head>
   <body class="bg-bg text-white">
-    <div id="root"></div>
+    <div id="root">
+      <!-- Fallback shown until React mounts. If you see this in the
+           shipped app, something's preventing main.tsx from loading. -->
+      <div id="boot-fallback" style="color:#98a2b3;padding:24px;font-family:Inter,sans-serif;font-size:14px;">
+        Loading Portal...
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

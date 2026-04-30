@@ -276,20 +276,24 @@ func (a *App) OpenSaveDir() error {
 // Persistence — recent portals
 // ----------------------------------------------------------------------------
 
-// RecentPortals returns the latest N portal_history rows.
+// RecentPortals returns the latest N portal_history rows. Always
+// returns a non-nil slice so JSON serialises as `[]` not `null` —
+// the frontend treats history as an array and `.length` on null
+// throws.
 func (a *App) RecentPortals(n int) []storage.HistoryEntry {
 	a.mu.RLock()
 	store := a.store
 	a.mu.RUnlock()
+	out := []storage.HistoryEntry{}
 	if store == nil {
-		return nil
+		return out
 	}
 	if n <= 0 {
 		n = 10
 	}
 	rows, err := store.RecentHistory(n)
-	if err != nil {
-		return nil
+	if err != nil || rows == nil {
+		return out
 	}
 	return rows
 }

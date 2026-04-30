@@ -91,7 +91,7 @@ export const usePortalStore = create<Store>((set) => ({
   clearPeers: () => set({ peers: {} }),
 
   localServices: [],
-  setLocalServices: (s) => set({ localServices: s }),
+  setLocalServices: (s) => set({ localServices: Array.isArray(s) ? s : [] }),
 
   messages: [],
   addMessage: (m) =>
@@ -118,7 +118,7 @@ export const usePortalStore = create<Store>((set) => ({
     })),
 
   history: [],
-  setHistory: (h) => set({ history: h }),
+  setHistory: (h) => set({ history: Array.isArray(h) ? h : [] }),
 
   saveDir: "",
   setSaveDir: (d) => set({ saveDir: d }),
