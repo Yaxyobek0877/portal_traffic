@@ -47,6 +47,8 @@ type PeerView struct {
 	IsOwner   bool           `json:"isOwner"`
 	State     string         `json:"state"` // "connecting" | "connected" | "failed" | "closed"
 	RTTMs     float64        `json:"rttMs"` // 0 if no pong yet
+	BytesSent int64          `json:"bytesSent"`
+	BytesRecv int64          `json:"bytesRecv"`
 	Services  []ServiceView  `json:"services"`
 }
 
@@ -691,6 +693,8 @@ func peerToView(p *mesh.Peer) PeerView {
 		IsOwner:   p.IsOwner,
 		State:     state,
 		RTTMs:     float64(rtt.Microseconds()) / 1000.0,
+		BytesSent: p.BytesSent(),
+		BytesRecv: p.BytesRecv(),
 		Services:  svc,
 	}
 }

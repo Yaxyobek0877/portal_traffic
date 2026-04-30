@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pion/webrtc/v4"
@@ -69,6 +70,12 @@ type Peer struct {
 	// services exposed by this remote peer (announced over the control
 	// channel). Keyed by port. Owned by the proxy layer.
 	services map[int]ServiceAnnounce
+
+	// bytesSent / bytesRecv are atomic counters tracked across all four
+	// data channels — the diagnostic view shows them as cumulative
+	// since this peer joined the portal.
+	bytesSent atomic.Int64
+	bytesRecv atomic.Int64
 }
 
 // ServiceAnnounce mirrors protocol.ServiceExpose for the proxy layer.
@@ -101,6 +108,9 @@ const (
 	EventError
 	EventChat
 	EventServiceAnnounce
+	EventReconnecting   // signaling dropped; we'll retry
+	EventReconnected    // signaling came back and (joiner) re-joined OK
+	EventReconnectGiveUp // exceeded retry budget OR portal gone
 )
 
 func (t MeshEventType) String() string {
@@ -108,6 +118,7 @@ func (t MeshEventType) String() string {
 		"portal_ready", "peer_joining", "peer_ready",
 		"peer_rtt", "peer_left", "portal_closed", "error",
 		"chat", "service_announce",
+		"reconnecting", "reconnected", "reconnect_give_up",
 	}[t]
 }
 
@@ -143,6 +154,13 @@ type Manager struct {
 	// Owned by the proxy layer; the announcement is broadcast over the
 	// control channel whenever it changes.
 	localServices map[int]ServiceAnnounce
+
+	// reconnect bookkeeping. Stored at create/join time so we can re-do
+	// the same operation if signaling drops.
+	wasOwner    bool
+	joinedID    string // empty when wasOwner
+	joinedCode  string // empty when wasOwner
+	wantPortal  bool   // true once we've successfully entered a portal
 
 	// proxyHandler is set by the proxy.Forwarder when the user wires
 	// it in. nil means proxy frames are dropped on the floor.
@@ -214,6 +232,11 @@ func (m *Manager) CreatePortal(ctx context.Context) error {
 	if err := m.dial(ctx); err != nil {
 		return err
 	}
+	m.mu.Lock()
+	m.wasOwner = true
+	m.wantPortal = true
+	m.mu.Unlock()
+
 	if err := m.sig.CreatePortal(m.cfg.Nickname, m.cfg.PublicNick, 0); err != nil {
 		return err
 	}
@@ -231,6 +254,10 @@ func (m *Manager) JoinPortal(ctx context.Context, portalID, code string) error {
 	k := crypt.Derive(code)
 	m.mu.Lock()
 	m.portalKey = &k
+	m.wasOwner = false
+	m.joinedID = portalID
+	m.joinedCode = code
+	m.wantPortal = true
 	m.mu.Unlock()
 
 	if err := m.sig.JoinPortal(portalID, code, m.cfg.Nickname); err != nil {
@@ -307,12 +334,124 @@ func (m *Manager) run() {
 			return
 		case ev, ok := <-m.sig.Events():
 			if !ok {
+				if m.shouldReconnect() {
+					if !m.attemptReconnect() {
+						m.emit(MeshEvent{Type: EventReconnectGiveUp})
+						return
+					}
+					continue
+				}
 				m.emit(MeshEvent{Type: EventPortalClosed, Err: errors.New("signaling closed")})
 				return
 			}
 			m.handleSignalingEvent(ev)
 		}
 	}
+}
+
+func (m *Manager) shouldReconnect() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	// Reconnect is only useful if the user is in a portal and we've
+	// stopped on our own. If the user explicitly Leave()'d, wantPortal
+	// is false and we don't retry.
+	return m.wantPortal
+}
+
+// attemptReconnect tries to dial signaling again with exponential
+// backoff and re-issue the appropriate portal operation. Returns
+// true if reconnection succeeded; false if we exhausted attempts or
+// the manager was closed.
+//
+// For owners: re-creating the portal would change the ID/code, so we
+// emit EventReconnectGiveUp instead — the UI tells the user to make
+// a fresh portal and share the new code with peers (existing P2P
+// connections are still up via WebRTC).
+//
+// For joiners: we re-issue portal.join with the same ID + code. If
+// the original portal still exists on the server (other members keep
+// it alive), we slot back in; otherwise the server returns
+// PORTAL_NOT_FOUND and we give up.
+func (m *Manager) attemptReconnect() bool {
+	m.emit(MeshEvent{Type: EventReconnecting})
+	m.logger.Info("signaling dropped; attempting reconnect")
+
+	m.mu.RLock()
+	wasOwner := m.wasOwner
+	joinedID := m.joinedID
+	joinedCode := m.joinedCode
+	m.mu.RUnlock()
+
+	if wasOwner {
+		// We can't reclaim our owned portal; the server destroyed it
+		// when our connection dropped. Existing peer connections are
+		// still up via WebRTC, but anyone else trying to join will
+		// fail. Best UX is to surface this and let the user decide.
+		m.emit(MeshEvent{
+			Type: EventError,
+			Err:  errors.New("egasi sifatida ulangansiz; signal uzilgani sababli portal yopildi. Qaytadan yarating."),
+		})
+		return false
+	}
+
+	const maxAttempts = 8
+	delay := time.Second
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		select {
+		case <-m.closed:
+			return false
+		case <-time.After(delay):
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		c, err := signaling.Dial(ctx, m.cfg.SignalingURL, m.logger)
+		cancel()
+		if err != nil {
+			m.logger.Debug("reconnect dial failed", "attempt", attempt+1, "err", err)
+			delay = capDelay(delay * 2)
+			continue
+		}
+
+		// Replace the active client.
+		m.mu.Lock()
+		old := m.sig
+		m.sig = c
+		m.mu.Unlock()
+		if old != nil {
+			_ = old.Close()
+		}
+
+		if err := m.sig.JoinPortal(joinedID, joinedCode, m.cfg.Nickname); err != nil {
+			m.logger.Debug("reconnect join failed", "attempt", attempt+1, "err", err)
+			_ = c.Close()
+			delay = capDelay(delay * 2)
+			continue
+		}
+
+		// Success — drop existing peer entries so the joining flow
+		// rebuilds them. Existing WebRTC connections to the same peers
+		// will be replaced; pion handles the renegotiation.
+		m.mu.Lock()
+		for id, p := range m.peers {
+			if p.conn != nil {
+				_ = p.conn.Close()
+			}
+			delete(m.peers, id)
+		}
+		m.mu.Unlock()
+
+		m.emit(MeshEvent{Type: EventReconnected})
+		m.logger.Info("signaling reconnected", "attempt", attempt+1)
+		return true
+	}
+	return false
+}
+
+func capDelay(d time.Duration) time.Duration {
+	if d > 5*time.Minute {
+		return 5 * time.Minute
+	}
+	return d
 }
 
 func (m *Manager) handleSignalingEvent(ev signaling.Event) {
@@ -637,8 +776,12 @@ func (m *Manager) SendChatTo(peerID, text string) error {
 	return p.conn.SendBinary(peer.ChanChat, sealed)
 }
 
-// Leave releases the portal cleanly.
+// Leave releases the portal cleanly. Clears wantPortal so a subsequent
+// signaling drop won't trigger reconnect.
 func (m *Manager) Leave() error {
+	m.mu.Lock()
+	m.wantPortal = false
+	m.mu.Unlock()
 	if m.sig == nil {
 		return nil
 	}
@@ -770,7 +913,11 @@ func (m *Manager) sendOnChannel(peerID, ch string, payload []byte) error {
 		return fmt.Errorf("%s channel not open with %s", ch, peerID)
 	}
 	sealed := m.sealEnvelope(payload)
-	return p.conn.SendBinary(ch, sealed)
+	if err := p.conn.SendBinary(ch, sealed); err != nil {
+		return err
+	}
+	p.bytesSent.Add(int64(len(sealed)))
+	return nil
 }
 
 // MyPeerID returns our own server-assigned peer ID. Useful for the

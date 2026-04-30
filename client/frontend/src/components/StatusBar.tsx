@@ -1,7 +1,14 @@
 import React from "react";
-import { Activity, Globe, Users, Wifi } from "lucide-react";
+import { Activity, ArrowDown, ArrowUp, Globe, Users, Wifi } from "lucide-react";
 import type { NATResult, PeerView } from "../types";
 import { rttLabel } from "../lib/format";
+
+function bytesShort(n: number): string {
+  if (n < 1024) return `${n}B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)}K`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)}M`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)}G`;
+}
 
 type Props = {
   ownVip: string;
@@ -17,6 +24,8 @@ export function StatusBar({ ownVip, peers, signalingUrl, nat }: Props) {
     if (v.length === 0) return 0;
     return v.reduce((a, b) => a + b, 0) / v.length;
   })();
+  const totalSent = peers.reduce((acc, p) => acc + (p.bytesSent || 0), 0);
+  const totalRecv = peers.reduce((acc, p) => acc + (p.bytesRecv || 0), 0);
 
   const natBadge = (() => {
     if (!nat) return null;
@@ -49,6 +58,10 @@ export function StatusBar({ ownVip, peers, signalingUrl, nat }: Props) {
         <span className="flex items-center gap-1.5">
           <Activity className="w-3 h-3" />
           {rttLabel(avgRtt)}
+        </span>
+        <span className="flex items-center gap-1" title="Mesh ustida yuborilgan / qabul qilingan baytlar">
+          <ArrowUp className="w-3 h-3 text-violet-300" /> {bytesShort(totalSent)}
+          <ArrowDown className="w-3 h-3 text-cyan-300 ml-1" /> {bytesShort(totalRecv)}
         </span>
         {natBadge}
       </div>

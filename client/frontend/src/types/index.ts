@@ -22,6 +22,8 @@ export type PeerView = {
   isOwner: boolean;
   state: "connecting" | "connected" | "failed" | "closed";
   rttMs: number;
+  bytesSent: number;
+  bytesRecv: number;
   services: ServiceView[];
 };
 

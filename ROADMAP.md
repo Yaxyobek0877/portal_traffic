@@ -82,10 +82,16 @@ Oddiy foydalanuvchi ko'radigan qismlar — Wails + React + TS + Tailwind.
       (2026-04-30 audit paytida ko'chirildi, ishlaydi)
 - [x] **App-layer secretbox shifrlash** — portal kodidan PBKDF2 bilan
       olingan kalit, har frame uchun yangi nonce
-- [ ] UDP proksi (ko'p o'yinlar UDP ham ishlatadi)
-- [ ] Mesh bo'ylab fosh qilingan portlarni ko'rsatadigan Services paneli (UI)
-- [ ] Push-to-talk bilan ovoz kanali
-- [ ] Demo sifatida o'rnatilgan mini-o'yinlar
+- [x] **UDP proksi** — `f.DialUDP(...)` har source-addr uchun stream
+      hosil qiladi; o'yinlar va boshqa UDP servislar uchun
+- [x] Servislar paneli (UI) — Phase 3 da kelgan
+- [x] **Auto-reconnect** — signaling uzilsa eksponensial backoff bilan
+      qayta ulanadi; joiner avtomatik portalga qaytadi
+- [x] **Per-peer bandwidth** — atomic counterlar har peer da, status barda
+      yuqi/pastga o'qlar bilan ko'rsatiladi
+- [x] **Cross-platform build script** — `client/build-all.sh`
+- [ ] Push-to-talk bilan ovoz kanali (kelajakda)
+- [ ] Demo sifatida o'rnatilgan mini-o'yinlar (kelajakda)
 
 ---
 

@@ -62,6 +62,19 @@ export default function App() {
     offs.push(subscribe<string>("error", (msg) => msg && setBanner(msg)));
     offs.push(subscribe<NATResult>("nat:result", (r) => setNat(r)));
     offs.push(subscribe<TransferProgress>("transfer:progress", (t) => upsertTransfer(t)));
+    offs.push(
+      subscribe("reconnecting", () =>
+        setBanner("Signal serveri uzildi — qayta ulanmoqda...")
+      )
+    );
+    offs.push(
+      subscribe("reconnected", () => setBanner("Qayta ulandi ✓"))
+    );
+    offs.push(
+      subscribe("reconnect_give_up", () =>
+        setBanner("Qayta ulanish muvaffaqiyatsiz. Qaytadan portal yarating.")
+      )
+    );
 
     return () => offs.forEach((off) => off());
   }, [

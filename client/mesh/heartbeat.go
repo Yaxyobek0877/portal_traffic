@@ -84,6 +84,7 @@ func (m *Manager) pruneStalePings() {
 // routeMessage dispatches an inbound peer message based on the channel
 // it arrived on.
 func (m *Manager) routeMessage(p *Peer, msg peer.Message) {
+	p.bytesRecv.Add(int64(len(msg.Raw)))
 	switch msg.Channel {
 	case peer.ChanControl:
 		m.handleControl(p, msg)
@@ -183,3 +184,11 @@ func (p *Peer) Services() []ServiceAnnounce {
 	}
 	return out
 }
+
+// BytesSent returns the cumulative encrypted bytes we've written to
+// this peer across all data channels since they joined.
+func (p *Peer) BytesSent() int64 { return p.bytesSent.Load() }
+
+// BytesRecv returns the cumulative encrypted bytes we've received
+// from this peer.
+func (p *Peer) BytesRecv() int64 { return p.bytesRecv.Load() }
