@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { Copy, QrCode, LogOut, Check, Eye, EyeOff } from "lucide-react";
+import { Copy, QrCode, LogOut, Check, Eye, EyeOff, Settings as SettingsIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import type { PortalView } from "../types";
+import { usePortalStore } from "../stores/portalStore";
 
 type Props = {
   portal: PortalView;
@@ -13,6 +14,7 @@ type Props = {
 const HIDDEN_PLACEHOLDER = "••••••";
 
 export function PortalHeader({ portal, onLeave }: Props) {
+  const setScreen = usePortalStore((s) => s.setScreen);
   const [copiedField, setCopiedField] = useState<"id" | "code" | "both" | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
   // Default to hidden so the code isn't shoulder-surfed in screen-shares
@@ -78,12 +80,21 @@ export function PortalHeader({ portal, onLeave }: Props) {
         )}
       </div>
 
-      <button
-        onClick={onLeave}
-        className="no-drag h-9 px-3 rounded-btn text-xs flex items-center gap-1.5 text-rose-300 hover:bg-rose-500/10"
-      >
-        <LogOut className="w-3.5 h-3.5" /> Chiqish
-      </button>
+      <div className="no-drag flex items-center gap-1">
+        <button
+          onClick={() => setScreen("settings")}
+          title="Sozlamalar"
+          className="h-9 w-9 rounded-btn flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.05]"
+        >
+          <SettingsIcon className="w-4 h-4" strokeWidth={2} />
+        </button>
+        <button
+          onClick={onLeave}
+          className="h-9 px-3 rounded-btn text-xs flex items-center gap-1.5 text-rose-300 hover:bg-rose-500/10"
+        >
+          <LogOut className="w-3.5 h-3.5" /> Chiqish
+        </button>
+      </div>
 
       {/* Modal is rendered via createPortal to document.body. The
           parent header has a backdrop-filter, which establishes a

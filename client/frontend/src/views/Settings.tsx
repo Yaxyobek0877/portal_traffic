@@ -149,7 +149,7 @@ export function Settings() {
     <div className="h-full flex flex-col">
       <div className="draggable titlebar-pad flex items-center gap-3 px-4 border-b border-white/5" style={{ height: 88 }}>
         <button
-          onClick={() => setScreen("welcome")}
+          onClick={() => setScreen(usePortalStore.getState().portal ? "portal" : "welcome")}
           className="no-drag p-2 rounded-md hover:bg-white/5 text-zinc-400"
         >
           <ArrowLeft className="w-4 h-4" />
