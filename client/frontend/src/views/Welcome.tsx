@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, LogIn, Settings, History as HistoryIcon } from "lucide-react";
+import { Sparkles, LogIn, Settings, History as HistoryIcon, AlertTriangle } from "lucide-react";
 import { Logo } from "../components/Logo";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
@@ -16,6 +16,7 @@ export function Welcome() {
   const signalingUrl = usePortalStore((s) => s.signalingUrl);
   const history = usePortalStore((s) => s.history);
   const setHistory = usePortalStore((s) => s.setHistory);
+  const nat = usePortalStore((s) => s.nat);
 
   const [mode, setMode] = useState<Mode>("idle");
   const [portalId, setPortalId] = useState("");
@@ -270,7 +271,18 @@ export function Welcome() {
             </div>
           )}
 
-          <div className="text-xs text-zinc-600 mt-8 font-mono truncate">{signalingUrl}</div>
+          {nat?.type === 3 && (
+            <div className="mt-6 panel rounded-input p-3 text-left flex gap-2 items-start border-amber-500/20 bg-amber-500/5">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" strokeWidth={2} />
+              <div className="text-[11px] text-amber-200/90 leading-relaxed">
+                <strong>Simmetrik NAT aniqlandi.</strong> To'g'ridan-to'g'ri ulanish
+                ishlamasligi mumkin. Bepul TURN serveri orqali avtomatik o'tib ulanadi —
+                hech narsa qilish kerak emas. Ulanish sekinroq bo'lishi mumkin.
+              </div>
+            </div>
+          )}
+
+          <div className="text-xs text-zinc-600 mt-6 font-mono truncate">{signalingUrl}</div>
         </div>
       </div>
     </div>

@@ -28,6 +28,7 @@ import uz.aihealth.portal_mobile.mesh.ChatMessage
 import uz.aihealth.portal_mobile.mesh.MeshManager
 import uz.aihealth.portal_mobile.mesh.MeshState
 import uz.aihealth.portal_mobile.mesh.PeerSnapshot
+import uz.aihealth.portal_mobile.service.MeshService
 import uz.aihealth.portal_mobile.signaling.DEFAULT_SIGNALING_URL
 import uz.aihealth.portal_mobile.transfer.FileTransfer
 import uz.aihealth.portal_mobile.transfer.TransferEngine
@@ -79,6 +80,7 @@ class PortalViewModel(app: Application) : AndroidViewModel(app) {
     fun createPortal() {
         if (nickname.isBlank()) return
         commitNickname()
+        MeshService.start(getApplication(), "Portal yaratilmoqda…")
         val mesh = ensureMesh()
         mesh.createPortal()
         observeForRecent(asOwner = true, joinedId = "", joinedCode = "")
@@ -87,6 +89,7 @@ class PortalViewModel(app: Application) : AndroidViewModel(app) {
     fun joinPortal(portalId: String, code: String) {
         if (nickname.isBlank() || portalId.isBlank() || code.isBlank()) return
         commitNickname()
+        MeshService.start(getApplication(), "Portalga ulanmoqda…")
         val mesh = ensureMesh()
         mesh.joinPortal(portalId, code)
         observeForRecent(asOwner = false, joinedId = portalId, joinedCode = code)
@@ -153,6 +156,7 @@ class PortalViewModel(app: Application) : AndroidViewModel(app) {
         _mesh.value = null
         _engine.value = null
         _chatLog.clear()
+        MeshService.stop(getApplication())
     }
 
     private fun commitNickname() {
@@ -217,6 +221,7 @@ class PortalViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         _mesh.value?.close()
+        MeshService.stop(getApplication())
         super.onCleared()
     }
 }
