@@ -38,6 +38,10 @@ type Bridge = {
   GetTurnConfig: () => Promise<TurnConfig>;
   SetTurnConfig: (c: TurnConfig) => Promise<void>;
   LocalListeners: () => Promise<LocalListener[]>;
+  LogLines: (n: number) => Promise<string[]>;
+  LogFilePath: () => Promise<string>;
+  OpenLogFolder: () => Promise<void>;
+  ClearLogs: () => Promise<void>;
 };
 
 declare global {
@@ -103,6 +107,10 @@ const stub: Bridge = {
   GetTurnConfig: async () => ({ url: "", username: "", credential: "" }),
   SetTurnConfig: async () => {},
   LocalListeners: async () => [],
+  LogLines: async () => ["[preview] no logs"],
+  LogFilePath: async () => "~/.portal/logs/portal.log",
+  OpenLogFolder: async () => {},
+  ClearLogs: async () => {},
 };
 
 export const app: Bridge =

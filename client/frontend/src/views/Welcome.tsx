@@ -174,7 +174,36 @@ export function Welcome() {
               </motion.div>
             )}
 
-            {error && <div className="text-xs text-rose-400">{error}</div>}
+            {error && (
+              <div className="rounded-input border border-rose-500/30 bg-rose-500/5 p-3 text-xs space-y-2">
+                <div className="text-rose-300">
+                  {/no such portal/i.test(error)
+                    ? "Bu portal allaqachon yopilgan. Egasi chiqib ketgan bo'lsa, ID + KOD avtomatik bekor qilinadi."
+                    : /code does not match|portal_code_wrong/i.test(error)
+                    ? "Kod noto'g'ri. Qaytadan tekshiring yoki egasidan so'rang."
+                    : /portal_full/i.test(error)
+                    ? "Portal to'lib qolgan (16 ta peer max)."
+                    : /portal_locked/i.test(error)
+                    ? "Egasi portalni qulflagan. Ochilishini kuting."
+                    : error}
+                </div>
+                {/no such portal/i.test(error) && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setMode("create");
+                        setError("");
+                        setPortalId("");
+                        setCode("");
+                      }}
+                      className="text-xs text-emerald-300 hover:text-emerald-200 underline"
+                    >
+                      Yangi portal yaratish →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {mode === "idle" ? (
               <div className="grid grid-cols-2 gap-3 pt-3">

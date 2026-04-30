@@ -54,7 +54,9 @@ fun PortalApp(modifier: Modifier = Modifier) {
     // so the user can read the error.
     LaunchedEffect(meshState) {
         when (meshState) {
-            is MeshState.Connecting, is MeshState.Ready -> {
+            is MeshState.Connecting,
+            is MeshState.Ready,
+            is MeshState.Reconnecting -> {
                 if (nav.currentDestination?.route != Routes.PORTAL) {
                     nav.navigate(Routes.PORTAL) {
                         popUpTo(Routes.WELCOME)

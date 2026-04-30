@@ -17,7 +17,22 @@ Backwards compatibility on `shared/protocol/messages.go` is a hard contract: onl
 
 ## Current state
 
-Stage-zero scaffold. `app/src/main/java/uz/aihealth/portal_mobile/MainActivity.kt` is the default Compose "Hello Android" template; theme files are the Studio-generated defaults. No Portal protocol, signaling, WebRTC, or crypto code has been written yet — assume work here is new implementation, not modification.
+Phase-1 mesh client implemented. `./gradlew assembleDebug` produces a working APK. The on-the-wire behavior is byte-compatible with the desktop client (verified: same protocol message types, same channel IDs, same PBKDF2 + secretbox parameters), so an Android peer can join a portal alongside Wails desktop peers.
+
+Working features: create / join portal, full-mesh WebRTC handshake, encrypted broadcast chat, RTT heartbeat, peer roster.
+
+Not yet implemented (would mirror named files under `../client/`): file transfer (`transfer/`), TCP/UDP proxy (`proxy/`), service expose UI, NAT-type detection, auto-reconnect, settings persistence, QR scan/display, join-by-nick.
+
+Source layout under `app/src/main/java/uz/aihealth/portal_mobile/`:
+
+| Package | Mirrors | Purpose |
+| --- | --- | --- |
+| `protocol/` | `../shared/protocol/messages.go` | `@Serializable` data classes + type discriminator |
+| `crypt/` | `../client/crypt/` | PBKDF2-SHA256 KDF + libsodium secretbox via lazysodium-android |
+| `signaling/` | `../client/signaling/` | OkHttp WebSocket → typed `SignalingEvent` Flow |
+| `peer/` | `../client/peer/` | Stream-WebRTC `PeerConnection` + 4 negotiated data channels |
+| `mesh/` | `../client/mesh/` | Orchestrator: handshake glare-free rule, heartbeat, chat fan-out |
+| `ui/` | (no Go counterpart — Compose is its own thing) | `PortalViewModel` + Welcome/Join/Portal screens |
 
 ## Toolchain pins (mismatches will break builds)
 
@@ -28,6 +43,17 @@ Stage-zero scaffold. `app/src/main/java/uz/aihealth/portal_mobile/MainActivity.k
 - Versions are centralized in `gradle/libs.versions.toml`. Add new deps there, not as inline `"group:name:ver"` strings.
 
 `local.properties` is gitignored and supplies `sdk.dir`. Don't commit it.
+
+This system has no JDK on `PATH` — Gradle's bootstrap launcher needs one before the daemon-JVM provisioner kicks in. Use Android Studio's bundled JBR:
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+./gradlew assembleDebug
+```
+
+(`gradle/gradle-daemon-jvm.properties` only governs the daemon, not the launcher itself.)
+
+`lazysodium-android` and `jna` must be declared with the `@aar` packaging classifier as direct strings in `app/build.gradle.kts` (not via the version catalog) — without `@aar` Gradle resolves the JAR variant of JNA which collides with its AAR variant on Android. See the inline comment in `app/build.gradle.kts`.
 
 ## Commands
 
@@ -56,4 +82,4 @@ There is no Go or Node tooling in this directory; those live in `../client/` and
 - **Channel IDs/labels are negotiated, not auto-assigned.** The reference client uses fixed IDs for `control`, `chat`, `transfer`, `proxy`. Peers across clients won't talk if these drift.
 - **Encryption is two layers, not one.** WebRTC DTLS-SRTP is automatic; on top of that, app-layer NaCl secretbox wraps every chat/file/proxy payload, with the key derived from the 6-digit portal code via PBKDF2-SHA256 with **200,000** iterations and salt `"portal-app-v1:secretbox"` (32-byte key, 24-byte random nonce per frame). See `../client/crypt/crypt.go` — these constants must match exactly or peers can't decrypt each other.
 - **Default signal endpoint:** `wss://signaling.1pro.uz/ws`. Make it overridable in settings, same as the desktop client.
-- **WebRTC on Android:** the standard option is `org.webrtc:google-webrtc`. The reference client uses pion in Go — APIs differ but the SDP/ICE flow on the wire is identical.
+- **WebRTC on Android:** uses `io.getstream:stream-webrtc-android` (an actively maintained fork of Google's library, classes still in the `org.webrtc.*` namespace). The reference client uses pion in Go — APIs differ but the SDP/ICE flow on the wire is identical.

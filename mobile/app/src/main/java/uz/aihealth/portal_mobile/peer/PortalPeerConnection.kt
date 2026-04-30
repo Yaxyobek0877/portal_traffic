@@ -103,35 +103,11 @@ class PortalPeerConnection(
     private val pendingRemoteIce = mutableListOf<IceCandidate>()
     private val closed = AtomicBoolean(false)
 
-    private val pc: PeerConnection
-
-    init {
-        val rtcConfig = PeerConnection.RTCConfiguration(iceServers).apply {
-            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-            bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE
-            rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
-        }
-        pc = factory.createPeerConnection(rtcConfig, observer)
-            ?: error("Peer: createPeerConnection returned null")
-
-        // Pre-create all four channels with negotiated IDs; both sides do
-        // this and pion/Android dedupes via the ID. Without negotiation,
-        // the answerer would have to wait for ondatachannel.
-        for (def in channelDefs) {
-            val init = DataChannel.Init().apply {
-                ordered = def.ordered
-                maxRetransmits = def.maxRetransmits
-                negotiated = true
-                id = def.id
-            }
-            val dc = pc.createDataChannel(def.label, init)
-                ?: error("Peer: createDataChannel(${def.label}) failed")
-            attachChannel(dc)
-        }
-    }
-
     // ------------------------------------------------------------------------
     // PeerConnection.Observer
+    //
+    // Declared before [pc] / the init block so it's initialized in time to
+    // pass to factory.createPeerConnection(...).
     // ------------------------------------------------------------------------
 
     private val observer = object : PeerConnection.Observer {
@@ -172,6 +148,33 @@ class PortalPeerConnection(
         override fun onRemoveStream(p0: MediaStream?) {}
         override fun onRenegotiationNeeded() {}
         override fun onAddTrack(p0: RtpReceiver?, p1: Array<out MediaStream>?) {}
+    }
+
+    private val pc: PeerConnection
+
+    init {
+        val rtcConfig = PeerConnection.RTCConfiguration(iceServers).apply {
+            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
+            bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE
+            rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
+        }
+        pc = factory.createPeerConnection(rtcConfig, observer)
+            ?: error("Peer: createPeerConnection returned null")
+
+        // Pre-create all four channels with negotiated IDs; both sides do
+        // this and pion/Android dedupes via the ID. Without negotiation,
+        // the answerer would have to wait for ondatachannel.
+        for (def in channelDefs) {
+            val init = DataChannel.Init().apply {
+                ordered = def.ordered
+                maxRetransmits = def.maxRetransmits
+                negotiated = true
+                id = def.id
+            }
+            val dc = pc.createDataChannel(def.label, init)
+                ?: error("Peer: createDataChannel(${def.label}) failed")
+            attachChannel(dc)
+        }
     }
 
     private fun attachChannel(dc: DataChannel) {

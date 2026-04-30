@@ -1,5 +1,6 @@
 package uz.aihealth.portal_mobile.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,12 +20,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -40,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -70,6 +75,7 @@ fun PortalScreen(
                                 else
                                     "Portal ${s.portal.portalId}"
                             MeshState.Connecting -> "Ulanmoqda…"
+                            is MeshState.Reconnecting -> "Qayta ulanmoqda… (${s.attempt}/8)"
                             is MeshState.Failed -> "Xatolik"
                             else -> "Portal"
                         },
@@ -106,6 +112,7 @@ private fun HeaderCard(state: MeshState) {
     when (state) {
         is MeshState.Ready -> {
             val info = state.portal
+            var qrOpen by remember { mutableStateOf(false) }
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -119,18 +126,29 @@ private fun HeaderCard(state: MeshState) {
                         ItemRow("Portal ID", info.portalId, mono = true)
                         Spacer(Modifier.height(4.dp))
                         ItemRow("Kod", info.code, mono = true)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Bu kodni do'stlaringiz bilan ulashing.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
+                        Spacer(Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "Bu kodni do'stlaringiz bilan ulashing.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.weight(1f),
+                            )
+                            OutlinedButton(onClick = { qrOpen = true }) { Text("QR") }
+                        }
                     } else {
                         ItemRow("Portal ID", info.portalId, mono = true)
                         Spacer(Modifier.height(4.dp))
                         ItemRow("Sizning IP", info.ownVip, mono = true)
                     }
                 }
+            }
+            if (qrOpen) {
+                QrInviteDialog(
+                    portalId = info.portalId,
+                    code = info.code,
+                    onDismiss = { qrOpen = false },
+                )
             }
         }
 
@@ -157,6 +175,23 @@ private fun HeaderCard(state: MeshState) {
                 modifier = Modifier.padding(16.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+
+        is MeshState.Reconnecting -> {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            ) {
+                Text(
+                    "Tarmoq vaqtinchalik uzildi. Urinish ${state.attempt}/8…",
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
         }
 
         else -> {}
@@ -271,6 +306,49 @@ private fun ChatSection(vm: PortalViewModel, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+@Composable
+private fun QrInviteDialog(portalId: String, code: String, onDismiss: () -> Unit) {
+    val invite = inviteText(portalId, code)
+    val bmp = remember(invite) { generateQrBitmap(invite, 600).asImageBitmap() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Portal taklifi") },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .background(Color.White),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        bitmap = bmp,
+                        contentDescription = "QR taklif",
+                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "$portalId · $code",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "QR ni do'stingizning kamerasiga tutsangiz, portalga to'g'ridan-to'g'ri kiradi.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Yopish") }
+        },
+    )
 }
 
 @Composable

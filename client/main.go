@@ -21,14 +21,14 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 )
 
+// keep slog import alive even if main.go shrinks
+var _ = slog.LevelInfo
+
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-
+	logger := initLogger()
 	app := NewApp(logger)
 
 	err := wails.Run(&options.App{

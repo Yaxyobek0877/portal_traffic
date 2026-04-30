@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  Copy,
+  FileText,
   Folder,
   Globe,
   History,
@@ -9,6 +11,7 @@ import {
   RefreshCcw,
   Shield,
   Trash2,
+  Zap,
 } from "lucide-react";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
@@ -31,6 +34,10 @@ export function Settings() {
   const [turn, setTurn] = useState<TurnConfig>({ url: "", username: "", credential: "" });
   const [turnSavedAt, setTurnSavedAt] = useState<number | null>(null);
   const [turnError, setTurnError] = useState("");
+
+  const [logs, setLogs] = useState<string[]>([]);
+  const [logPath, setLogPath] = useState("");
+  const [logsOpen, setLogsOpen] = useState(false);
 
   useEffect(() => {
     setDraftUrl(signalingUrl);
@@ -81,6 +88,33 @@ export function Settings() {
     } catch (e: any) {
       setTurnError(e?.message || String(e));
     }
+  };
+
+  // Open Relay Project public TURN — works for everyone, no signup,
+  // but adds latency. Useful for symmetric-NAT users to verify the
+  // mesh works end-to-end before they set up a private TURN.
+  const fillFreePublicTurn = () => {
+    setTurn({
+      url: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    });
+  };
+
+  const showLogs = async () => {
+    const [lines, path] = await Promise.all([app.LogLines(200), app.LogFilePath()]);
+    setLogs(lines);
+    setLogPath(path);
+    setLogsOpen(true);
+  };
+  const copyLogs = async () => {
+    try {
+      await navigator.clipboard.writeText(logs.join("\n"));
+    } catch {}
+  };
+  const clearLogsLocal = async () => {
+    await app.ClearLogs();
+    setLogs([]);
   };
 
   return (
@@ -166,12 +200,20 @@ export function Settings() {
               />
             </Field>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={saveTurn}
               className="btn-primary rounded-btn px-4 py-2 text-sm font-medium"
             >
               Saqlash
+            </button>
+            <button
+              onClick={fillFreePublicTurn}
+              className="panel rounded-btn px-3 py-2 text-xs flex items-center gap-1.5 hover:bg-white/[0.07]"
+              title="Open Relay Project — bepul, sekinroq, lekin tezda sinash uchun yetadi"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              Bepul TURN ni yoqish
             </button>
             {turn.url && (
               <button
@@ -188,7 +230,32 @@ export function Settings() {
           </div>
           <p className="text-xs text-zinc-600 mt-1">
             Sozlangandan keyin keyingi portal yaratish/qo'shilishda kuchga kiradi.
+            "Bepul TURN" — tezda sinash uchun: Open Relay Project ning ommaviy
+            relay, doim ishlamasligi mumkin.
           </p>
+        </Section>
+
+        {/* Logs */}
+        <Section icon={<FileText className="w-4 h-4" />} title="Loglar">
+          <p className="text-xs text-zinc-500 -mt-2">
+            Dastur ichidagi voqealar oxirgi 500 qatorda saqlanadi va bir
+            kunlik fayl sifatida ham diskka yoziladi.
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={showLogs}
+              className="btn-primary rounded-btn px-4 py-2 text-sm font-medium"
+            >
+              Oxirgi 200 qatorni ko'rish
+            </button>
+            <button
+              onClick={() => app.OpenLogFolder()}
+              className="panel rounded-btn px-3 py-2 text-xs flex items-center gap-1.5 hover:bg-white/[0.07]"
+            >
+              <Folder className="w-3.5 h-3.5" />
+              Fayl papkasini ochish
+            </button>
+          </div>
         </Section>
 
         {/* Diagnostics */}
@@ -274,6 +341,53 @@ export function Settings() {
           </div>
         </Section>
       </div>
+
+      {logsOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md flex items-center justify-center p-6 titlebar-pad"
+          onClick={() => setLogsOpen(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 320, damping: 26 }}
+            className="bg-[#0d1322] panel rounded-card flex flex-col w-full max-w-3xl max-h-[80vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="w-4 h-4 text-violet-300 shrink-0" />
+                <span className="font-mono text-xs text-zinc-400 truncate">{logPath}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={copyLogs}
+                  className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded hover:bg-white/[0.05] flex items-center gap-1"
+                >
+                  <Copy className="w-3 h-3" /> Nusxa
+                </button>
+                <button
+                  onClick={clearLogsLocal}
+                  className="text-xs text-zinc-400 hover:text-rose-300 px-2 py-1 rounded hover:bg-rose-500/10"
+                >
+                  Tozalash
+                </button>
+                <button
+                  onClick={() => setLogsOpen(false)}
+                  className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded hover:bg-white/[0.05]"
+                >
+                  Yopish
+                </button>
+              </div>
+            </div>
+            <pre className="flex-1 overflow-auto px-5 py-4 font-mono text-[11px] text-zinc-300 leading-relaxed whitespace-pre-wrap">
+              {logs.length === 0 ? "(bo'sh)" : logs.join("\n")}
+            </pre>
+          </motion.div>
+        </motion.div>
+      )}
     </div>
   );
 }

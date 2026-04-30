@@ -505,6 +505,36 @@ func (a *App) SendChat(text string) int {
 // Service / proxy bindings
 // ----------------------------------------------------------------------------
 
+// LogLines returns the last `n` lines of the in-memory log ring.
+// Used by Settings → Diagnostika to surface what the app has been
+// doing without having to dig into the on-disk file.
+func (a *App) LogLines(n int) []string {
+	return LogTail(n)
+}
+
+// LogFilePath returns the absolute on-disk path of the current log
+// file (~/.portal/logs/portal-YYYY-MM-DD.log).
+func (a *App) LogFilePath() string {
+	return LogPath()
+}
+
+// OpenLogFolder opens the OS file manager at the logs directory.
+func (a *App) OpenLogFolder() error {
+	p := LogPath()
+	if p == "" {
+		return errors.New("log fayli yo'q")
+	}
+	dir := filepath.Dir(p)
+	runtime.BrowserOpenURL(a.ctx, "file://"+dir)
+	return nil
+}
+
+// ClearLogs empties the in-memory tail. The on-disk file remains so
+// you can dig deeper if needed.
+func (a *App) ClearLogs() {
+	ClearLogTail()
+}
+
 // LocalListeners enumerates TCP ports the OS reports as listening.
 // Used by the Services panel to offer one-click "expose" for the
 // services already running on the user's machine.

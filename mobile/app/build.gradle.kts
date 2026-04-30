@@ -60,14 +60,20 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.zxing.core)
+    implementation(libs.zxing.android.embedded)
 
     // Portal stack
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.stream.webrtc.android)
-    implementation(libs.lazysodium.android)
-    implementation(libs.jna) { artifact { type = "aar" } }
+    // lazysodium-android requires the explicit @aar packaging form per their
+    // README (the POM transitives bring in jna's jar variant which collides
+    // with the aar variant Android actually needs).
+    implementation("com.goterl:lazysodium-android:5.1.0@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Server, Link2, Trash2, Globe, Search, Zap } from "lucide-react";
+import { Plus, Server, Link2, Trash2, Globe, Search, Zap, Copy, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { LocalListener, PeerView, ServiceView } from "../types";
 import { app } from "../lib/wails";
@@ -225,12 +225,12 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                           <span className="font-mono text-zinc-500">{s.protocol}:{s.port}</span>
                         </div>
                         {local ? (
-                          <span className="font-mono text-emerald-400 text-[10px]">→ {local}</span>
+                          <DialedPill addr={local} />
                         ) : (
                           <button
                             disabled={dialing?.peerId === p.peerId && dialing?.port === s.port}
                             onClick={() => dialPeerService(p, s)}
-                            className="px-2 py-1 rounded bg-white/[0.06] hover:bg-white/[0.12] text-[11px] font-medium disabled:opacity-50"
+                            className="px-2 py-1 rounded bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 text-[11px] font-medium disabled:opacity-50"
                           >
                             Ulash
                           </button>
@@ -245,5 +245,34 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
         </div>
       </div>
     </div>
+  );
+}
+
+// DialedPill is shown after a successful Dial — the local listener
+// address the user can paste into a browser, ssh, or any third-party
+// app to reach the remote service. Includes a one-click copy because
+// most users will want to immediately use the address.
+function DialedPill({ addr }: { addr: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(addr);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {}
+  };
+  return (
+    <button
+      onClick={copy}
+      className="group flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 transition-colors"
+      title="Nusxa olish"
+    >
+      <span className="font-mono text-emerald-300 text-[11px]">{addr}</span>
+      {copied ? (
+        <Check className="w-3 h-3 text-emerald-300" strokeWidth={2.5} />
+      ) : (
+        <Copy className="w-3 h-3 text-emerald-300/60 group-hover:text-emerald-300" strokeWidth={2} />
+      )}
+    </button>
   );
 }

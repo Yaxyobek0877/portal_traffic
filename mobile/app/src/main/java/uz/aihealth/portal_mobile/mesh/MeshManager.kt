@@ -2,8 +2,10 @@ package uz.aihealth.portal_mobile.mesh
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
 import uz.aihealth.portal_mobile.crypt.Crypt
 import uz.aihealth.portal_mobile.crypt.PortalKey
@@ -66,6 +69,7 @@ sealed class MeshState {
     data object Idle : MeshState()
     data object Connecting : MeshState()
     data class Ready(val portal: PortalInfo) : MeshState()
+    data class Reconnecting(val attempt: Int) : MeshState()
     data class Failed(val reason: String) : MeshState()
     data object Closed : MeshState()
 }
@@ -90,8 +94,8 @@ private class MeshPeer(
  * for newcomers), heartbeats over the control channel, and chat
  * over the chat channel sealed with the portal-derived secretbox key.
  *
- * Currently implemented: chat + RTT. Transfer, proxy, services, and
- * auto-reconnect are deferred.
+ * Currently implemented: chat + RTT + auto-reconnect (joiner side).
+ * Transfer, proxy, and services are deferred.
  */
 class MeshManager(
     appContext: Context,
@@ -100,7 +104,7 @@ class MeshManager(
     private val signalingUrl: String = DEFAULT_SIGNALING_URL,
 ) {
     private val factory = WebRtcFactory.get(appContext)
-    private val sig = SignalingClient(signalingUrl)
+    private var sig = SignalingClient(signalingUrl)
 
     private val peers = ConcurrentHashMap<String, MeshPeer>()
 
@@ -108,6 +112,20 @@ class MeshManager(
     @Volatile private var myPeerId: String = ""
     @Volatile private var myNickname: String = nickname
     @Volatile private var queuedOperation: (() -> Unit)? = null
+
+    // Saved at create/join time so reconnect can re-issue the same
+    // portal.join. Owners can't reclaim their portal — the server tears
+    // it down on disconnect — so we surface Failed for them instead.
+    @Volatile private var wasJoiner: Boolean = false
+    @Volatile private var joinedId: String = ""
+    @Volatile private var joinedCode: String = ""
+
+    /**
+     * While non-null, the consumer routes "is this attempt OK?" verdicts
+     * from Joined / Error / ConnectionLost into this deferred instead of
+     * applying the normal state transitions. Used by the reconnect loop.
+     */
+    @Volatile private var pendingReconnectOutcome: CompletableDeferred<Boolean>? = null
 
     private val _state = MutableStateFlow<MeshState>(MeshState.Idle)
     val state: StateFlow<MeshState> = _state.asStateFlow()
@@ -123,6 +141,7 @@ class MeshManager(
 
     private var consumerJob: Job? = null
     private var heartbeatJob: Job? = null
+    private var reconnectJob: Job? = null
 
     // ------------------------------------------------------------------------
     // Public API
@@ -131,6 +150,7 @@ class MeshManager(
     fun createPortal(publicNick: Boolean = false) {
         check(consumerJob == null) { "mesh already running" }
         _state.value = MeshState.Connecting
+        wasJoiner = false
         queuedOperation = { sig.createPortal(nickname, publicNick) }
         startConsumer()
         startHeartbeat()
@@ -141,6 +161,9 @@ class MeshManager(
         check(consumerJob == null) { "mesh already running" }
         _state.value = MeshState.Connecting
         portalKey = Crypt.derive(code)
+        wasJoiner = true
+        joinedId = portalId
+        joinedCode = code
         queuedOperation = { sig.joinPortal(portalId, code, nickname) }
         startConsumer()
         startHeartbeat()
@@ -174,6 +197,7 @@ class MeshManager(
     }
 
     fun close() {
+        reconnectJob?.cancel()
         consumerJob?.cancel()
         heartbeatJob?.cancel()
         for (p in peers.values) p.conn.close()
@@ -259,6 +283,10 @@ class MeshManager(
                 for (p in ev.msg.peers) {
                     addPeer(p.peerId, p.nickname, p.virtualIp, p.isOwner, weAreJoiner = true)
                 }
+                // If this Joined arrived during a reconnect attempt, the
+                // reconnect loop is awaiting a verdict — release it.
+                pendingReconnectOutcome?.complete(true)
+                pendingReconnectOutcome = null
             }
 
             is SignalingEvent.PeerJoined -> {
@@ -303,6 +331,11 @@ class MeshManager(
 
             is SignalingEvent.Error -> {
                 Log.w(TAG, "signaling error ${ev.msg.code}: ${ev.msg.message}")
+                if (pendingReconnectOutcome != null) {
+                    pendingReconnectOutcome?.complete(false)
+                    pendingReconnectOutcome = null
+                    return
+                }
                 if (_state.value !is MeshState.Ready) {
                     _state.value = MeshState.Failed(ev.msg.message)
                     close()
@@ -310,10 +343,14 @@ class MeshManager(
             }
 
             is SignalingEvent.ConnectionLost -> {
-                if (_state.value !is MeshState.Closed) {
-                    _state.value = MeshState.Failed("signaling: ${ev.reason}")
+                // During an active reconnect attempt: just mark this attempt
+                // as failed; the loop will spin up another one.
+                if (pendingReconnectOutcome != null) {
+                    pendingReconnectOutcome?.complete(false)
+                    pendingReconnectOutcome = null
+                    return
                 }
-                close()
+                handleConnectionLost(ev.reason)
             }
         }
     }
@@ -445,6 +482,80 @@ class MeshManager(
                 timestampMs = System.currentTimeMillis(),
             ),
         )
+    }
+
+    // ------------------------------------------------------------------------
+    // Reconnect (joiner side only — owners can't reclaim their portal,
+    // since the server tears it down when the owner's WebSocket drops).
+    // Mirrors client/mesh/manager.go attemptReconnect.
+    // ------------------------------------------------------------------------
+
+    private fun handleConnectionLost(reason: String) {
+        val cur = _state.value
+        val canReconnect = wasJoiner &&
+            cur is MeshState.Ready &&
+            joinedId.isNotEmpty() &&
+            joinedCode.isNotEmpty()
+        if (!canReconnect) {
+            _state.value = MeshState.Failed("aloqa uzildi: $reason")
+            close()
+            return
+        }
+        if (reconnectJob?.isActive == true) return
+        reconnectJob = scope.launch { runReconnectLoop() }
+    }
+
+    private suspend fun runReconnectLoop() {
+        var backoff = 1_000L
+        for (attempt in 1..8) {
+            _state.value = MeshState.Reconnecting(attempt)
+            delay(backoff)
+            if (tryReconnectOnce()) {
+                Log.d(TAG, "reconnected on attempt $attempt")
+                reconnectJob = null
+                return
+            }
+            backoff = (backoff * 2).coerceAtMost(60_000L)
+        }
+        _state.value = MeshState.Failed("Qayta ulanish urinishlari tugadi")
+        close()
+    }
+
+    private suspend fun tryReconnectOnce(): Boolean {
+        val id = joinedId
+        val code = joinedCode
+        if (id.isEmpty() || code.isEmpty()) return false
+
+        // Tear down whatever's running. Existing peer connections are
+        // dropped — the server's PortalJoined will hand us back the
+        // current roster and existing peers will re-handshake with us
+        // via portal.peer_joined pushes.
+        runCatching { consumerJob?.cancelAndJoin() }
+        consumerJob = null
+        runCatching { sig.close() }
+        for (p in peers.values) p.conn.close()
+        peers.clear()
+        publishPeers()
+
+        // Fresh signaling client with its own scope and event channel.
+        sig = SignalingClient(signalingUrl)
+        val outcome = CompletableDeferred<Boolean>()
+        pendingReconnectOutcome = outcome
+
+        consumerJob = scope.launch {
+            sig.events.collect { handleSignalingEvent(it) }
+        }
+        queuedOperation = { sig.joinPortal(id, code, nickname) }
+        sig.connect()
+
+        val ok = withTimeoutOrNull(15_000) { outcome.await() } == true
+        if (!ok) {
+            pendingReconnectOutcome = null
+            runCatching { consumerJob?.cancel() }
+            consumerJob = null
+            runCatching { sig.close() }
+        }
+        return ok
     }
 
     private fun publishPeers() {
