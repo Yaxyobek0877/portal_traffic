@@ -71,12 +71,15 @@ Oddiy foydalanuvchi ko'radigan qismlar.
 
 ## 5-bosqich — Kuchli imkoniyatlar
 
-- [ ] Virtual IP larni WebRTC `proxy` kanali bilan bog'laydigan lokal
-      TCP/UDP proksi (`portal expose tcp 25565`)
-- [ ] Mesh bo'ylab fosh qilingan portlarni ko'rsatadigan Services paneli
+- [x] **Lokal TCP proksi** — `portal expose tcp 25565`, `portal dial`
+      orqali boshqa peer ning portiga lokal listener qo'yish
+      (2026-04-30 audit paytida ko'chirildi, ishlaydi)
+- [x] **App-layer secretbox shifrlash** — portal kodidan PBKDF2 bilan
+      olingan kalit, har frame uchun yangi nonce
+- [ ] UDP proksi (ko'p o'yinlar UDP ham ishlatadi)
+- [ ] Mesh bo'ylab fosh qilingan portlarni ko'rsatadigan Services paneli (UI)
 - [ ] Push-to-talk bilan ovoz kanali
-- [ ] Demo sifatida o'rnatilgan mini-o'yinlar (data kanali ustida
-      tic-tac-toe)
+- [ ] Demo sifatida o'rnatilgan mini-o'yinlar
 
 ---
 

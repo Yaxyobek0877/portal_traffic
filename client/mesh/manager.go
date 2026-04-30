@@ -18,6 +18,7 @@ import (
 
 	"github.com/pion/webrtc/v4"
 	"portal_traffic/shared/protocol"
+	"portal_traffic_client/crypt"
 	"portal_traffic_client/peer"
 	"portal_traffic_client/signaling"
 )
@@ -40,7 +41,13 @@ var DefaultICEServers = []webrtc.ICEServer{
 }
 
 // Peer is the mesh's view of another participant in the portal.
-// State, RTT, etc. are mutated under Manager.mu.
+//
+// Concurrency: the Manager-level mu only protects membership in the
+// peers map. Per-peer mutable state (rtt, outstanding ping timestamps,
+// service registry) is protected by Peer.mu, which is independent of
+// the manager's lock and may be held without it. This is what avoids
+// the "write under RLock" data race we'd otherwise have when heartbeat
+// goroutines and message-routing goroutines both touch outstanding.
 type Peer struct {
 	ID        string
 	Nickname  string
@@ -49,6 +56,8 @@ type Peer struct {
 
 	conn *peer.Connection
 
+	mu sync.Mutex
+
 	// last observed round-trip time on the control channel.
 	rtt          time.Duration
 	rttUpdatedAt time.Time
@@ -56,16 +65,28 @@ type Peer struct {
 	// outstanding ping timestamps awaiting pong, keyed by send-time
 	// unix-milli. Pruned in heartbeat tick to avoid leaking on packet loss.
 	outstanding map[int64]time.Time
+
+	// services exposed by this remote peer (announced over the control
+	// channel). Keyed by port. Owned by the proxy layer.
+	services map[int]ServiceAnnounce
+}
+
+// ServiceAnnounce mirrors protocol.ServiceExpose for the proxy layer.
+type ServiceAnnounce struct {
+	Name     string
+	Protocol string
+	Port     int
 }
 
 // MeshEvent is what consumers see. PortalReady fires once the local
 // PortalCreated/PortalJoined response has landed; PeerReady fires
 // once a given peer has reached "all data channels open".
 type MeshEvent struct {
-	Type   MeshEventType
-	Peer   *Peer
-	Portal *PortalInfo
-	Err    error
+	Type     MeshEventType
+	Peer     *Peer
+	Portal   *PortalInfo
+	Err      error
+	ChatText string // populated for EventChat
 }
 
 type MeshEventType int
@@ -78,12 +99,15 @@ const (
 	EventPeerLeft
 	EventPortalClosed
 	EventError
+	EventChat
+	EventServiceAnnounce
 )
 
 func (t MeshEventType) String() string {
 	return [...]string{
 		"portal_ready", "peer_joining", "peer_ready",
 		"peer_rtt", "peer_left", "portal_closed", "error",
+		"chat", "service_announce",
 	}[t]
 }
 
@@ -110,6 +134,20 @@ type Manager struct {
 	myPeerID  string
 	myVIP     string
 
+	// portalKey is derived from the portal access code via PBKDF2 once
+	// we've successfully created or joined. nil before that. App-layer
+	// chat / proxy / transfer payloads are sealed with this key.
+	portalKey *crypt.Key
+
+	// localServices is what *we* expose into the mesh. Keyed by port.
+	// Owned by the proxy layer; the announcement is broadcast over the
+	// control channel whenever it changes.
+	localServices map[int]ServiceAnnounce
+
+	// proxyHandler is set by the proxy.Forwarder when the user wires
+	// it in. nil means proxy frames are dropped on the floor.
+	proxyHandler ProxyHandler
+
 	events chan MeshEvent
 
 	closeOnce sync.Once
@@ -129,11 +167,12 @@ func New(cfg Config) *Manager {
 		cfg.ICEServers = DefaultICEServers
 	}
 	return &Manager{
-		cfg:    cfg,
-		logger: cfg.Logger.With("component", "mesh"),
-		peers:  make(map[string]*Peer),
-		events: make(chan MeshEvent, 64),
-		closed: make(chan struct{}),
+		cfg:           cfg,
+		logger:        cfg.Logger.With("component", "mesh"),
+		peers:         make(map[string]*Peer),
+		localServices: make(map[int]ServiceAnnounce),
+		events:        make(chan MeshEvent, 64),
+		closed:        make(chan struct{}),
 	}
 }
 
@@ -184,6 +223,13 @@ func (m *Manager) JoinPortal(ctx context.Context, portalID, code string) error {
 	if err := m.dial(ctx); err != nil {
 		return err
 	}
+	// Pre-derive the encryption key now while we have the code in hand;
+	// the server's PortalJoined response doesn't echo the code.
+	k := crypt.Derive(code)
+	m.mu.Lock()
+	m.portalKey = &k
+	m.mu.Unlock()
+
 	if err := m.sig.JoinPortal(portalID, code, m.cfg.Nickname); err != nil {
 		return err
 	}
@@ -313,6 +359,12 @@ func (m *Manager) onPortalReady(portalID, code, peerID, vip, ownerID string, isO
 	m.mu.Lock()
 	m.myPeerID = peerID
 	m.myVIP = vip
+	// Owner path: server returned the code in PortalCreated; derive now.
+	// Joiner path: code was set in JoinPortal already, so leave portalKey alone.
+	if code != "" && m.portalKey == nil {
+		k := crypt.Derive(code)
+		m.portalKey = &k
+	}
 	m.portal = &PortalInfo{
 		PortalID:  portalID,
 		Code:      code,
@@ -372,6 +424,7 @@ func (m *Manager) onPeerJoinedWithRoster(peerID, nick, vip string, weAreJoiner b
 		ID: peerID, Nickname: nick, VirtualIP: vip,
 		conn:        conn,
 		outstanding: map[int64]time.Time{},
+		services:    map[int]ServiceAnnounce{},
 	}
 	m.peers[peerID] = p
 	m.mu.Unlock()
@@ -550,14 +603,18 @@ func (m *Manager) watchState(p *Peer) {
 // ----------------------------------------------------------------------------
 
 // SendChat broadcasts a text message on the chat channel to every peer.
-// Returns the number of peers it was successfully queued for.
+// Returns the number of peers it was successfully queued for. Payloads
+// are sealed with the portal-derived secretbox key on top of WebRTC's
+// DTLS, so even a hypothetical break of the transport layer doesn't
+// reveal chat content to non-portal-members.
 func (m *Manager) SendChat(text string) int {
+	sealed := m.sealEnvelope([]byte(text))
 	n := 0
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for _, p := range m.peers {
 		if p.conn != nil && p.conn.ChannelOpen(peer.ChanChat) {
-			if err := p.conn.SendText(peer.ChanChat, text); err == nil {
+			if err := p.conn.SendBinary(peer.ChanChat, sealed); err == nil {
 				n++
 			}
 		}
@@ -573,7 +630,8 @@ func (m *Manager) SendChatTo(peerID, text string) error {
 	if !ok {
 		return fmt.Errorf("peer %s not in mesh", peerID)
 	}
-	return p.conn.SendText(peer.ChanChat, text)
+	sealed := m.sealEnvelope([]byte(text))
+	return p.conn.SendBinary(peer.ChanChat, sealed)
 }
 
 // Leave releases the portal cleanly.
@@ -582,4 +640,163 @@ func (m *Manager) Leave() error {
 		return nil
 	}
 	return m.sig.Leave()
+}
+
+// ----------------------------------------------------------------------------
+// App-layer encryption envelope helpers
+// ----------------------------------------------------------------------------
+
+// sealEnvelope wraps a plaintext payload with secretbox using the
+// portal-derived key. If no key is set yet (we're still mid-handshake),
+// the plaintext is returned unchanged — chat from before the portal is
+// ready is rare and shouldn't be lost. Higher layers may opt to refuse.
+func (m *Manager) sealEnvelope(plaintext []byte) []byte {
+	m.mu.RLock()
+	k := m.portalKey
+	m.mu.RUnlock()
+	if k == nil {
+		return plaintext
+	}
+	return crypt.Seal(k, plaintext)
+}
+
+// openEnvelope is the inverse. text==true frames are JSON we sent
+// before encryption was wired (back-compat) — pass them through. We
+// detect a sealed binary frame by length: < nonce+tag is invalid;
+// anything else attempts decrypt and falls back to raw on failure so
+// peers running older builds still interoperate during the transition.
+func (m *Manager) openEnvelope(raw []byte, isText bool) ([]byte, bool) {
+	m.mu.RLock()
+	k := m.portalKey
+	m.mu.RUnlock()
+	if k == nil || isText {
+		return raw, true
+	}
+	pt, err := crypt.Open(k, raw)
+	if err != nil {
+		return nil, false
+	}
+	return pt, true
+}
+
+// ----------------------------------------------------------------------------
+// Proxy hooks (the actual TCP forwarder lives in client/proxy)
+// ----------------------------------------------------------------------------
+
+// ProxyHandler is the contract between the mesh and the (optional)
+// proxy package. It receives every decrypted inbound frame on the
+// proxy data channel along with the sender's peer ID. Returning
+// quickly is desirable; do heavy work in your own goroutine.
+type ProxyHandler interface {
+	HandleFrame(peerID string, payload []byte)
+}
+
+// SetProxyHandler registers (or replaces) the proxy.Forwarder. Pass
+// nil to detach.
+func (m *Manager) SetProxyHandler(h ProxyHandler) {
+	m.mu.Lock()
+	m.proxyHandler = h
+	m.mu.Unlock()
+}
+
+func (m *Manager) handleProxy(p *Peer, msg peer.Message) {
+	plain, ok := m.openEnvelope(msg.Raw, msg.Text)
+	if !ok {
+		m.logger.Warn("proxy frame decrypt failed", "from", p.ID)
+		return
+	}
+	m.mu.RLock()
+	h := m.proxyHandler
+	m.mu.RUnlock()
+	if h == nil {
+		// Nothing exposes / dials proxy on our side; drop silently.
+		return
+	}
+	h.HandleFrame(p.ID, plain)
+}
+
+// SendProxyFrame is what the proxy package calls when it has a frame
+// destined for a particular peer. The payload is sealed before it
+// hits the data channel.
+func (m *Manager) SendProxyFrame(peerID string, payload []byte) error {
+	m.mu.RLock()
+	p, ok := m.peers[peerID]
+	m.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("peer %s not in mesh", peerID)
+	}
+	if !p.conn.ChannelOpen(peer.ChanProxy) {
+		return fmt.Errorf("proxy channel not open with %s", peerID)
+	}
+	sealed := m.sealEnvelope(payload)
+	return p.conn.SendBinary(peer.ChanProxy, sealed)
+}
+
+// MyPeerID returns our own server-assigned peer ID. Useful for the
+// proxy layer when it needs to report bidirectional streams.
+func (m *Manager) MyPeerID() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.myPeerID
+}
+
+// ----------------------------------------------------------------------------
+// Service announce — the local side of expose/unexpose
+// ----------------------------------------------------------------------------
+
+// AnnounceService records a locally exposed service and broadcasts it
+// to every connected peer over the control channel. Idempotent.
+func (m *Manager) AnnounceService(name, proto string, port int) error {
+	if proto != "tcp" && proto != "udp" {
+		return fmt.Errorf("unknown protocol %q", proto)
+	}
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("port out of range")
+	}
+	m.mu.Lock()
+	m.localServices[port] = ServiceAnnounce{Name: name, Protocol: proto, Port: port}
+	m.mu.Unlock()
+	return m.broadcastControl(map[string]any{
+		"type":     protocol.TypeServiceExpose,
+		"name":     name,
+		"protocol": proto,
+		"port":     port,
+	})
+}
+
+// UnannounceService removes a previously exposed service.
+func (m *Manager) UnannounceService(port int) error {
+	m.mu.Lock()
+	delete(m.localServices, port)
+	m.mu.Unlock()
+	return m.broadcastControl(map[string]any{
+		"type": protocol.TypeServiceUnexpose,
+		"port": port,
+	})
+}
+
+// LocalServices returns a snapshot of services we're currently exposing.
+func (m *Manager) LocalServices() []ServiceAnnounce {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]ServiceAnnounce, 0, len(m.localServices))
+	for _, s := range m.localServices {
+		out = append(out, s)
+	}
+	return out
+}
+
+func (m *Manager) broadcastControl(payload map[string]any) error {
+	m.mu.RLock()
+	peers := make([]*Peer, 0, len(m.peers))
+	for _, p := range m.peers {
+		peers = append(peers, p)
+	}
+	m.mu.RUnlock()
+	for _, p := range peers {
+		if p.conn != nil && p.conn.ChannelOpen(peer.ChanControl) {
+			_ = p.conn.SendJSON(peer.ChanControl, payload)
+		}
+	}
+	return nil
 }

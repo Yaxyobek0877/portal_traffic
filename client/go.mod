@@ -7,6 +7,7 @@ replace portal_traffic/shared => ../shared
 require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/pion/webrtc/v4 v4.2.12
+	golang.org/x/crypto v0.48.0
 	portal_traffic/shared v0.0.0-00010101000000-000000000000
 )
 
@@ -28,7 +29,6 @@ require (
 	github.com/pion/transport/v4 v4.0.1 // indirect
 	github.com/pion/turn/v5 v5.0.3 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/time v0.14.0 // indirect

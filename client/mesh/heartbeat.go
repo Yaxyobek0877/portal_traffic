@@ -28,14 +28,26 @@ func (m *Manager) heartbeatLoop() {
 	}
 }
 
+// sendPings emits a ping on every peer's control channel and tracks
+// the send time so we can compute RTT when the pong returns.
+//
+// Locking: m.mu (RLock) is held only long enough to snapshot the peer
+// pointers; per-peer state is then mutated under each Peer's own mu.
+// This is what makes the function safe against concurrent writers (us,
+// pruneStalePings, handleControl).
 func (m *Manager) sendPings() {
 	now := time.Now()
 	ts := now.UnixMilli()
 	payload, _ := json.Marshal(protocol.Ping{Type: protocol.TypePing, TS: ts})
 
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	peers := make([]*Peer, 0, len(m.peers))
 	for _, p := range m.peers {
+		peers = append(peers, p)
+	}
+	m.mu.RUnlock()
+
+	for _, p := range peers {
 		if p.conn == nil || !p.conn.ChannelOpen(peer.ChanControl) {
 			continue
 		}
@@ -43,41 +55,57 @@ func (m *Manager) sendPings() {
 			m.logger.Debug("ping send failed", "peer", p.ID, "err", err)
 			continue
 		}
-		// Track outstanding under the peer's own lock proxy — we already
-		// hold m.mu (RLock) which keeps the map stable; mutate the peer
-		// map element directly. Concurrent heartbeats are serialised by
-		// the ticker so we don't race with ourselves. If routeMessage
-		// runs concurrently it operates on the same map; access is safe
-		// because we never resize p.outstanding from multiple goroutines
-		// (heartbeat writes; routeMessage deletes).
+		p.mu.Lock()
 		p.outstanding[ts] = now
+		p.mu.Unlock()
 	}
 }
 
 func (m *Manager) pruneStalePings() {
 	cutoff := time.Now().Add(-3 * m.cfg.HeartbeatInterval)
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	peers := make([]*Peer, 0, len(m.peers))
 	for _, p := range m.peers {
+		peers = append(peers, p)
+	}
+	m.mu.RUnlock()
+
+	for _, p := range peers {
+		p.mu.Lock()
 		for ts, sentAt := range p.outstanding {
 			if sentAt.Before(cutoff) {
 				delete(p.outstanding, ts)
 			}
 		}
+		p.mu.Unlock()
 	}
 }
 
 // routeMessage dispatches an inbound peer message based on the channel
-// it arrived on. Currently only the control channel does anything
-// machine-meaningful here; chat / transfer / proxy bubble up via
-// future hooks (Phase 4+).
+// it arrived on.
 func (m *Manager) routeMessage(p *Peer, msg peer.Message) {
 	switch msg.Channel {
 	case peer.ChanControl:
 		m.handleControl(p, msg)
 	case peer.ChanChat:
-		m.logger.Debug("chat msg", "from", p.ID, "text", string(msg.Raw))
+		m.handleChat(p, msg)
+	case peer.ChanTransfer:
+		// Phase 4 — file transfer reassembly lands here.
+		m.logger.Debug("transfer frame", "from", p.ID, "size", len(msg.Raw))
+	case peer.ChanProxy:
+		m.handleProxy(p, msg)
 	}
+}
+
+func (m *Manager) handleChat(p *Peer, msg peer.Message) {
+	// Decrypt if encryption was negotiated for this portal.
+	plain, ok := m.openEnvelope(msg.Raw, msg.Text)
+	if !ok {
+		m.logger.Warn("chat decrypt failed", "from", p.ID)
+		return
+	}
+	m.logger.Debug("chat", "from", p.ID, "text", string(plain))
+	m.emit(MeshEvent{Type: EventChat, Peer: p, ChatText: string(plain)})
 }
 
 func (m *Manager) handleControl(p *Peer, msg peer.Message) {
@@ -87,7 +115,6 @@ func (m *Manager) handleControl(p *Peer, msg peer.Message) {
 	t, _ := msg.JSON["type"].(string)
 	switch t {
 	case protocol.TypePing:
-		// Echo back as pong.
 		echo, _ := msg.JSON["ts"].(float64)
 		pong, _ := json.Marshal(protocol.Pong{
 			Type:   protocol.TypePong,
@@ -99,24 +126,61 @@ func (m *Manager) handleControl(p *Peer, msg peer.Message) {
 	case protocol.TypePong:
 		echo, _ := msg.JSON["echo_ts"].(float64)
 		ts := int64(echo)
-		m.mu.Lock()
+
+		p.mu.Lock()
 		sent, ok := p.outstanding[ts]
 		if ok {
 			delete(p.outstanding, ts)
 		}
-		m.mu.Unlock()
+		if ok {
+			p.rtt = time.Since(sent)
+			p.rttUpdatedAt = time.Now()
+		}
+		p.mu.Unlock()
+
 		if !ok {
 			return
 		}
-		rtt := time.Since(sent)
-		m.mu.Lock()
-		p.rtt = rtt
-		p.rttUpdatedAt = time.Now()
-		m.mu.Unlock()
 		m.emit(MeshEvent{Type: EventPeerRTT, Peer: p})
+
+	case protocol.TypeServiceExpose:
+		name, _ := msg.JSON["name"].(string)
+		proto, _ := msg.JSON["protocol"].(string)
+		portF, _ := msg.JSON["port"].(float64)
+		port := int(portF)
+		if port <= 0 || port > 65535 || (proto != "tcp" && proto != "udp") {
+			return
+		}
+		p.mu.Lock()
+		p.services[port] = ServiceAnnounce{Name: name, Protocol: proto, Port: port}
+		p.mu.Unlock()
+		m.emit(MeshEvent{Type: EventServiceAnnounce, Peer: p})
+
+	case protocol.TypeServiceUnexpose:
+		portF, _ := msg.JSON["port"].(float64)
+		port := int(portF)
+		p.mu.Lock()
+		delete(p.services, port)
+		p.mu.Unlock()
+		m.emit(MeshEvent{Type: EventServiceAnnounce, Peer: p})
 	}
 }
 
 // RTT returns the most recently measured round-trip time for a peer,
 // or 0 if no pong has been received yet.
-func (p *Peer) RTT() time.Duration { return p.rtt }
+func (p *Peer) RTT() time.Duration {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.rtt
+}
+
+// Services returns a snapshot of the services this peer is exposing.
+func (p *Peer) Services() []ServiceAnnounce {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]ServiceAnnounce, 0, len(p.services))
+	for _, s := range p.services {
+		out = append(out, s)
+	}
+	return out
+}

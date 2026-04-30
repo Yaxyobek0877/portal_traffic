@@ -29,10 +29,11 @@ uchun ishlatiladi; undan keyin hamma trafik peer-to-peer oqadi.
 | **Mesh ni jonli ko'rish** | Kim kim bilan ulangani jonli vizual ko'rinishda; haqiqiy vaqtda RTT (ping); NAT-traversal indikatorlari (to'g'ridan-to'g'ri yoki TURN orqali). |
 | **Maxfiyligingizni saqlash** | WebRTC handshake dan keyin signal serveri sizning trafigingizni hech qachon ko'rmaydi. Hamma ma'lumot peer-to-peer oqadi. |
 
-> **Holat:** signal serveri va client yadrosi (mesh dvigateli) tayyor.
-> 3 ta peer to'liq peer-to-peer mesh hosil qiladi va `control` data
-> kanali orqali heartbeat almashadi. Desktop UI keyingi bosqich —
-> qarang [ROADMAP.md](ROADMAP.md).
+> **Holat:** signal serveri, mesh dvigateli, **app-layer secretbox
+> shifrlash** va **TCP proxy ulanish** tayyor — peer'lar bir-birining
+> lokal portlariga (Minecraft, web, SSH) LAN da bo'lgandek ulanadi.
+> Desktop UI keyingi bosqich — qarang [ROADMAP.md](ROADMAP.md) va
+> [SECURITY-AUDIT.md](SECURITY-AUDIT.md).
 
 ---
 
@@ -89,6 +90,7 @@ avtomatik tarzda TURN relay ga o'tadi — qarang
 | [INSTALL.md](INSTALL.md) | Har bir platforma uchun manbadan build qilish |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Qanday hissa qo'shish, issue ochish, testlarni ishga tushirish |
 | [SECURITY.md](SECURITY.md) | Xavfsizlik siyosati va zaifliklarni xabar qilish |
+| [SECURITY-AUDIT.md](SECURITY-AUDIT.md) | 2026-04-30 audit natijalari, topilgan/tuzatilgan kamchiliklar |
 
 ---
 
