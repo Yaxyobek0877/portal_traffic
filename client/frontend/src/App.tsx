@@ -1,9 +1,16 @@
 import React, { useEffect } from "react";
 import { Welcome } from "./views/Welcome";
 import { PortalView } from "./views/Portal";
+import { Settings } from "./views/Settings";
 import { usePortalStore } from "./stores/portalStore";
-import { subscribe } from "./lib/wails";
-import type { ChatMessage, PeerView, PortalView as PortalT } from "./types";
+import { app, subscribe } from "./lib/wails";
+import type {
+  ChatMessage,
+  NATResult,
+  PeerView,
+  PortalView as PortalT,
+  TransferProgress,
+} from "./types";
 
 export default function App() {
   const screen = usePortalStore((s) => s.screen);
@@ -16,8 +23,15 @@ export default function App() {
   const clearMessages = usePortalStore((s) => s.clearMessages);
   const setBanner = usePortalStore((s) => s.setBanner);
   const banner = usePortalStore((s) => s.banner);
+  const setNat = usePortalStore((s) => s.setNat);
+  const upsertTransfer = usePortalStore((s) => s.upsertTransfer);
+  const setSaveDir = usePortalStore((s) => s.setSaveDir);
 
   useEffect(() => {
+    // One-shot bootstrap calls.
+    app.NATInfo().then((r) => r && setNat(r));
+    app.SaveDir().then(setSaveDir);
+
     const offs: Array<() => void> = [];
 
     offs.push(
@@ -46,6 +60,8 @@ export default function App() {
     offs.push(subscribe<ChatMessage>("chat", (m) => addMessage(m)));
     offs.push(subscribe<PeerView>("peer:services", (p) => upsertPeer(p)));
     offs.push(subscribe<string>("error", (msg) => msg && setBanner(msg)));
+    offs.push(subscribe<NATResult>("nat:result", (r) => setNat(r)));
+    offs.push(subscribe<TransferProgress>("transfer:progress", (t) => upsertTransfer(t)));
 
     return () => offs.forEach((off) => off());
   }, [
@@ -57,6 +73,9 @@ export default function App() {
     clearMessages,
     setBanner,
     setScreen,
+    setNat,
+    upsertTransfer,
+    setSaveDir,
   ]);
 
   return (
@@ -72,7 +91,9 @@ export default function App() {
           </button>
         </div>
       )}
-      {screen === "welcome" ? <Welcome /> : <PortalView />}
+      {screen === "welcome" && <Welcome />}
+      {screen === "portal" && <PortalView />}
+      {screen === "settings" && <Settings />}
     </div>
   );
 }

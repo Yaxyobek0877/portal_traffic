@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -19,8 +21,11 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"portal_traffic_client/mesh"
+	"portal_traffic_client/nat"
 	"portal_traffic_client/proxy"
 	"portal_traffic_client/signaling"
+	"portal_traffic_client/storage"
+	"portal_traffic_client/transfer"
 )
 
 // PortalView is the JSON projection of the local portal context for
@@ -76,12 +81,19 @@ type App struct {
 	mu       sync.RWMutex
 	mesh     *mesh.Manager
 	fwd      *proxy.Forwarder
+	xfer     *transfer.Engine
 	nick     string
 	url      string
 
 	// connectingTo is set when CreatePortal/JoinPortal is in flight, so
 	// the UI can surface a "connecting" state without polling.
 	connectingTo string
+
+	// store persists settings, portal history, contacts.
+	store *storage.Store
+
+	// natResult is the cached startup NAT classification.
+	natResult nat.Result
 }
 
 // NewApp constructs the app singleton; main.go binds it.
@@ -90,19 +102,49 @@ func NewApp(logger *slog.Logger) *App {
 }
 
 // Startup is called once Wails has the runtime context. We use it
-// to remember ctx for runtime.EventsEmit calls from any goroutine.
+// to remember ctx for runtime.EventsEmit calls from any goroutine,
+// open the on-disk store, and kick off a background NAT classification.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	a.logger.Info("portal app starting")
+
+	// Open SQLite. If it fails we proceed without persistence — the
+	// app still works, settings just don't survive restarts.
+	store, err := storage.Open("")
+	if err != nil {
+		a.logger.Warn("storage open failed; running without persistence", "err", err)
+	} else {
+		a.store = store
+		a.url = store.GetOr(storage.KeySignalingURL, "")
+		a.nick = store.GetOr(storage.KeyNickname, "")
+	}
+
+	// Run NAT detection in the background; UI subscribes to "nat:result".
+	go func() {
+		dctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		r, err := nat.Detect(dctx, nat.DefaultServers)
+		if err != nil {
+			a.logger.Debug("nat detect", "err", err)
+			return
+		}
+		a.mu.Lock()
+		a.natResult = r
+		a.mu.Unlock()
+		runtime.EventsEmit(ctx, "nat:result", r)
+	}()
 }
 
-// Shutdown cleans up the mesh and proxy on quit.
+// Shutdown cleans up the mesh, proxy, transfer engine, and SQLite.
 func (a *App) Shutdown(ctx context.Context) {
 	a.mu.Lock()
 	m := a.mesh
 	f := a.fwd
+	store := a.store
 	a.mesh = nil
 	a.fwd = nil
+	a.xfer = nil
+	a.store = nil
 	a.mu.Unlock()
 	if f != nil {
 		_ = f.Close()
@@ -111,6 +153,9 @@ func (a *App) Shutdown(ctx context.Context) {
 		_ = m.Leave()
 		m.Close()
 	}
+	if store != nil {
+		_ = store.Close()
+	}
 }
 
 // ----------------------------------------------------------------------------
@@ -118,7 +163,7 @@ func (a *App) Shutdown(ctx context.Context) {
 // ----------------------------------------------------------------------------
 
 // SignalingURL returns the configured signaling URL (effectively the
-// project default unless overridden by env).
+// project default unless overridden in settings).
 func (a *App) SignalingURL() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -128,8 +173,31 @@ func (a *App) SignalingURL() string {
 	return signaling.DefaultURL
 }
 
+// NATInfo returns the cached NAT classification result. Empty Type if
+// detection hasn't finished yet — the UI also subscribes to nat:result
+// for live updates.
+func (a *App) NATInfo() nat.Result {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.natResult
+}
+
+// SaveDir reports where received files land. UI displays it next to
+// the file-transfer affordance.
+func (a *App) SaveDir() string {
+	a.mu.RLock()
+	x := a.xfer
+	a.mu.RUnlock()
+	if x == nil {
+		// Fallback so the UI can show something pre-portal.
+		fallback, _ := os.UserHomeDir()
+		return filepath.Join(fallback, "Downloads", "Portal")
+	}
+	return x.SaveDir()
+}
+
 // SetSignalingURL changes the URL we'll connect to on next create/join.
-// Has no effect on a session already in flight.
+// Persists immediately. Has no effect on a session already in flight.
 func (a *App) SetSignalingURL(url string) error {
 	url = strings.TrimSpace(url)
 	if url == "" {
@@ -140,8 +208,99 @@ func (a *App) SetSignalingURL(url string) error {
 	}
 	a.mu.Lock()
 	a.url = url
+	store := a.store
 	a.mu.Unlock()
+	if store != nil {
+		_ = store.PutSetting(storage.KeySignalingURL, url)
+	}
 	return nil
+}
+
+// ----------------------------------------------------------------------------
+// File transfer
+// ----------------------------------------------------------------------------
+
+// SendFile asks the OS to pick a file via Wails dialog and starts a
+// transfer to peerID. Returns the assigned xfer_id (string for the JS
+// boundary). Progress is reported via the "transfer:progress" event.
+func (a *App) SendFile(peerID string) (string, error) {
+	a.mu.RLock()
+	x := a.xfer
+	a.mu.RUnlock()
+	if x == nil {
+		return "", errors.New("portal yo'q")
+	}
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Yuborish uchun fayl tanlang",
+	})
+	if err != nil || path == "" {
+		return "", err
+	}
+	xferID, err := x.SendFile(peerID, path)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d", xferID), nil
+}
+
+// SendFilePath sends a file by absolute path (used by drag-and-drop;
+// the UI gets the path from Wails' OnFileDrop event).
+func (a *App) SendFilePath(peerID, path string) (string, error) {
+	a.mu.RLock()
+	x := a.xfer
+	a.mu.RUnlock()
+	if x == nil {
+		return "", errors.New("portal yo'q")
+	}
+	if path == "" {
+		return "", errors.New("fayl yo'li bo'sh")
+	}
+	xferID, err := x.SendFile(peerID, path)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d", xferID), nil
+}
+
+// OpenSaveDir opens the OS file manager at the receive folder.
+func (a *App) OpenSaveDir() error {
+	dir := a.SaveDir()
+	_ = os.MkdirAll(dir, 0o755)
+	runtime.BrowserOpenURL(a.ctx, "file://"+dir)
+	return nil
+}
+
+// ----------------------------------------------------------------------------
+// Persistence — recent portals
+// ----------------------------------------------------------------------------
+
+// RecentPortals returns the latest N portal_history rows.
+func (a *App) RecentPortals(n int) []storage.HistoryEntry {
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+	if n <= 0 {
+		n = 10
+	}
+	rows, err := store.RecentHistory(n)
+	if err != nil {
+		return nil
+	}
+	return rows
+}
+
+// ClearHistory wipes portal history.
+func (a *App) ClearHistory() error {
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+	return store.ClearHistory()
 }
 
 // CreatePortal dials signaling and creates a new portal. Returns the
@@ -157,7 +316,12 @@ func (a *App) CreatePortal(nickname string, publicNick bool) (PortalView, error)
 		a.tearDown()
 		return PortalView{}, err
 	}
-	return a.waitPortalReady(8 * time.Second)
+	pv, err := a.waitPortalReady(8 * time.Second)
+	if err != nil {
+		return pv, err
+	}
+	a.persistEnter(pv, nickname, true)
+	return pv, nil
 }
 
 // JoinPortal dials signaling and joins by ID + code.
@@ -175,7 +339,34 @@ func (a *App) JoinPortal(nickname, portalID, code string) (PortalView, error) {
 		a.tearDown()
 		return PortalView{}, err
 	}
-	return a.waitPortalReady(8 * time.Second)
+	pv, err := a.waitPortalReady(8 * time.Second)
+	if err != nil {
+		return pv, err
+	}
+	// JoinPortal doesn't echo the code back from the server, so we
+	// persist what the user typed.
+	pv.Code = code
+	a.persistEnter(pv, nickname, false)
+	pv.Code = "" // don't surface the code on the joiner UI side
+	return pv, nil
+}
+
+// persistEnter records this portal in history and saves the nickname
+// for next launch. Best-effort; failures are logged at debug level.
+func (a *App) persistEnter(pv PortalView, nickname string, isOwner bool) {
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return
+	}
+	_ = store.PutSetting(storage.KeyNickname, nickname)
+	_ = store.AddHistory(storage.HistoryEntry{
+		PortalID: pv.PortalID,
+		Code:     pv.Code,
+		Nickname: nickname,
+		IsOwner:  isOwner,
+	})
 }
 
 // Leave detaches from the current portal but keeps the app running.
@@ -335,6 +526,16 @@ func (a *App) bringUpMesh(nickname string) error {
 	})
 	a.fwd = proxy.New(a.mesh, a.logger)
 	a.mesh.SetProxyHandler(a.fwd)
+
+	// Transfer engine — emits ProgressEvents straight to the frontend
+	// via Wails events. Uses ~/Downloads/Portal as save dir by default.
+	ctx := a.ctx
+	a.xfer = transfer.NewEngine(a.mesh, "", a.logger, func(ev transfer.ProgressEvent) {
+		if ctx != nil {
+			runtime.EventsEmit(ctx, "transfer:progress", ev)
+		}
+	})
+	a.mesh.SetTransferHandler(a.xfer)
 	a.mu.Unlock()
 
 	go a.pumpEvents()

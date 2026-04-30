@@ -148,6 +148,9 @@ type Manager struct {
 	// it in. nil means proxy frames are dropped on the floor.
 	proxyHandler ProxyHandler
 
+	// transferHandler is set by the transfer.Engine.
+	transferHandler TransferHandler
+
 	events chan MeshEvent
 
 	closeOnce sync.Once
@@ -691,11 +694,24 @@ type ProxyHandler interface {
 	HandleFrame(peerID string, payload []byte)
 }
 
+// TransferHandler is the file-transfer counterpart of ProxyHandler.
+// Same shape, different channel.
+type TransferHandler interface {
+	HandleFrame(peerID string, payload []byte)
+}
+
 // SetProxyHandler registers (or replaces) the proxy.Forwarder. Pass
 // nil to detach.
 func (m *Manager) SetProxyHandler(h ProxyHandler) {
 	m.mu.Lock()
 	m.proxyHandler = h
+	m.mu.Unlock()
+}
+
+// SetTransferHandler registers (or replaces) the transfer.Engine.
+func (m *Manager) SetTransferHandler(h TransferHandler) {
+	m.mu.Lock()
+	m.transferHandler = h
 	m.mu.Unlock()
 }
 
@@ -715,21 +731,46 @@ func (m *Manager) handleProxy(p *Peer, msg peer.Message) {
 	h.HandleFrame(p.ID, plain)
 }
 
+func (m *Manager) handleTransfer(p *Peer, msg peer.Message) {
+	plain, ok := m.openEnvelope(msg.Raw, msg.Text)
+	if !ok {
+		m.logger.Warn("transfer frame decrypt failed", "from", p.ID)
+		return
+	}
+	m.mu.RLock()
+	h := m.transferHandler
+	m.mu.RUnlock()
+	if h == nil {
+		return
+	}
+	h.HandleFrame(p.ID, plain)
+}
+
 // SendProxyFrame is what the proxy package calls when it has a frame
 // destined for a particular peer. The payload is sealed before it
 // hits the data channel.
 func (m *Manager) SendProxyFrame(peerID string, payload []byte) error {
+	return m.sendOnChannel(peerID, peer.ChanProxy, payload)
+}
+
+// SendTransferFrame is the file-transfer counterpart of SendProxyFrame.
+// Used by the transfer.Engine.
+func (m *Manager) SendTransferFrame(peerID string, payload []byte) error {
+	return m.sendOnChannel(peerID, peer.ChanTransfer, payload)
+}
+
+func (m *Manager) sendOnChannel(peerID, ch string, payload []byte) error {
 	m.mu.RLock()
 	p, ok := m.peers[peerID]
 	m.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf("peer %s not in mesh", peerID)
 	}
-	if !p.conn.ChannelOpen(peer.ChanProxy) {
-		return fmt.Errorf("proxy channel not open with %s", peerID)
+	if !p.conn.ChannelOpen(ch) {
+		return fmt.Errorf("%s channel not open with %s", ch, peerID)
 	}
 	sealed := m.sealEnvelope(payload)
-	return p.conn.SendBinary(peer.ChanProxy, sealed)
+	return p.conn.SendBinary(ch, sealed)
 }
 
 // MyPeerID returns our own server-assigned peer ID. Useful for the

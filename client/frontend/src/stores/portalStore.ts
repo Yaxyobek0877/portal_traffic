@@ -3,9 +3,17 @@
 // has to poll.
 
 import { create } from "zustand";
-import type { ChatMessage, PeerView, PortalView, ServiceView } from "../types";
+import type {
+  ChatMessage,
+  HistoryEntry,
+  NATResult,
+  PeerView,
+  PortalView,
+  ServiceView,
+  TransferProgress,
+} from "../types";
 
-type Screen = "welcome" | "portal";
+type Screen = "welcome" | "portal" | "settings";
 
 type Store = {
   screen: Screen;
@@ -37,9 +45,24 @@ type Store = {
 
   connecting: boolean;
   setConnecting: (b: boolean) => void;
+
+  // Phase 4 additions
+  nat: NATResult | null;
+  setNat: (n: NATResult | null) => void;
+
+  transfers: Record<string, TransferProgress>;
+  upsertTransfer: (t: TransferProgress) => void;
+  clearFinishedTransfers: () => void;
+
+  history: HistoryEntry[];
+  setHistory: (h: HistoryEntry[]) => void;
+
+  saveDir: string;
+  setSaveDir: (d: string) => void;
 };
 
 const MAX_MESSAGES = 500;
+const transferKey = (t: TransferProgress) => `${t.peerId}:${t.xferId}:${t.direction}`;
 
 export const usePortalStore = create<Store>((set) => ({
   screen: "welcome",
@@ -72,9 +95,7 @@ export const usePortalStore = create<Store>((set) => ({
 
   messages: [],
   addMessage: (m) =>
-    set((s) => ({
-      messages: [...s.messages.slice(-MAX_MESSAGES + 1), m],
-    })),
+    set((s) => ({ messages: [...s.messages.slice(-MAX_MESSAGES + 1), m] })),
   clearMessages: () => set({ messages: [] }),
 
   banner: "",
@@ -82,4 +103,23 @@ export const usePortalStore = create<Store>((set) => ({
 
   connecting: false,
   setConnecting: (b) => set({ connecting: b }),
+
+  nat: null,
+  setNat: (n) => set({ nat: n }),
+
+  transfers: {},
+  upsertTransfer: (t) =>
+    set((s) => ({ transfers: { ...s.transfers, [transferKey(t)]: t } })),
+  clearFinishedTransfers: () =>
+    set((s) => ({
+      transfers: Object.fromEntries(
+        Object.entries(s.transfers).filter(([, t]) => !t.done)
+      ),
+    })),
+
+  history: [],
+  setHistory: (h) => set({ history: h }),
+
+  saveDir: "",
+  setSaveDir: (d) => set({ saveDir: d }),
 }));

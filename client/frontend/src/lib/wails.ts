@@ -4,7 +4,14 @@
 // (npm run dev without `wails dev` wrapping it) so the UI is still
 // previewable without a backend.
 
-import type { PortalView, PeerView, ServiceView, ChatMessage } from "../types";
+import type {
+  PortalView,
+  PeerView,
+  ServiceView,
+  ChatMessage,
+  NATResult,
+  HistoryEntry,
+} from "../types";
 
 type Bridge = {
   SignalingURL: () => Promise<string>;
@@ -19,6 +26,13 @@ type Bridge = {
   ExposeService: (name: string, port: number) => Promise<void>;
   UnexposeService: (port: number) => Promise<void>;
   DialService: (peerId: string, remotePort: number, localPort: number) => Promise<string>;
+  NATInfo: () => Promise<NATResult>;
+  SaveDir: () => Promise<string>;
+  SendFile: (peerId: string) => Promise<string>;
+  SendFilePath: (peerId: string, path: string) => Promise<string>;
+  OpenSaveDir: () => Promise<void>;
+  RecentPortals: (n: number) => Promise<HistoryEntry[]>;
+  ClearHistory: () => Promise<void>;
 };
 
 declare global {
@@ -66,6 +80,21 @@ const stub: Bridge = {
   ExposeService: async () => {},
   UnexposeService: async () => {},
   DialService: async () => "127.0.0.1:0 (preview)",
+  NATInfo: async () => ({
+    type: 0,
+    label: "preview",
+    localAddr: "192.168.0.1:0",
+    reflexiveAddrs: [],
+    needsTurn: false,
+    detectedAt: new Date().toISOString(),
+    servers: [],
+  }),
+  SaveDir: async () => "~/Downloads/Portal",
+  SendFile: async () => "0",
+  SendFilePath: async () => "0",
+  OpenSaveDir: async () => {},
+  RecentPortals: async () => [],
+  ClearHistory: async () => {},
 };
 
 export const app: Bridge =

@@ -90,8 +90,7 @@ func (m *Manager) routeMessage(p *Peer, msg peer.Message) {
 	case peer.ChanChat:
 		m.handleChat(p, msg)
 	case peer.ChanTransfer:
-		// Phase 4 — file transfer reassembly lands here.
-		m.logger.Debug("transfer frame", "from", p.ID, "size", len(msg.Raw))
+		m.handleTransfer(p, msg)
 	case peer.ChanProxy:
 		m.handleProxy(p, msg)
 	}

@@ -6,6 +6,8 @@ replace portal_traffic/shared => ../shared
 
 require (
 	github.com/gorilla/websocket v1.5.3
+	github.com/mattn/go-sqlite3 v1.14.44
+	github.com/pion/stun/v2 v2.0.0
 	github.com/pion/webrtc/v4 v4.2.12
 	github.com/wailsapp/wails/v2 v2.12.0
 	golang.org/x/crypto v0.48.0
@@ -28,6 +30,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pion/datachannel v1.6.0 // indirect
+	github.com/pion/dtls/v2 v2.2.7 // indirect
 	github.com/pion/dtls/v3 v3.1.2 // indirect
 	github.com/pion/ice/v4 v4.2.5 // indirect
 	github.com/pion/interceptor v0.1.44 // indirect
@@ -40,6 +43,8 @@ require (
 	github.com/pion/sdp/v3 v3.0.18 // indirect
 	github.com/pion/srtp/v3 v3.0.10 // indirect
 	github.com/pion/stun/v3 v3.1.2 // indirect
+	github.com/pion/transport/v2 v2.2.1 // indirect
+	github.com/pion/transport/v3 v3.1.1 // indirect
 	github.com/pion/transport/v4 v4.0.1 // indirect
 	github.com/pion/turn/v5 v5.0.3 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect

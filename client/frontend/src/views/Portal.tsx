@@ -24,6 +24,8 @@ export function PortalView() {
   const clearPeers = usePortalStore((s) => s.clearPeers);
   const clearMessages = usePortalStore((s) => s.clearMessages);
   const nickname = usePortalStore((s) => s.nickname);
+  const nat = usePortalStore((s) => s.nat);
+  const transfers = Object.values(usePortalStore((s) => s.transfers));
 
   const [rightTab, setRightTab] = useState<RightTab>("chat");
   const [hovered, setHovered] = useState<string | null>(null);
@@ -140,7 +142,12 @@ export function PortalView() {
           </div>
           <div className="flex-1 min-h-0">
             {rightTab === "chat" ? (
-              <ChatPanel messages={messages} myPeerId={portal.ownPeerId} />
+              <ChatPanel
+                messages={messages}
+                myPeerId={portal.ownPeerId}
+                peers={sortedPeers}
+                transfers={transfers.filter((t) => sortedPeers.some((p) => p.peerId === t.peerId))}
+              />
             ) : (
               <ServicesPanel
                 localServices={localServices}
@@ -152,7 +159,7 @@ export function PortalView() {
         </aside>
       </div>
 
-      <StatusBar ownVip={portal.ownVip} peers={peers} signalingUrl={signalingUrl} />
+      <StatusBar ownVip={portal.ownVip} peers={peers} signalingUrl={signalingUrl} nat={nat} />
     </div>
   );
 }

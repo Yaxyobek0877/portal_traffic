@@ -29,6 +29,46 @@ export type ChatMessage = {
   from: string;
   nickname: string;
   text: string;
-  at: string; // ISO date string from Go's time.Time
+  at: string;
   isLocal: boolean;
+};
+
+export type NATResult = {
+  type: number;
+  label: string;
+  localAddr: string;
+  reflexiveAddrs: string[];
+  needsTurn: boolean;
+  detectedAt: string;
+  servers: string[];
+};
+
+export type Manifest = {
+  name: string;
+  size: number;
+  mime?: string;
+};
+
+export type TransferProgress = {
+  xferId: number;
+  peerId: string;
+  direction: "send" | "recv";
+  manifest: Manifest;
+  bytes: number;
+  total: number;
+  done: boolean;
+  error?: string;
+  startedAt: string;
+  updatedAt: string;
+  savePath?: string;
+};
+
+export type HistoryEntry = {
+  id: number;
+  portalId: string;
+  code: string;
+  nickname: string;
+  isOwner: boolean;
+  joinedAt: string;
+  lastSeen: string;
 };

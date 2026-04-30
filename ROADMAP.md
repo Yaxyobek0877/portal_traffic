@@ -60,16 +60,20 @@ Oddiy foydalanuvchi ko'radigan qismlar — Wails + React + TS + Tailwind.
 - [x] Servislar paneli — fosh qilish + boshqalarniki bilan ulash UI dan
 - [x] QR kod modal (offline-tarzda generatsiya)
 
-## 4-bosqich — Sayqal
+## 4-bosqich — Sayqal ✅
 
-- [ ] QR kod yaratish + skanerlash modal
-- [ ] Ishga tushganda STUN asosidagi NAT turi aniqlash, simmetrik / CGNAT
-      uchun banner
-- [ ] Drag-and-drop fayl uzatish va progress bar
-- [ ] Sozlamalar sahifasi (tarmoq, maxfiylik, ko'rinish, diagnostika)
-- [ ] UI da avtomatik qayta ulanish ko'rsatkichi
-- [ ] Sozlamalar, portal tarixi, saqlangan kontaktlar uchun SQLite
-- [ ] Sozlamalarda bandwidth grafigi
+- [x] QR kod yaratish (3-bosqichda kelgan)
+- [x] **Ishga tushganda STUN asosidagi NAT turi aniqlash** — Status bar
+      badge'i, simmetrik NAT uchun banner sozlamalarda
+- [x] **Drag-and-drop fayl uzatish va progress bar** — chat panelga
+      fayl tashlang, har juftlik uchun chunk-chunk uzatiladi
+- [x] **Sozlamalar sahifasi** — tarmoq (signal URL), diagnostika (NAT,
+      tashqi IP), fayllar (saqlanadigan papka), tarix
+- [x] **SQLite persistence** — `~/.portal/portal.db` da sozlamalar,
+      portal tarixi (oxirgi 50), kontaktlar
+- [x] Welcome ekranida yaqindagi portallar — bir click bilan qayta kirish
+- [ ] UI da avtomatik qayta ulanish ko'rsatkichi (keyin)
+- [ ] Bandwidth grafigi (keyin)
 
 ## 5-bosqich — Kuchli imkoniyatlar
 

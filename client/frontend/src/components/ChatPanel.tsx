@@ -1,24 +1,28 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Paperclip, Send } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { ChatMessage } from "../types";
+import type { ChatMessage, PeerView, TransferProgress } from "../types";
 import { app } from "../lib/wails";
 import { avatarColor, avatarInitial } from "../lib/avatar";
 import { timeOfDay } from "../lib/format";
+import { TransferRow } from "./TransferRow";
 
 type Props = {
   messages: ChatMessage[];
   myPeerId: string;
+  peers: PeerView[];
+  transfers: TransferProgress[];
 };
 
-export function ChatPanel({ messages, myPeerId }: Props) {
+export function ChatPanel({ messages, myPeerId, peers, transfers }: Props) {
   const [draft, setDraft] = useState("");
+  const [dragOver, setDragOver] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, transfers.length]);
 
   const send = async () => {
     const text = draft.trim();
@@ -27,22 +31,83 @@ export function ChatPanel({ messages, myPeerId }: Props) {
     await app.SendChat(text);
   };
 
+  const sendFile = async () => {
+    if (peers.length === 0) return;
+    // For v1 we offer "send to first connected peer" via the picker.
+    // Multi-peer broadcast would multi-stream; UI picker is Phase 5.
+    const first = peers.find((p) => p.state === "connected") ?? peers[0];
+    try {
+      await app.SendFile(first.peerId);
+    } catch {}
+  };
+
+  // Drag-and-drop. Wails on macOS bridges OS file drops via window
+  // dragenter/drop events on the webview. The dropped File objects
+  // have a `path` property under Wails (non-standard but documented).
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+  const onDragLeave = () => setDragOver(false);
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (peers.length === 0) return;
+    const first = peers.find((p) => p.state === "connected") ?? peers[0];
+    const files = Array.from(e.dataTransfer.files) as Array<File & { path?: string }>;
+    for (const f of files) {
+      const path = (f as any).path as string | undefined;
+      if (path) {
+        try {
+          await app.SendFilePath(first.peerId, path);
+        } catch {}
+      }
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col">
+    <div
+      className={`h-full flex flex-col relative ${
+        dragOver ? "ring-2 ring-violet-400/60 ring-inset" : ""
+      }`}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {dragOver && (
+        <div className="absolute inset-0 bg-violet-500/10 backdrop-blur-sm z-20 flex items-center justify-center pointer-events-none">
+          <div className="text-sm text-violet-200 font-medium">
+            Tashlang — meshda yuborish boshlanadi
+          </div>
+        </div>
+      )}
+
       <div ref={scrollerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.length === 0 && (
+        {messages.length === 0 && transfers.length === 0 && (
           <div className="text-center text-sm text-zinc-500 py-12">
-            Hozircha xabarlar yo'q.<br/>Birinchi bo'lib salom yozing.
+            Hozircha xabarlar yo'q.<br />
+            Birinchi bo'lib salom yozing yoki faylni shu yerga tashlang.
           </div>
         )}
         <AnimatePresence initial={false}>
           {messages.map((m, i) => (
-            <Bubble key={i} msg={m} mine={m.isLocal || m.from === myPeerId} />
+            <Bubble key={`m-${i}`} msg={m} mine={m.isLocal || m.from === myPeerId} />
+          ))}
+          {transfers.map((t) => (
+            <TransferRow key={`t-${t.peerId}-${t.xferId}-${t.direction}`} t={t} />
           ))}
         </AnimatePresence>
       </div>
 
       <div className="p-3 border-t border-white/5 flex gap-2 items-end">
+        <button
+          onClick={sendFile}
+          disabled={peers.length === 0}
+          title="Fayl yuborish"
+          className="h-10 w-10 rounded-btn flex items-center justify-center text-zinc-300 hover:bg-white/[0.05] disabled:opacity-40"
+        >
+          <Paperclip className="w-4 h-4" strokeWidth={2} />
+        </button>
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

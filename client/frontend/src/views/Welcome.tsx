@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, LogIn, Settings } from "lucide-react";
+import { Sparkles, LogIn, Settings, History as HistoryIcon } from "lucide-react";
 import { Logo } from "../components/Logo";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
@@ -14,21 +14,25 @@ export function Welcome() {
   const setScreen = usePortalStore((s) => s.setScreen);
   const setSignalingUrl = usePortalStore((s) => s.setSignalingUrl);
   const signalingUrl = usePortalStore((s) => s.signalingUrl);
+  const history = usePortalStore((s) => s.history);
+  const setHistory = usePortalStore((s) => s.setHistory);
 
   const [mode, setMode] = useState<Mode>("idle");
   const [portalId, setPortalId] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [draftUrl, setDraftUrl] = useState("");
 
   useEffect(() => {
-    app.SignalingURL().then((u) => {
-      setSignalingUrl(u);
-      setDraftUrl(u);
-    });
-  }, [setSignalingUrl]);
+    app.SignalingURL().then(setSignalingUrl);
+    app.RecentPortals(5).then(setHistory);
+  }, [setSignalingUrl, setHistory]);
+
+  const reuse = (id: string, c: string) => {
+    setMode("join");
+    setPortalId(id);
+    setCode(c);
+  };
 
   const submit = async () => {
     setError("");
@@ -57,30 +61,20 @@ export function Welcome() {
     }
   };
 
-  const saveSettings = async () => {
-    try {
-      await app.SetSignalingURL(draftUrl);
-      setSignalingUrl(draftUrl);
-      setSettingsOpen(false);
-    } catch (e: any) {
-      setError(e?.message || String(e));
-    }
-  };
-
   return (
     <div className="h-full flex flex-col">
       <div className="draggable h-[40px] flex justify-end items-center px-3">
         <button
           className="no-drag p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-white/5"
           title="Sozlamalar"
-          onClick={() => setSettingsOpen((v) => !v)}
+          onClick={() => setScreen("settings")}
         >
           <Settings className="w-4 h-4" strokeWidth={2} />
         </button>
       </div>
 
       <div className="flex-1 flex items-center justify-center px-6 -mt-6">
-        <div className="w-full max-w-[420px] text-center">
+        <div className="w-full max-w-[440px] text-center">
           <motion.div
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -195,52 +189,38 @@ export function Welcome() {
             )}
           </div>
 
-          <div className="text-xs text-zinc-600 mt-8 font-mono truncate">
-            {signalingUrl}
-          </div>
+          {history.length > 0 && mode === "idle" && (
+            <div className="mt-8 text-left">
+              <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-zinc-500 mb-2">
+                <HistoryIcon className="w-3 h-3" />
+                Yaqindagilar
+              </div>
+              <div className="space-y-1.5">
+                {history.slice(0, 4).map((h) => (
+                  <button
+                    key={h.id}
+                    onClick={() => h.code && reuse(h.portalId, h.code)}
+                    disabled={!h.code}
+                    className="w-full panel rounded-input px-3 py-2 flex items-center justify-between text-sm hover:bg-white/[0.07] disabled:opacity-50"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-mono text-violet-300">{h.portalId}</span>
+                      <span className="text-zinc-500 truncate">{h.nickname}</span>
+                    </div>
+                    {h.isOwner && (
+                      <span className="text-[10px] uppercase tracking-wider text-amber-400">
+                        owner
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="text-xs text-zinc-600 mt-8 font-mono truncate">{signalingUrl}</div>
         </div>
       </div>
-
-      {settingsOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-30"
-          onClick={() => setSettingsOpen(false)}
-        >
-          <motion.div
-            initial={{ scale: 0.95 }}
-            animate={{ scale: 1 }}
-            className="panel rounded-card p-6 w-[440px]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-base font-semibold mb-3">Sozlamalar</div>
-            <label className="text-xs uppercase tracking-widest text-zinc-500">
-              Signal URL
-            </label>
-            <input
-              type="text"
-              value={draftUrl}
-              onChange={(e) => setDraftUrl(e.target.value)}
-              className="input-base w-full mt-1.5 font-mono text-sm"
-            />
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                onClick={() => setSettingsOpen(false)}
-                className="px-3 py-1.5 text-sm text-zinc-400 hover:text-white"
-              >
-                Bekor
-              </button>
-              <button
-                onClick={saveSettings}
-                className="btn-primary rounded-btn px-4 py-1.5 text-sm font-medium"
-              >
-                Saqlash
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
     </div>
   );
 }
