@@ -27,22 +27,23 @@ amalga oshiradigan simli protokol [PROTOCOL.md](PROTOCOL.md) da to'liq
 hujjatlashtirilgan, shuning uchun istalgan kishi o'zinikini ishga
 tushira oladi.
 
-## 2-bosqich — Client yadrosi (jarayonda)
+## 2-bosqich — Client yadrosi ✅
 
-Go asosidagi mesh dvigateli, hali UI yo'q. Bu bosqich oxirida maqsad —
-turli tarmoqlardagi ikki CLI test client quyidagilarni qila oladigan
-bo'lishi:
+Go asosidagi mesh dvigateli, hali UI yo'q. CLI test harness ichida
+ikki yoki uchta client to'liq peer-to-peer mesh hosil qiladi va
+o'lchangan RTT ni hisobotlaydi.
 
-- [ ] Wails loyiha skeletini ochish (`client/`)
-- [ ] Xavfsiz WebSocket orqali signal URL ga ulanish
-- [ ] `pion/webrtc/v4` yordamida WebRTC handshake ni o'tkazish
-- [ ] Har bir peer o'rtasida to'liq mesh hosil qilish
-- [ ] To'rtta data kanalni multipleks qilish: `control`, `chat`,
-      `transfer`, `proxy`
-- [ ] RTT kuzatuvi bilan heartbeat ping/pong
-- [ ] Eksponensial backoff bilan avtomatik qayta ulanish
-- [ ] CLI smoke test: ikkita client `control` kanali orqali `ping`
-      almashadi va o'lchangan RTT ni hisobot qiladi
+- [x] `client/` da Go modul (Wails 3-bosqichda qo'shiladi)
+- [x] WebSocket orqali signal URL ga ulanish (`signaling.Client`)
+- [x] `pion/webrtc/v4` yordamida WebRTC handshake (`peer.Connection`)
+- [x] Har bir peer o'rtasida to'liq mesh hosil qilish (`mesh.Manager`)
+- [x] To'rtta data kanal multipleks: `control`, `chat`, `transfer`,
+      `proxy` (negotiated channel ID lari bilan)
+- [x] RTT kuzatuvi bilan heartbeat ping/pong (`mesh/heartbeat.go`)
+- [x] CLI test harness (`cmd/portal-cli`): 2-3 ta peer to'liq mesh
+      hosil qiladi va sub-ms RTT ko'rsatadi
+- [ ] Eksponensial backoff bilan avtomatik qayta ulanish (4-bosqichga
+      ko'chirildi)
 
 ## 3-bosqich — Desktop UI
 

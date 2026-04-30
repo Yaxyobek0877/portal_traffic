@@ -25,8 +25,10 @@ uchun ishlatiladi; undan keyin hamma trafik peer-to-peer oqadi.
 | **Mesh ni jonli ko'rish** | Kim kim bilan ulangani jonli vizual ko'rinishda; haqiqiy vaqtda RTT (ping); NAT-traversal indikatorlari (to'g'ridan-to'g'ri yoki TURN orqali). |
 | **Maxfiyligingizni saqlash** | WebRTC handshake dan keyin signal serveri sizning trafigingizni hech qachon ko'rmaydi. Hamma ma'lumot peer-to-peer oqadi. |
 
-> **Holat:** signal serveri tayyor va ishlamoqda. Desktop client faol
-> ishlab chiqilmoqda — qarang [ROADMAP.md](ROADMAP.md).
+> **Holat:** signal serveri va client yadrosi (mesh dvigateli) tayyor.
+> 3 ta peer to'liq peer-to-peer mesh hosil qiladi va `control` data
+> kanali orqali heartbeat almashadi. Desktop UI keyingi bosqich —
+> qarang [ROADMAP.md](ROADMAP.md).
 
 ---
 
