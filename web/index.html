@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0e1a" />
+
+<title>Portal — to'g'ridan-to'g'ri ulanish, orada server yo'q</title>
+<meta name="description" content="Portal — peer-to-peer mesh tarmoq dasturi. 6 xonali kod ulashing, 16 tagacha qurilma to'g'ridan-to'g'ri ulanadi: chat, fayl, port tunnel. Signal serveri faqat handshake uchun." />
+
+<meta property="og:title" content="Portal — P2P mesh tarmoq" />
+<meta property="og:description" content="To'g'ridan-to'g'ri ulanish. Orada hech qanday server yo'q." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://portal.1pro.uz" />
+<meta property="og:image" content="https://portal.1pro.uz/og.svg" />
+<meta name="twitter:card" content="summary_large_image" />
+
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+  /* ---------- design tokens ---------- */
+  :root {
+    --bg:        #0a0e1a;
+    --bg-2:      #0d1322;
+    --surface:   rgba(255,255,255,0.04);
+    --surface-2: rgba(255,255,255,0.06);
+    --border:    rgba(255,255,255,0.08);
+    --border-2:  rgba(255,255,255,0.14);
+    --text:      #e6e9ef;
+    --text-dim:  #98a2b3;
+    --text-faint:#5b6479;
+    --accent:    #8b5cf6;
+    --accent-2:  #6366f1;
+    --accent-3:  #22d3ee;
+    --gradient:  linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #22d3ee 100%);
+    --gradient-soft: linear-gradient(135deg, rgba(139,92,246,.18), rgba(99,102,241,.12) 60%, rgba(34,211,238,.06));
+    --radius:    12px;
+    --radius-sm: 8px;
+    --radius-xs: 6px;
+    --shadow-glow: 0 0 60px -15px rgba(139,92,246,.45);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  /* ambient mesh background */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139,92,246,.15), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 30%, rgba(34,211,238,.08), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 10% 90%, rgba(99,102,241,.10), transparent 60%);
+    z-index: -2;
+    pointer-events: none;
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+    background-size: 60px 60px;
+    mask-image: radial-gradient(ellipse 70% 70% at 50% 30%, #000 30%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 30%, #000 30%, transparent 80%);
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  a { color: inherit; }
+
+  .container {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ---------- nav ---------- */
+  nav.top {
+    position: sticky;
+    top: 0; left: 0; right: 0;
+    z-index: 50;
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    background: rgba(10,14,26,.65);
+    border-bottom: 1px solid var(--border);
+  }
+  nav.top .row {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+  }
+  nav.top .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; font-size: 17px; letter-spacing: -0.01em;
+    text-decoration: none;
+  }
+  nav.top .brand .mark { width: 26px; height: 26px; }
+  nav.top .links {
+    display: flex; gap: 28px; align-items: center;
+  }
+  nav.top .links a {
+    color: var(--text-dim); text-decoration: none; font-size: 14px;
+    transition: color .15s ease;
+  }
+  nav.top .links a:hover { color: var(--text); }
+  nav.top .cta {
+    background: var(--gradient);
+    color: white; padding: 8px 16px; border-radius: var(--radius-sm);
+    font-size: 14px; font-weight: 600;
+    text-decoration: none;
+    box-shadow: 0 4px 20px -4px rgba(139,92,246,.5);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  nav.top .cta:hover { transform: translateY(-1px); box-shadow: 0 8px 30px -6px rgba(139,92,246,.6); }
+  @media (max-width: 720px) {
+    nav.top .links a:not(.cta):not(.gh) { display: none; }
+  }
+
+  /* ---------- hero ---------- */
+  section.hero {
+    padding: 80px 0 60px;
+    text-align: center;
+    position: relative;
+  }
+  .hero .wormhole-wrap {
+    width: 220px; height: 220px;
+    margin: 0 auto 40px;
+    position: relative;
+  }
+  .hero .wormhole-wrap::after {
+    content: "";
+    position: absolute; inset: -30%;
+    background: radial-gradient(circle, rgba(139,92,246,.35), transparent 60%);
+    z-index: -1;
+    filter: blur(20px);
+    animation: pulse 4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: .55; transform: scale(1); }
+    50%      { opacity: .85; transform: scale(1.06); }
+  }
+  .wormhole circle { fill: none; stroke-linecap: round; }
+  .wormhole .ring1 { animation: spin 14s linear infinite; transform-origin: 100px 100px; }
+  .wormhole .ring2 { animation: spin 9s linear infinite reverse; transform-origin: 100px 100px; }
+  .wormhole .ring3 { animation: spin 6s linear infinite; transform-origin: 100px 100px; }
+  .wormhole .ring4 { animation: spin 4s linear infinite reverse; transform-origin: 100px 100px; }
+  @keyframes spin { from {transform:rotate(0)} to {transform:rotate(360deg)} }
+
+  .hero h1 {
+    font-size: clamp(40px, 7vw, 80px);
+    line-height: 1.04;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    margin: 0 0 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #c9cfde 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero p.tagline {
+    font-size: clamp(17px, 1.6vw, 21px);
+    color: var(--text-dim);
+    max-width: 620px;
+    margin: 0 auto 36px;
+    line-height: 1.55;
+  }
+  .hero p.tagline strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .pills {
+    display: inline-flex; gap: 8px; flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 36px;
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 12px; color: var(--text-dim);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 10px #22c55e; }
+  .pill.amber .dot { background: #f59e0b; box-shadow: 0 0 10px #f59e0b; }
+
+  .cta-row {
+    display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 13px 22px;
+    border-radius: var(--radius-sm);
+    font-weight: 600; font-size: 15px;
+    text-decoration: none;
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+    cursor: pointer; border: 1px solid transparent;
+  }
+  .btn-primary {
+    background: var(--gradient);
+    color: white;
+    box-shadow: 0 8px 28px -8px rgba(139,92,246,.55);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px -10px rgba(139,92,246,.7); }
+  .btn-ghost {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--text);
+    backdrop-filter: blur(8px);
+  }
+  .btn-ghost:hover { background: var(--surface-2); border-color: var(--border-2); transform: translateY(-2px); }
+
+  .icon { width: 18px; height: 18px; stroke-width: 1.6; }
+
+  /* ---------- sections ---------- */
+  section { padding: 80px 0; position: relative; }
+  section h2 {
+    font-size: clamp(28px, 4vw, 44px);
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    margin: 0 0 14px;
+  }
+  section .eyebrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin: 0 0 12px;
+  }
+  section p.lede {
+    font-size: 17px; color: var(--text-dim);
+    max-width: 640px; margin: 0 0 56px;
+    line-height: 1.6;
+  }
+
+  /* ---------- features grid ---------- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transition: transform .25s ease, border-color .2s ease, background .2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    border-color: var(--border-2);
+    background: var(--surface-2);
+  }
+  .card::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: var(--gradient-soft);
+    opacity: 0; transition: opacity .3s ease;
+    pointer-events: none;
+  }
+  .card:hover::before { opacity: .5; }
+  .card .icon-wrap {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--gradient);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: white;
+    margin-bottom: 18px;
+    box-shadow: 0 8px 24px -10px rgba(139,92,246,.6);
+  }
+  .card .icon-wrap svg { width: 20px; height: 20px; stroke-width: 1.7; }
+  .card h3 {
+    font-size: 18px; font-weight: 600; letter-spacing: -0.01em;
+    margin: 0 0 8px;
+  }
+  .card p {
+    color: var(--text-dim);
+    font-size: 14.5px;
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  /* ---------- how it works ---------- */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    counter-reset: step;
+  }
+  @media (max-width: 800px) { .steps { grid-template-columns: 1fr; } }
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    position: relative;
+    counter-increment: step;
+  }
+  .step::before {
+    content: "0" counter(step);
+    position: absolute; top: 24px; right: 24px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    color: var(--text-faint);
+    letter-spacing: 0.1em;
+  }
+  .step h3 {
+    font-size: 17px; font-weight: 600; margin: 0 0 8px;
+  }
+  .step p { color: var(--text-dim); font-size: 14.5px; margin: 0 0 18px; line-height: 1.6; }
+  .step .demo {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+  .step .demo .id, .step .demo .code { color: var(--accent-3); font-weight: 600; }
+  .step .demo .label { color: var(--text-faint); }
+
+  /* ---------- mesh diagram ---------- */
+  .mesh-section {
+    text-align: center;
+  }
+  .mesh-svg {
+    max-width: 100%; height: auto;
+    margin-top: 24px;
+  }
+
+  /* ---------- code block / install ---------- */
+  .install-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0;
+    overflow: hidden;
+    margin-bottom: 18px;
+  }
+  .install-card .head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px; color: var(--text-faint);
+    letter-spacing: 0.05em;
+  }
+  .install-card .head .copy {
+    background: transparent;
+    border: none; color: var(--text-dim);
+    font-family: inherit; font-size: 11px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background .15s ease, color .15s ease;
+  }
+  .install-card .head .copy:hover { background: var(--surface); color: var(--text); }
+  .install-card pre {
+    margin: 0; padding: 18px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13.5px; color: var(--text);
+    line-height: 1.65;
+    overflow-x: auto;
+  }
+  .install-card pre .c { color: var(--text-faint); }
+  .install-card pre .k { color: var(--accent-3); }
+
+  /* ---------- status table ---------- */
+  .roadmap {
+    display: grid; gap: 8px;
+  }
+  .roadmap-row {
+    display: grid;
+    grid-template-columns: 56px 1fr 110px;
+    gap: 18px;
+    align-items: center;
+    padding: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .roadmap-row .num {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--text-faint); font-size: 13px; letter-spacing: 0.1em;
+  }
+  .roadmap-row .name { font-weight: 500; }
+  .roadmap-row .name .desc {
+    display: block; color: var(--text-dim); font-size: 13px; margin-top: 2px;
+    font-weight: 400;
+  }
+  .roadmap-row .status {
+    text-align: right;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    justify-self: end;
+    white-space: nowrap;
+  }
+  .roadmap-row .status.done { background: rgba(34,197,94,.1); color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+  .roadmap-row .status.wip  { background: rgba(245,158,11,.1); color: #fbbf24; border: 1px solid rgba(245,158,11,.3); }
+  .roadmap-row .status.next { background: var(--surface); color: var(--text-faint); border: 1px solid var(--border); }
+  @media (max-width: 600px) {
+    .roadmap-row { grid-template-columns: 56px 1fr; }
+    .roadmap-row .status { grid-column: 2; justify-self: start; }
+  }
+
+  /* ---------- big CTA ---------- */
+  .big-cta {
+    text-align: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 64px 32px;
+    margin-top: 32px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    position: relative;
+    overflow: hidden;
+  }
+  .big-cta::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 50% 100% at 50% 100%, rgba(139,92,246,.18), transparent 70%);
+    pointer-events: none;
+  }
+  .big-cta h2 { margin-bottom: 12px; }
+  .big-cta p { color: var(--text-dim); max-width: 520px; margin: 0 auto 32px; }
+
+  /* ---------- footer ---------- */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 48px 0 36px;
+    margin-top: 80px;
+    color: var(--text-faint);
+    font-size: 14px;
+  }
+  footer .row {
+    display: flex; justify-content: space-between; align-items: center; gap: 24px;
+    flex-wrap: wrap;
+  }
+  footer .links { display: flex; gap: 24px; flex-wrap: wrap; }
+  footer a { color: var(--text-dim); text-decoration: none; transition: color .15s; }
+  footer a:hover { color: var(--text); }
+
+  /* ---------- text gradient ---------- */
+  .gradient-text {
+    background: var(--gradient);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* ---------- reveal-on-scroll ---------- */
+  .reveal {
+    opacity: 0; transform: translateY(20px);
+    transition: opacity .6s cubic-bezier(.25,.46,.45,.94), transform .6s cubic-bezier(.25,.46,.45,.94);
+  }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+
+  ::selection { background: rgba(139,92,246,.4); color: white; }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="container row">
+    <a href="#" class="brand">
+      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+        <defs>
+          <linearGradient id="markGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#8b5cf6"/>
+            <stop offset="100%" stop-color="#22d3ee"/>
+          </linearGradient>
+        </defs>
+        <circle cx="50" cy="50" r="35" fill="none" stroke="url(#markGrad)" stroke-width="6"/>
+        <circle cx="50" cy="50" r="20" fill="none" stroke="url(#markGrad)" stroke-width="4" opacity=".6"/>
+        <circle cx="50" cy="50" r="6"  fill="url(#markGrad)"/>
+      </svg>
+      Portal
+    </a>
+    <div class="links">
+      <a href="#imkoniyatlar">Imkoniyatlar</a>
+      <a href="#qadamlar">Qanday ishlaydi</a>
+      <a href="#roadmap">Roadmap</a>
+      <a class="gh" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">GitHub</a>
+      <a class="cta" href="https://github.com/Yaxyobek0877/portal_traffic#install">Yuklab olish</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="container">
+    <div class="wormhole-wrap" aria-hidden="true">
+      <svg class="wormhole" width="220" height="220" viewBox="0 0 200 200">
+        <defs>
+          <linearGradient id="wg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#8b5cf6"/>
+            <stop offset="60%" stop-color="#6366f1"/>
+            <stop offset="100%" stop-color="#22d3ee"/>
+          </linearGradient>
+          <radialGradient id="wgGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="100" cy="100" r="14" fill="url(#wgGlow)" opacity=".8"/>
+        <circle cx="100" cy="100" r="6"  fill="#fff" opacity=".95"/>
+
+        <g class="ring1">
+          <circle cx="100" cy="100" r="92" stroke="url(#wg)" stroke-width="1.2" stroke-dasharray="3 9" opacity=".55"/>
+        </g>
+        <g class="ring2">
+          <circle cx="100" cy="100" r="74" stroke="url(#wg)" stroke-width="1.4" stroke-dasharray="6 4" opacity=".7"/>
+        </g>
+        <g class="ring3">
+          <circle cx="100" cy="100" r="56" stroke="url(#wg)" stroke-width="1.8" stroke-dasharray="2 6" opacity=".85"/>
+        </g>
+        <g class="ring4">
+          <circle cx="100" cy="100" r="38" stroke="url(#wg)" stroke-width="2.2" stroke-dasharray="14 6"/>
+        </g>
+        <g class="ring2">
+          <circle cx="100" cy="100" r="24" stroke="url(#wg)" stroke-width="1.5" opacity=".6"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="pills">
+      <span class="pill"><span class="dot"></span> signaling.1pro.uz · jonli</span>
+      <span class="pill amber"><span class="dot"></span> v0.2 · 2-bosqich tugadi</span>
+    </div>
+
+    <h1>To'g'ridan-to'g'ri ulanish.<br/>Orada hech qanday <span class="gradient-text">server yo'q</span>.</h1>
+    <p class="tagline">
+      Portal — qurilmalar o'rtasida xususiy <strong>peer-to-peer mesh</strong> tarmoq quradigan
+      desktop dastur. 6 xonali kod ulashing — 16 tagacha qurilma to'g'ridan-to'g'ri ulanadi.
+      Chat, fayl, hatto LAN-style port tunneli — hammasi P2P.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+        </svg>
+        GitHub'da ko'rish
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/INSTALL.md" target="_blank" rel="noreferrer">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Manbadan build
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- =================== imkoniyatlar =================== -->
+<section id="imkoniyatlar">
+  <div class="container">
+    <p class="eyebrow reveal">Imkoniyatlar</p>
+    <h2 class="reveal">Bir portal ichida — istalgan narsa.</h2>
+    <p class="lede reveal">Bir marta kod ulashing va do'stlaringiz bilan birga ishlash uchun zarur bo'lgan barcha narsa qo'lingizda. Hech qanday markaziy server, hech qanday hisob qaydnomasi, hech qanday port forwarding.</p>
+
+    <div class="grid">
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"/><path d="M12 2a15.3 15.3 0 0 0-4 10 15.3 15.3 0 0 0 4 10"/>
+          </svg>
+        </div>
+        <h3>2 dan 16 qurilmagacha</h3>
+        <p>6 xonali ID + kod ulashing, internetning istalgan joyidan kim xohlasa qo'shiladi. Router sozlash yo'q, VPN yo'q, port forwarding yo'q.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        <h3>Chat va fayl</h3>
+        <p>Guruh chat, shaxsiy xabar, drag-and-drop fayl uzatish. Ma'lumot portal kodidan olingan kalit bilan uchidan-uchiga shifrlanadi.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+          </svg>
+        </div>
+        <h3>TCP/UDP tunnel</h3>
+        <p>Minecraft serverni <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">localhost:25565</code> da oching, do'stlaringiz <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">10.42.0.3:25565</code> orqali ulanadi. Mesh ichida har qanday port.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/>
+            <path d="M9 6h6M6 9v6M18 9v6M9 18h6M9 6l9 12M15 6l-9 12"/>
+          </svg>
+        </div>
+        <h3>Jonli mesh ko'rinish</h3>
+        <p>Kim kim bilan ulangani jonli vizual ko'rinishda. Haqiqiy vaqt RTT, NAT-traversal indikatorlari (to'g'ridan-to'g'ri yoki TURN orqali).</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <h3>Maxfiyligingiz</h3>
+        <p>WebRTC handshake dan keyin signal serveri sizning trafigingizni hech qachon ko'rmaydi. DTLS + portal kodidan kelgan secretbox.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="3" height="3"/>
+            <rect x="18" y="14" width="3" height="3"/>
+            <rect x="14" y="18" width="3" height="3"/>
+            <rect x="18" y="18" width="3" height="3"/>
+          </svg>
+        </div>
+        <h3>QR + 6 xonali kod</h3>
+        <p>Yonidagi do'stga QR ni ko'rsating yoki masofadagi do'stga ID + kodni yuboring. Hisob qaydnomasi yoki email kerak emas.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== qadamlar =================== -->
+<section id="qadamlar" style="background: linear-gradient(180deg, transparent, rgba(255,255,255,.015) 50%, transparent);">
+  <div class="container">
+    <p class="eyebrow reveal">Qanday ishlaydi</p>
+    <h2 class="reveal">Uch qadamda <span class="gradient-text">jonli mesh</span>.</h2>
+    <p class="lede reveal">Hisobga ro'yxatdan o'tish yo'q. Server tomonidan saqlangan ma'lumot yo'q. Faqat 6 xonali raqam.</p>
+
+    <div class="steps">
+      <div class="step reveal">
+        <h3>Portalni oching</h3>
+        <p>Dasturni oching, taxallus yozing va <strong>"Portal yaratish"</strong> ni bosing.</p>
+        <div class="demo">
+          <span class="label">ID:</span>   <span class="id">428591</span><br/>
+          <span class="label">KOD:</span>  <span class="code">739204</span>
+        </div>
+      </div>
+      <div class="step reveal">
+        <h3>Kodni ulashing</h3>
+        <p>Do'stlaringizga raqamlarni yuboring yoki QR kodni ko'rsating.</p>
+        <div class="demo" style="display:flex;align-items:center;justify-content:center;height:73px">
+          <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/>
+            <rect x="18" y="14" width="3" height="3"/><rect x="14" y="18" width="3" height="3"/>
+            <rect x="18" y="18" width="3" height="3"/>
+          </svg>
+        </div>
+      </div>
+      <div class="step reveal">
+        <h3>Mesh tushadi</h3>
+        <p>Har bir qurilma boshqa har biriga to'g'ridan-to'g'ri ulanadi. Server orqali emas.</p>
+        <div class="demo">
+          <span class="label">peer-1</span> ↔ <span class="label">peer-2</span> · <span class="id">0.4ms</span><br/>
+          <span class="label">peer-1</span> ↔ <span class="label">peer-3</span> · <span class="id">0.6ms</span><br/>
+          <span class="label">peer-2</span> ↔ <span class="label">peer-3</span> · <span class="id">0.5ms</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== install =================== -->
+<section id="install">
+  <div class="container">
+    <p class="eyebrow reveal">Boshlash</p>
+    <h2 class="reveal">Uchta buyruq, mesh tayyor.</h2>
+    <p class="lede reveal">Desktop binary 3-bosqichda chiqadi. Hozircha CLI test harness ham to'liq mesh ni quradi va RTT ni ko'rsatadi.</p>
+
+    <div class="install-card reveal">
+      <div class="head">
+        <span>terminal · clone va build</span>
+        <button class="copy" data-copy="git clone https://github.com/Yaxyobek0877/portal_traffic.git
+cd portal_traffic/client
+go run ./cmd/portal-cli -mode create -nick alice">copy</button>
+      </div>
+<pre><span class="c"># 1. repo ni klonlang</span>
+git clone https://github.com/Yaxyobek0877/portal_traffic.git
+<span class="c">cd</span> portal_traffic/client
+
+<span class="c"># 2. portal yarating (1-terminal)</span>
+go <span class="k">run</span> ./cmd/portal-cli -mode create -nick alice
+
+<span class="c"># 3. kodni boshqa terminalda joylang</span>
+go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
+    -portal &lt;ID&gt; -code &lt;KOD&gt;</pre>
+    </div>
+
+    <p style="color: var(--text-dim); font-size: 14px; margin-top: 12px;">
+      Standart endpoint: <code style="font-family:'JetBrains Mono',monospace;color:var(--accent-3)">wss://signaling.1pro.uz/ws</code>.
+      O'zingizniki ishlatish uchun <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/PROTOCOL.md" style="color:var(--accent-3)">PROTOCOL.md</a> ga qarang.
+    </p>
+  </div>
+</section>
+
+<!-- =================== roadmap =================== -->
+<section id="roadmap">
+  <div class="container">
+    <p class="eyebrow reveal">Joriy holat</p>
+    <h2 class="reveal">Beshta bosqichda quriladi.</h2>
+    <p class="lede reveal">Har bir bosqich ishlaydigan to'xtash nuqtasi — oldingisi tasdiqlangan tarzda ishlamasdan turib keyingisiga o'tilmaydi.</p>
+
+    <div class="roadmap">
+      <div class="roadmap-row reveal">
+        <span class="num">01</span>
+        <span class="name">Signal magistrali<span class="desc">Portal lifecycle, WebRTC SDP/ICE relay, TLS, rate-limiting</span></span>
+        <span class="status done">tugadi</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">02</span>
+        <span class="name">Client yadrosi<span class="desc">pion/webrtc, multipleks data channel, full mesh, heartbeat</span></span>
+        <span class="status done">tugadi</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">03</span>
+        <span class="name">Desktop UI<span class="desc">Wails skelet, welcome ekrani, animatsiyali mesh diagrammasi, chat</span></span>
+        <span class="status wip">jarayonda</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">04</span>
+        <span class="name">Sayqal<span class="desc">QR, NAT detection, fayl uzatish, sozlamalar, SQLite, auto-reconnect</span></span>
+        <span class="status next">keyin</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">05</span>
+        <span class="name">Kuchli imkoniyatlar<span class="desc">Lokal TCP/UDP proxy, ovoz kanali, services panel</span></span>
+        <span class="status next">keyin</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== big cta =================== -->
+<section>
+  <div class="container">
+    <div class="big-cta reveal">
+      <h2>Loyihaga qarshing.</h2>
+      <p>Kod ochiq. Issue oching, patch yuboring, yoki o'zingizning fork ni quring.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">
+          GitHub Repo
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/CONTRIBUTING.md" target="_blank" rel="noreferrer">
+          Hissa qo'shish
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container row">
+    <div>© 2026 Portal · MIT*</div>
+    <div class="links">
+      <a href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">GitHub</a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/ROADMAP.md" target="_blank" rel="noreferrer">Roadmap</a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/ARCHITECTURE.md" target="_blank" rel="noreferrer">Arxitektura</a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/PROTOCOL.md" target="_blank" rel="noreferrer">Protokol</a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/SECURITY.md" target="_blank" rel="noreferrer">Xavfsizlik</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // reveal-on-scroll
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    }
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // copy buttons
+  document.querySelectorAll('.copy[data-copy]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy);
+        const old = btn.textContent;
+        btn.textContent = 'copied ✓';
+        setTimeout(() => { btn.textContent = old; }, 1400);
+      } catch (e) { /* noop */ }
+    });
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://portal.1pro.uz/sitemap.xml

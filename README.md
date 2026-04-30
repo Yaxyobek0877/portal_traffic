@@ -4,6 +4,10 @@
 
 **To'g'ridan-to'g'ri ulanish. Orada hech qanday server yo'q.**
 
+[**Sayt → portal.1pro.uz**](https://portal.1pro.uz) ·
+[Signaling endpoint](https://signaling.1pro.uz/healthz) ·
+[Roadmap](ROADMAP.md)
+
 Portal — bu odamlar o'rtasida xususiy peer-to-peer (tengma-teng) mesh tarmoq
 quradigan desktop dastur. Portal oching, 6 xonali kodni ulashing — va
 ichidagi har bir qurilma boshqa har bir qurilma bilan to'g'ridan-to'g'ri

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="60%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+    <radialGradient id="bgGlow" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#0a0e1a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#0a0e1a"/>
+  <rect width="1200" height="630" fill="url(#bgGlow)"/>
+
+  <!-- Wormhole logo -->
+  <g transform="translate(180,200)">
+    <circle cx="100" cy="100" r="92" fill="none" stroke="url(#g)" stroke-width="2" stroke-dasharray="3 9" opacity="0.5"/>
+    <circle cx="100" cy="100" r="74" fill="none" stroke="url(#g)" stroke-width="2.4" stroke-dasharray="6 4" opacity="0.7"/>
+    <circle cx="100" cy="100" r="56" fill="none" stroke="url(#g)" stroke-width="3" stroke-dasharray="2 6" opacity="0.85"/>
+    <circle cx="100" cy="100" r="38" fill="none" stroke="url(#g)" stroke-width="3.6" stroke-dasharray="14 6"/>
+    <circle cx="100" cy="100" r="14" fill="url(#g)" opacity="0.6"/>
+    <circle cx="100" cy="100" r="6"  fill="#fff"/>
+  </g>
+
+  <!-- Text -->
+  <text x="460" y="280" fill="white" font-family="Inter, system-ui, sans-serif" font-weight="800" font-size="92" letter-spacing="-3">Portal</text>
+  <text x="460" y="335" fill="#98a2b3" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="28">P2P mesh tarmoq · 1pro.uz</text>
+
+  <text x="460" y="430" fill="white" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="34" opacity="0.95">To'g'ridan-to'g'ri ulanish.</text>
+  <text x="460" y="475" fill="white" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="34" opacity="0.95">Orada hech qanday server yo'q.</text>
+</svg>
