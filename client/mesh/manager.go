@@ -728,15 +728,39 @@ func (m *Manager) watchState(p *Peer) {
 		case <-p.conn.StateChanges():
 			if !announced && p.conn.State() == peer.StateConnected && p.conn.AllChannelsOpen() {
 				m.emit(MeshEvent{Type: EventPeerReady, Peer: p})
+				m.replayServicesTo(p)
 				announced = true
 			}
 		case <-time.After(200 * time.Millisecond):
 			// Channels may open after the state hits Connected; poll briefly.
 			if !announced && p.conn.State() == peer.StateConnected && p.conn.AllChannelsOpen() {
 				m.emit(MeshEvent{Type: EventPeerReady, Peer: p})
+				m.replayServicesTo(p)
 				announced = true
 			}
 		}
+	}
+}
+
+// replayServicesTo pushes our currently-exposed services to a single
+// freshly-ready peer over their control channel. AnnounceService only
+// broadcasts at expose time; without this, peers that join after the
+// host has already exposed a port never see it.
+func (m *Manager) replayServicesTo(p *Peer) {
+	m.mu.RLock()
+	services := make([]ServiceAnnounce, 0, len(m.localServices))
+	for _, s := range m.localServices {
+		services = append(services, s)
+	}
+	m.mu.RUnlock()
+
+	for _, s := range services {
+		_ = p.conn.SendJSON(peer.ChanControl, map[string]any{
+			"type":     protocol.TypeServiceExpose,
+			"name":     s.Name,
+			"protocol": s.Protocol,
+			"port":     s.Port,
+		})
 	}
 }
 
