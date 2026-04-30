@@ -1,19 +1,20 @@
-# Build from source
+# Manbadan build qilish
 
-The desktop app isn't packaged for users yet (Phase 2 in
-[ROADMAP.md](ROADMAP.md)). If you want to build the project today, you'll
-need a Go toolchain and the platform prerequisites for [Wails](https://wails.io)
-on your OS.
+Desktop dastur foydalanuvchilar uchun hali paketlanmagan
+([ROADMAP.md](ROADMAP.md) dagi 2-bosqich). Loyihani bugun build qilmoqchi
+bo'lsangiz, sizga Go toolchain va o'z OS ingizda
+[Wails](https://wails.io) uchun kerakli platforma talablari kerak
+bo'ladi.
 
-> Once Phase 2 ships, prebuilt installers for macOS, Windows, and Linux
-> will land on the Releases page and this file will become a "for
-> contributors" guide.
+> 2-bosqich tugagandan keyin macOS, Windows va Linux uchun tayyor
+> installer lar Releases sahifasida paydo bo'ladi va bu fayl
+> "kontributorlar uchun" qo'llanmaga aylanadi.
 
 ---
 
-## 1. Prerequisites
+## 1. Talab qilinadigan narsalar
 
-### All platforms
+### Hamma platformalar
 
 - **Go 1.22+** — `https://go.dev/dl/`
 - **Git**
@@ -22,7 +23,7 @@ on your OS.
 
 ```sh
 xcode-select --install
-brew install node          # for the React frontend (Phase 2)
+brew install node          # React frontend uchun (2-bosqich)
 ```
 
 ### Linux (Debian / Ubuntu)
@@ -35,7 +36,7 @@ sudo apt install -y \
     nodejs npm
 ```
 
-On Fedora:
+Fedora da:
 
 ```sh
 sudo dnf install -y gcc-c++ pkg-config gtk3-devel webkit2gtk4.1-devel nodejs npm
@@ -43,52 +44,53 @@ sudo dnf install -y gcc-c++ pkg-config gtk3-devel webkit2gtk4.1-devel nodejs npm
 
 ### Windows
 
-- Install **Go** from the official MSI installer.
-- Install [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
-  (preinstalled on Windows 11).
-- Install [Node.js LTS](https://nodejs.org/).
-- Install [Git for Windows](https://git-scm.com/download/win).
+- Rasmiy MSI installerdan **Go** ni o'rnating.
+- [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+  ni o'rnating (Windows 11 da o'rnatilgan).
+- [Node.js LTS](https://nodejs.org/) ni o'rnating.
+- [Git for Windows](https://git-scm.com/download/win) ni o'rnating.
 
 ---
 
-## 2. Clone
+## 2. Klonlash
 
 ```sh
-git clone https://github.com/<your-username>/portal-traffic.git
-cd portal-traffic
+git clone https://github.com/<sizning-username>/portal_traffic.git
+cd portal_traffic
 ```
 
 ---
 
-## 3. Build the bits available today
+## 3. Bugun mavjud bo'lgan qismlarni build qilish
 
-### The shared protocol package
+### Shared protocol paketi
 
 ```sh
 cd shared
 go test ./...
 ```
 
-That's it — `shared/` has no binary. It's imported by the client.
+Hammasi shu — `shared/` da binary yo'q. U client tomonidan import qilinadi.
 
-### The desktop app (Phase 2 — coming up)
+### Desktop dastur (2-bosqich — yo'lda)
 
-When `client/` lands, the build will look like this. Run from the repo root:
+`client/` paydo bo'lganda build shunday ko'rinishda bo'ladi. Repo
+ildizidan:
 
 ```sh
-# Install Wails CLI once
+# Wails CLI ni bir marta o'rnatish
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-# Development mode (live reload)
+# Development rejimi (live reload)
 cd client
 wails dev
 
-# Production build for your current OS
+# Joriy OS uchun production build
 wails build -clean
-# → produces client/build/bin/Portal[.app|.exe|]
+# → client/build/bin/Portal[.app|.exe|] hosil qiladi
 ```
 
-Cross-platform builds:
+Cross-platform build:
 
 ```sh
 wails build -platform darwin/universal     # macOS .app
@@ -96,50 +98,50 @@ wails build -platform windows/amd64        # Windows .exe
 wails build -platform linux/amd64          # Linux binary
 ```
 
-The resulting bundles are self-contained and don't require Go or Node
-on the user's machine.
+Hosil bo'lgan paketlar mustaqil — foydalanuvchining mashinasida Go yoki
+Node talab qilinmaydi.
 
 ---
 
-## 4. Configure the signaling URL
+## 4. Signal URL ni sozlash
 
-Portal clients connect to a signaling server you configure. You can:
+Portal client lar siz sozlagan signal serveriga ulanadi. Variantlar:
 
-1. **Use the project's hosted signaling endpoint** — default in the
-   shipped binary. No setup required.
-2. **Self-host.** The wire protocol is documented in
-   [PROTOCOL.md](PROTOCOL.md); a compatible server is a few hundred
-   lines of Go. Once running, point the client at it via Settings →
-   Network → Signaling URL, or set the env var:
+1. **Loyihaning hosting qilingan signal endpoint i** — yetkazib
+   beriladigan binary da standart. Sozlash kerak emas.
+2. **O'zingizniki ishga tushirish.** Simli protokol [PROTOCOL.md](PROTOCOL.md)
+   da hujjatlashtirilgan; mos server bir necha yuz qator Go kodi.
+   Ishga tushgandan keyin client ni Settings → Network → Signaling URL
+   orqali yo'naltiring yoki env var ni sozlang:
    ```sh
-   export PORTAL_SIGNALING_URL=wss://your-host/ws
+   export PORTAL_SIGNALING_URL=wss://sizning-host/ws
    ```
 
 ---
 
-## 5. Verify the build
+## 5. Build ni tekshirish
 
-After building the client (Phase 2+):
+Client ni build qilgandan keyin (2-bosqich+):
 
 ```sh
-./build/bin/Portal      # or open Portal.app on macOS
+./build/bin/Portal      # macOS da Portal.app ni oching
 ```
 
-You should see the welcome screen with a wormhole logo, a nickname
-input, and the **Create Portal / Join Portal** buttons. If you have the
-project's signaling URL configured, click **Create Portal** — within a
-second or two you should get a 6-digit ID and code.
+Wormhole logo, taxallus inputi va **Portal yaratish / Portalga
+qo'shilish** tugmalari bilan welcome ekrani ko'rinishi kerak.
+Loyihaning signal URL i sozlangan bo'lsa, **Portal yaratish** ni bosing
+— bir-ikki soniyada 6 xonali ID va kod chiqishi kerak.
 
-Hand the ID + code to a second device running Portal, click **Join
-Portal**, and watch the mesh diagram light up.
+ID + kodni Portal ishlayotgan ikkinchi qurilmaga bering, **Portalga
+qo'shilish** ni bosing va mesh diagrammasi yorishishini kuzating.
 
 ---
 
-## Troubleshooting
+## Muammolarni hal qilish
 
-| Symptom | Likely cause | Fix |
+| Belgi | Ehtimoliy sabab | Yechim |
 | --- | --- | --- |
-| `wails: command not found` | Wails CLI not installed | `go install github.com/wailsapp/wails/v2/cmd/wails@latest`; ensure `$GOPATH/bin` is on `PATH` |
-| Stuck on "Connecting…" | Signaling URL wrong or unreachable | Check `wss://` not `ws://`, verify cert isn't expired |
-| Peer shows 🔴 (failed) for >30s | NAT can't be traversed; no TURN configured | See [ARCHITECTURE.md § NAT & TURN fallback](ARCHITECTURE.md#nat--turn-fallback) |
-| Linux: `Package webkit2gtk-4.1 not found` | Older distro ships `webkit2gtk-4.0` | Try `libwebkit2gtk-4.0-dev` instead |
+| `wails: command not found` | Wails CLI o'rnatilmagan | `go install github.com/wailsapp/wails/v2/cmd/wails@latest`; `$GOPATH/bin` ni `PATH` da bo'lishini ta'minlang |
+| "Connecting…" da qotib qoladi | Signal URL noto'g'ri yoki yetib bo'lmaydigan | `wss://` ekanini, sertifikat eskirmaganini tekshiring |
+| Peer >30s davomida 🔴 (failed) | NAT ni o'tib bo'lmadi; TURN sozlanmagan | [ARCHITECTURE.md § NAT va TURN zaxiraga o'tish](ARCHITECTURE.md#nat-va-turn-zaxiraga-otish) ga qarang |
+| Linux: `Package webkit2gtk-4.1 not found` | Eskiroq distroda `webkit2gtk-4.0` bor | `libwebkit2gtk-4.0-dev` ni sinab ko'ring |

@@ -1,39 +1,39 @@
-# Architecture
+# Arxitektura
 
-This document explains how Portal works under the hood. For the ground
-truth, the code is the spec — start at
-[`shared/protocol/messages.go`](shared/protocol/messages.go).
-
----
-
-## Design goals
-
-1. **Direct connections by default.** Once two peers have shaken hands,
-   their packets must not pass through a server we operate. Latency,
-   privacy, and cost all benefit.
-2. **The signaling server is replaceable.** It's a thin broker that
-   matches peers and forwards SDP/ICE. Anyone can host one; clients
-   point at whichever URL they like.
-3. **The signaling server can never read application traffic.** It
-   only sees JSON envelopes for handshakes. WebRTC's DTLS plus an
-   app-layer secretbox derived from the portal code give us two
-   independent layers of protection.
-4. **A peer in portal A cannot probe peers in portal B.** Even though
-   the server connects every peer over a single WebSocket, the relay
-   path explicitly checks portal membership before forwarding.
+Bu hujjatda Portal qanday ishlashi tushuntiriladi. Aniq haqiqat — kod;
+boshlash uchun [`shared/protocol/messages.go`](shared/protocol/messages.go)
+ga qarang.
 
 ---
 
-## High-level diagram
+## Asosiy maqsadlar
+
+1. **Asosan to'g'ridan-to'g'ri ulanish.** Ikki peer handshake o'tkazib
+   bo'lgach, ularning paketlari biz boshqaradigan server orqali o'tmasligi
+   shart. Latentlik, maxfiylik va xarajat — hammasi yutadi.
+2. **Signal serveri almashtiriladigan.** U faqat peer larni topishtiradi
+   va SDP/ICE ni yo'naltiradi. Istalgan kishi o'zinikini ishga tushira
+   oladi; client lar qaysi URL ga sozlansa, o'shanga ulanadi.
+3. **Signal serveri ilova trafigini hech qachon o'qiy olmaydi.** U faqat
+   handshake uchun JSON konvertlarini ko'radi. WebRTC ning DTLS i va
+   portal kodidan olingan app-layer secretbox bizga ikki mustaqil
+   himoya qatlami beradi.
+4. **A portalidagi peer B portalidagi peer ga zond yubora olmaydi.** Server
+   hamma peer larni bitta WebSocket orqali bog'laydigan bo'lsa-da, relay
+   yo'li uzatishdan oldin portal a'zoligini aniq tekshiradi.
+
+---
+
+## Yuqori darajadagi diagramma
 
 ```
 ┌──────────────────────────────────────────────┐
-│         Signaling Server (Go, private)       │
-│  - Portal registry (6-digit ID + code)       │
-│  - Nickname directory (opt-in public)        │
-│  - WebRTC SDP/ICE relay (handshake only)     │
+│      Signal serveri (Go, xususiy)            │
+│  - Portal reyestri (6 xonali ID + kod)       │
+│  - Taxalluslar katalogi (ixtiyoriy ochiq)    │
+│  - WebRTC SDP/ICE relay (faqat handshake)    │
 └──────────────────┬───────────────────────────┘
-                   │ WebSocket TLS (handshake only)
+                   │ TLS WebSocket (faqat handshake)
         ┌──────────┴──────────┐
         │                     │
    ┌────▼────┐  ◄── P2P ───►  ┌────▼────┐
@@ -46,152 +46,154 @@ truth, the code is the spec — start at
                 └─────┘
 ```
 
-Once the mesh is established, every pair of peers has a direct
-WebRTC connection carrying four multiplexed data channels:
+Mesh o'rnatilgandan so'ng, har bir peer juftligi to'g'ridan-to'g'ri
+WebRTC ulanishiga ega va ular orqali to'rtta multipleks qilingan data
+kanali oqadi:
 
-| Channel | Reliability | Carries |
+| Kanal | Ishonchlilik | Nima olib boradi |
 | --- | --- | --- |
-| `control` | reliable, ordered | heartbeat, presence, service announcements |
-| `chat` | reliable, ordered | text messages, both group and DM |
-| `transfer` | reliable, ordered | chunked file transfers |
-| `proxy` | unreliable, unordered | tunneled TCP/UDP application traffic |
+| `control` | ishonchli, tartibli | heartbeat, presence, xizmat e'lonlari |
+| `chat` | ishonchli, tartibli | matn xabarlar (guruh va shaxsiy) |
+| `transfer` | ishonchli, tartibli | bo'lakli fayl uzatish |
+| `proxy` | ishonchsiz, tartibsiz | tunnel qilingan TCP/UDP trafik |
 
 ---
 
-## Joining a portal: the full sequence
+## Portalga qo'shilish: to'liq ketma-ketlik
 
 ```
-Bob                            Server                            Alice (owner)
+Bob                            Server                            Alice (egasi)
  │                                │                                │
  ├── portal.join(id, code) ──────▶│                                │
  │                                │                                │
- │                                │  validate id + code            │
- │                                │  allocate virtual IP           │
+ │                                │  id + kod tekshirildi          │
+ │                                │  virtual IP ajratildi          │
  │                                │                                │
  │◀── portal.joined(peers) ───────┤                                │
  │                                ├── portal.peer_joined(bob) ────▶│
  │                                │                                │
  │                                │                                │
- │  for each existing peer P:                                      │
+ │  har bir mavjud peer P uchun:                                   │
  │     ├── webrtc.offer(to=P) ──▶ ├── webrtc.offer(from=bob) ─▶ P  │
  │     │◀── webrtc.answer ◀────── ├──◀── webrtc.answer ────────── P│
- │     │── ICE candidates ──────▶ ├── ICE candidates ───────────▶ P│
- │     │      (until ICE done)                                     │
+ │     │── ICE kandidatlar ─────▶ ├── ICE kandidatlar ──────────▶ P│
+ │     │      (ICE tugaguncha)                                     │
  │     │                                                           │
- │     └── direct WebRTC connection up                             │
+ │     └── to'g'ridan-to'g'ri WebRTC ulandi                        │
  │            ↓                                                    │
- │       open data channels (control, chat, transfer, proxy)       │
+ │       data kanallar ochildi (control, chat, transfer, proxy)    │
 ```
 
-Once the data channels are open, all subsequent traffic flows directly
-over them. The signaling server has no further role in this session.
+Data kanallar ochilgandan keyin barcha trafik ular orqali
+to'g'ridan-to'g'ri oqadi. Signal serverining bu sessiyada keyingi roli
+yo'q.
 
 ---
 
-## Component map
+## Komponentlar xaritasi
 
 ```
 shared/
-└── protocol/                Wire format — every message type, every payload struct
-                              Source of truth for both sides; bumping it must be
-                              backward-compatible (only add optional fields).
+└── protocol/                Simli format — har bir xabar turi va payload struct.
+                              Ikkala tomon uchun haqiqat manbai; uni o'zgartirish
+                              orqaga moslashuvchan bo'lishi shart (faqat ixtiyoriy
+                              maydon qo'shish ruxsat).
 
-server/                       Private. Lives on a VPS behind Cloudflare.
-├── main.go                  Entry, TLS listener, /ws + /healthz
-├── connection.go            Per-WS read/write pumps, ping/pong handlers,
-│                              CF-Connecting-IP / X-Forwarded-For honoring
-├── hub.go                   Connection registry, broadcast helpers,
-│                              pending-join tracking, GC ticker
-├── portal.go                6-digit ID generation (crypto/rand), members,
-│                              virtual IP allocation in 10.42.0.0/24
-├── nickname.go              Public/private nickname directory, IP-hash hint
-├── handlers.go              Message dispatch + WebRTC relay (server stamps
-│                              `from` so peers can't lie about origin)
-├── ratelimit.go             Per-IP token buckets (golang.org/x/time/rate)
-└── deploy/                  systemd unit + Cloudflare-fronted deploy guide
+server/                       Xususiy. Cloudflare ortidagi VPS da ishlaydi.
+├── main.go                  Kirish nuqtasi, TLS listener, /ws + /healthz
+├── connection.go            Per-WS read/write pump lar, ping/pong handler,
+│                              CF-Connecting-IP / X-Forwarded-For ga rioya qilish
+├── hub.go                   Ulanish reyestri, broadcast yordamchi funksiyalari,
+│                              kutilayotgan join larni kuzatish, GC ticker
+├── portal.go                6 xonali ID generatsiyasi (crypto/rand), a'zolar,
+│                              10.42.0.0/24 da virtual IP ajratish
+├── nickname.go              Public/private taxalluslar katalogi, IP-hash hint
+├── handlers.go              Xabar dispatch + WebRTC relay (server `from` ni
+│                              shtamplaydi, peer lar yolg'on so'zlay olmaydi)
+├── ratelimit.go             Per-IP token bucket (golang.org/x/time/rate)
+└── deploy/                  systemd unit + Cloudflare deploy qo'llanma
 
-client/                       Public. Wails + React desktop app.
-└── (Phase 2)
+client/                       Public. Wails + React desktop dastur.
+└── (2-bosqich)
 ```
 
 ---
 
-## Concurrency model (server)
+## Konkurrentlik modeli (server)
 
-There is one read goroutine and one write goroutine per WebSocket. The
-read goroutine deserialises frames and calls into hub methods directly;
-the hub uses `sync.RWMutex` per registry plus per-portal locks. There
-is no central event loop — the handler and the goroutine that read the
-frame are the same goroutine, which keeps tracing simple.
+Har bir WebSocket uchun bitta read va bitta write goroutine bor. Read
+goroutine freym larni dekod qiladi va to'g'ridan-to'g'ri hub method larini
+chaqiradi; hub har bir reyestr uchun `sync.RWMutex` va per-portal qulflar
+ishlatadi. Markaziy event loop yo'q — handler va freym ni o'qigan goroutine
+bir xil, bu trace qilishni soddalashtiradi.
 
-Outbound frames are funnelled through a per-connection buffered channel
-(`send chan []byte`, default 64 slots). If a client is too slow and the
-channel fills, the connection is dropped — we'd rather kick a stuck
-client than back-pressure the whole hub.
-
----
-
-## NAT & TURN fallback
-
-WebRTC's ICE collects candidates from three sources:
-
-1. **Host candidates** — the local IP/port. Works on the same LAN.
-2. **Server-reflexive candidates** — public IP/port discovered via STUN.
-   Most home/office NATs work here.
-3. **Relayed candidates** — through a TURN server. Required for
-   symmetric NAT and most CGNAT.
-
-Portal will ship with multiple STUN servers configured by default
-(Google, Cloudflare). For TURN we recommend self-hosting `coturn` on a
-small VPS with a couple of GB of bandwidth budget. The desktop app
-shows a small "relayed" indicator next to peers whose connection went
-through TURN, and the status bar surfaces a one-line warning if the
-local NAT type would otherwise hide it.
-
-NAT type detection happens at app startup using STUN; the result is
-cached in settings until the network changes.
+Tashqi freymlar har-bir-ulanish uchun bufferli kanal orqali oqadi
+(`send chan []byte`, sukut bo'yicha 64 slot). Agar client juda sekin
+bo'lib kanal to'lib qolsa, ulanish uziladi — biz tiqilib qolgan client ni
+saqlab tursak, butun hub ni ushlab turgan bo'lardik.
 
 ---
 
-## Encryption
+## NAT va TURN zaxiraga o'tish
 
-Two independent layers protect peer-to-peer traffic:
+WebRTC ning ICE i kandidatlarni uch manbadan to'playdi:
 
-1. **WebRTC DTLS-SRTP.** Default for all data-channel traffic. Keys are
-   negotiated during the SDP handshake. Even an attacker who compromises
-   the signaling server cannot decrypt this, because they don't get the
-   ephemeral DTLS keys — those are derived from the SDP fingerprint
-   exchange.
-2. **App-layer secretbox.** All chat, file, and proxy payloads are
-   additionally sealed with NaCl secretbox using a key derived from the
-   portal code via PBKDF2 (100k iterations). This protects against a
-   *malicious peer inside the portal* abusing data-channel access — they
-   still need the portal code to read anything.
+1. **Host kandidatlar** — lokal IP/port. Bir LAN da ishlaydi.
+2. **Server-reflexive kandidatlar** — STUN orqali topilgan ochiq IP/port.
+   Aksariyat uy/ofis NAT lari shunda ishlaydi.
+3. **Relay kandidatlar** — TURN serveri orqali. Simmetrik NAT va
+   aksariyat CGNAT uchun zarur.
 
-The portal code is short on purpose: it's a six-digit number that
-travels over a side channel (chat, voice, paper) outside Portal itself.
-That short code becomes the second-factor secret.
+Portal sukut bo'yicha bir nechta STUN serverlari bilan keladi (Google,
+Cloudflare). TURN uchun esa kichkina VPS da o'zingiz `coturn` ni ishga
+tushirishni tavsiya qilamiz. Desktop dastur TURN orqali o'tgan peer lar
+uchun "relayed" indikatorni ko'rsatadi va status bar lokal NAT turi
+yashirib qo'yishi mumkin bo'lsa, qisqa ogohlantirish chiqaradi.
+
+NAT turi aniqlash dastur ishga tushganda STUN orqali bo'ladi; natija
+tarmoq o'zgarmaguncha sozlamalarda kesh qilinadi.
 
 ---
 
-## Threat model
+## Shifrlash
 
-| Adversary | What they get | What they don't |
+Peer-to-peer trafikni ikki mustaqil qatlam himoya qiladi:
+
+1. **WebRTC DTLS-SRTP.** Hamma data kanal trafigi uchun standart. Kalitlar
+   SDP handshake davomida muzokara qilinadi. Hatto signal serverini
+   qo'lga olgan tajovuzkor ham buni ocha olmaydi, chunki u efemera DTLS
+   kalitlarini olmaydi — ular SDP fingerprint almashinuvidan olinadi.
+2. **App-layer secretbox.** Hamma chat, fayl va proxy payload lar
+   qo'shimcha ravishda PBKDF2 (100k iteratsiya) orqali portal kodidan
+   olingan kalit bilan NaCl secretbox ga o'raladi. Bu *portal ichidagi
+   yomonniyatli peer ga* qarshi himoya qiladi — u data kanallariga ega
+   bo'lsa ham, biror narsani o'qish uchun portal kodi kerak.
+
+Portal kodi ataylab qisqa: u Portal dan tashqari yon kanal orqali (chat,
+ovoz, qog'oz) yetkaziladi. O'sha qisqa kod ikkinchi omil sirga aylanadi.
+
+---
+
+## Tahdid modeli
+
+| Tajovuzkor | Nimani oladi | Nimani ololmaydi |
 | --- | --- | --- |
-| Network observer between peer and server | Sees TLS-wrapped WebSocket frames | Cannot read SDP after TLS |
-| Compromised signaling server | Sees handshakes, peer IDs, IPs, nicknames | Cannot read DTLS-protected app traffic |
-| Random scanner on internet | Sees open `/ws` endpoint | No portal access without ID + code |
-| Brute-forcer guessing codes | Rate-limited at 30 join/min/IP, 1M codespace | Realistically ~10 years to half-exhaust |
-| Malicious peer inside a portal | Can chat & receive files (they joined!) | Cannot impersonate other peers (server-stamped `from`); cannot reach peers in other portals |
-| User who lost their device | Worst case: future portals owned by them | DTLS keys are ephemeral; old session traffic isn't recoverable |
+| Peer va server o'rtasidagi tarmoq kuzatuvchisi | TLS bilan o'ralgan WebSocket freymlarini ko'radi | TLS dan keyin SDP ni o'qiy olmaydi |
+| Qo'lga kiritilgan signal serveri | Handshake, peer ID, IP, taxalluslar | DTLS bilan himoyalangan ilova trafigini |
+| Internetdagi tasodifiy skanerchi | Ochiq `/ws` endpoint ni ko'radi | ID + kodsiz portalga kira olmaydi |
+| Kodlarni taxmin qiluvchi brute-forcer | 30 join/min/IP rate limit, 1M kod fazosi | Realistik ~10 yil yarmini sinash uchun |
+| Portal ichidagi yomonniyatli peer | Chat va fayl qabul qila oladi (u qo'shilgan!) | Boshqa peer larni taqlid qila olmaydi (server `from` ni shtamplaydi); boshqa portallardagi peer larga yeta olmaydi |
+| Qurilmasini yo'qotgan foydalanuvchi | Eng yomon holat: kelajakda o'sha foydalanuvchi egasi bo'lgan portallar | DTLS kalitlari efemera; eski sessiyalardagi trafikni qayta tiklab bo'lmaydi |
 
-What's *not* defended:
+Himoya *qilinmaydigan* narsalar:
 
-- A motivated attacker who is in the portal and has the code can do
-  everything any honest peer can do. Don't share codes with strangers.
-- Cloudflare (if you use it as a proxy) sees the TLS-wrapped traffic
-  between client and origin. Use **Full (strict)** mode + Origin
-  Certificates so the Cloudflare↔origin hop is also encrypted.
-- Side-channel timing attacks against PBKDF2 are not in scope; the
-  attacker who wants to brute-force portal codes is rate-limited
-  far below useful throughput regardless.
+- Portal ichida bo'lgan va kodi bor sodiq tajovuzkor halol peer qila
+  oladigan har bir narsani qila oladi. Notanish odamlar bilan kod
+  ulashmang.
+- Cloudflare ni proksi sifatida ishlatsangiz, u client va origin
+  o'rtasidagi TLS bilan o'ralgan trafikni ko'radi. **Full (strict)** rejim
+  + Origin Certificate ishlating, shunda Cloudflare↔origin bo'lagi ham
+  shifrlanadi.
+- PBKDF2 ga qarshi side-channel timing hujumlar qamrovga kirmaydi; portal
+  kodlarini brute-force qilmoqchi bo'lgan tajovuzkor baribir foydali
+  o'tkazuvchanlikdan ancha pastda rate-limit qilinadi.

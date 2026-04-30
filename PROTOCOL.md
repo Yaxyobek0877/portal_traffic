@@ -1,41 +1,42 @@
-# Wire Protocol
+# Simli protokol
 
-This is the canonical reference for the messages Portal exchanges. The
-authoritative form lives in [`shared/protocol/messages.go`](shared/protocol/messages.go);
-this document is the human-readable companion.
+Bu Portal almashinadigan xabarlar uchun rasmiy ma'lumotnoma. Haqiqiy
+manba — [`shared/protocol/messages.go`](shared/protocol/messages.go);
+bu hujjat — uning odam o'qiy oladigan hamrohi.
 
 ---
 
 ## Transport
 
-* **Signaling layer:** WebSocket carrying JSON text frames. Each frame
-  is one independent message. Endpoint: `wss://<signaling-host>/ws`.
-* **P2P layer:** WebRTC data channels carrying JSON text frames (for
-  control / chat / service announcements) or binary frames (for file
-  chunks and tunneled traffic).
+* **Signal qatlami:** JSON matn freymlarini olib boruvchi WebSocket. Har
+  bir freym — bitta mustaqil xabar. Endpoint: `wss://<signal-host>/ws`.
+* **P2P qatlami:** WebRTC data kanallari, JSON matn freymlari (control,
+  chat, xizmat e'lonlari uchun) yoki binary freymlar (fayl bo'laklari va
+  tunnel qilingan trafik uchun).
 
-Every JSON message has a top-level `"type"` field. To decode, parse
-just that field first, then re-parse into the type-specific struct.
+Har bir JSON xabarda yuqori darajadagi `"type"` maydoni bo'ladi.
+Dekod qilish uchun avval faqat o'sha maydonni tahlil qiling, keyin tipga
+xos struct ga qayta tahlil qiling.
 
 ---
 
-## Identifiers
+## Identifikatorlar
 
-| Field | Format | Notes |
+| Maydon | Format | Izoh |
 | --- | --- | --- |
-| `portal_id` | 6 ASCII digits | shown to users, drawn from `crypto/rand` |
-| `code`      | 6 ASCII digits | secret, shown alongside the ID |
-| `peer_id`   | UUID v4 string | server-assigned at WebSocket connect |
-| `virtual_ip`| `10.42.0.X`    | per-portal allocation, X ∈ [1, 254] |
-| `request_id`| free-form string | client-chosen, echoed back for correlation |
+| `portal_id` | 6 ASCII raqam | foydalanuvchilarga ko'rsatiladi, `crypto/rand` dan |
+| `code`      | 6 ASCII raqam | sirli, ID yonida ko'rsatiladi |
+| `peer_id`   | UUID v4 | WebSocket ulanishida server tomonidan ajratiladi |
+| `virtual_ip`| `10.42.0.X` | har portalga ajratish, X ∈ [1, 254] |
+| `request_id`| ixtiyoriy satr | client tanlaydi, korrelatsiya uchun qaytariladi |
 
 ---
 
-## Signaling messages — Client → Server
+## Signal xabarlari — Client → Server
 
 ### `portal.create`
 
-Allocate a fresh portal and admit the sender as owner.
+Yangi portal ajratish va yuboruvchini egasi sifatida qabul qilish.
 
 ```json
 {
@@ -46,15 +47,15 @@ Allocate a fresh portal and admit the sender as owner.
 }
 ```
 
-| Field | Type | Notes |
+| Maydon | Tur | Izoh |
 | --- | --- | --- |
-| `nickname` | string | 2–24 chars, `[A-Za-z0-9_.-]` |
-| `public_nick` | bool | if true, others can `portal.join_by_nick` you |
-| `capacity` | int (optional) | 2–254; omit for server default (16) |
+| `nickname` | string | 2–24 belgi, `[A-Za-z0-9_.-]` |
+| `public_nick` | bool | true bo'lsa, boshqalar `portal.join_by_nick` qila oladi |
+| `capacity` | int (ixtiyoriy) | 2–254; bo'sh — server standart qiymati (16) |
 
 ### `portal.join`
 
-Join an existing portal by ID and code.
+ID va kod orqali mavjud portalga qo'shilish.
 
 ```json
 { "type": "portal.join", "portal_id": "428591", "code": "739204", "nickname": "bob" }
@@ -62,22 +63,22 @@ Join an existing portal by ID and code.
 
 ### `portal.join_by_nick`
 
-Ask the server to forward a join request to the user with the given
-public nickname. The target receives `portal.join_request` and replies
-with `portal.join_response`.
+Server berilgan public taxallusli foydalanuvchiga join so'rovini
+yuborishini so'rash. Maqsad `portal.join_request` ni oladi va
+`portal.join_response` bilan javob beradi.
 
 ```json
 {
   "type": "portal.join_by_nick",
   "target_nickname": "alice",
   "my_nickname": "bob",
-  "request_id": "client-generated-id"
+  "request_id": "client-tomonidan-yaratilgan-id"
 }
 ```
 
-### `portal.join_response` (owner only)
+### `portal.join_response` (faqat egasi)
 
-Reply to an inbound join request.
+Kelgan join so'roviga javob.
 
 ```json
 { "type": "portal.join_response", "request_id": "...", "accept": true }
@@ -85,21 +86,21 @@ Reply to an inbound join request.
 
 ### `portal.leave`
 
-Leave the current portal. The connection stays open.
+Joriy portaldan chiqib ketish. Ulanish ochiq qoladi.
 
 ```json
 { "type": "portal.leave" }
 ```
 
-### `portal.kick` (owner only)
+### `portal.kick` (faqat egasi)
 
 ```json
 { "type": "portal.kick", "peer_id": "..." }
 ```
 
-### `portal.lock` (owner only)
+### `portal.lock` (faqat egasi)
 
-When locked, no new peers may join even with a correct code.
+Qulflanganda, hatto to'g'ri kod bilan ham yangi peer qo'shila olmaydi.
 
 ```json
 { "type": "portal.lock", "locked": true }
@@ -107,7 +108,8 @@ When locked, no new peers may join even with a correct code.
 
 ### `nick.set_visibility`
 
-Update your nickname directory entry. Values: `"hidden"`, `"friends_only"`, `"public"`.
+Taxallus katalogi yozuvini yangilash. Qiymatlar: `"hidden"`,
+`"friends_only"`, `"public"`.
 
 ```json
 { "type": "nick.set_visibility", "nickname": "alice", "visibility": "public" }
@@ -115,11 +117,11 @@ Update your nickname directory entry. Values: `"hidden"`, `"friends_only"`, `"pu
 
 ---
 
-## Signaling messages — Server → Client
+## Signal xabarlari — Server → Client
 
 ### `portal.created`
 
-Confirms a successful `portal.create`.
+Muvaffaqiyatli `portal.create` ni tasdiqlaydi.
 
 ```json
 {
@@ -134,14 +136,15 @@ Confirms a successful `portal.create`.
 
 ### `portal.joined`
 
-Confirms a successful join (whether by ID/code or accepted nick request)
-and gives you the existing peer roster so you can start handshakes.
+Muvaffaqiyatli qo'shilishni tasdiqlaydi (ID/kod orqali ham, qabul
+qilingan nick so'rovi orqali ham) va siz handshake boshlashingiz uchun
+mavjud peer ro'yxatini beradi.
 
 ```json
 {
   "type": "portal.joined",
   "portal_id": "428591",
-  "peer_id": "your-peer-id",
+  "peer_id": "sizning-peer-id",
   "virtual_ip": "10.42.0.3",
   "peers": [
     { "peer_id": "...", "nickname": "alice", "virtual_ip": "10.42.0.1", "is_owner": true },
@@ -152,7 +155,7 @@ and gives you the existing peer roster so you can start handshakes.
 
 ### `portal.peer_joined`
 
-Pushed to existing members when somebody new joins.
+Yangi a'zo qo'shilganda mavjud a'zolarga push qilinadi.
 
 ```json
 { "type": "portal.peer_joined", "peer_id": "...", "nickname": "charlie", "virtual_ip": "10.42.0.3" }
@@ -160,22 +163,22 @@ Pushed to existing members when somebody new joins.
 
 ### `portal.peer_left`
 
-Pushed to remaining members when a peer leaves or is kicked.
+Peer chiqib ketgani yoki chetlatilganini qolgan a'zolarga push qiladi.
 
 ```json
 { "type": "portal.peer_left", "peer_id": "...", "reason": "left" }
 ```
 
-`reason` is one of `"left"`, `"kicked"`, `"disconnected"`.
+`reason`: `"left"`, `"kicked"`, `"disconnected"`.
 
 ### `portal.join_request`
 
-Delivered to a portal owner whose public nickname was looked up.
+Public taxallusi qidirib topilgan portal egasiga yetkaziladi.
 
 ```json
 {
   "type": "portal.join_request",
-  "request_id": "server-generated",
+  "request_id": "server-tomonidan-yaratilgan",
   "from_peer_id": "...",
   "from_nickname": "bob",
   "from_ip_hash_short": "a3f1c2"
@@ -184,7 +187,7 @@ Delivered to a portal owner whose public nickname was looked up.
 
 ### `portal.kicked`
 
-Delivered to the peer who was kicked.
+Chetlatilgan peer ga yetkaziladi.
 
 ```json
 { "type": "portal.kicked", "portal_id": "..." }
@@ -192,7 +195,7 @@ Delivered to the peer who was kicked.
 
 ### `portal.locked`
 
-Broadcast to all members on lock state change.
+Qulflash holati o'zgarganda barcha a'zolarga broadcast qilinadi.
 
 ```json
 { "type": "portal.locked", "locked": true }
@@ -200,8 +203,7 @@ Broadcast to all members on lock state change.
 
 ### `portal.closed`
 
-Broadcast when the portal goes away (most commonly because the owner
-disconnected).
+Portal yopilganda broadcast qilinadi (eng ko'p — egasi uzilganda).
 
 ```json
 { "type": "portal.closed", "portal_id": "...", "reason": "owner_left" }
@@ -209,48 +211,48 @@ disconnected).
 
 ### `error`
 
-Any server-side rejection.
+Server tomonidan rad etilgan har qanday holat.
 
 ```json
 { "type": "error", "code": "PORTAL_CODE_WRONG", "message": "code does not match", "request_id": "..." }
 ```
 
-| Code | Meaning |
+| Kod | Ma'no |
 | --- | --- |
-| `INVALID_MESSAGE` | malformed JSON or unknown type |
-| `PORTAL_NOT_FOUND` | no portal with that ID |
-| `PORTAL_CODE_WRONG` | wrong access code |
-| `PORTAL_FULL` | capacity reached |
-| `PORTAL_LOCKED` | owner has locked the portal |
-| `NICKNAME_INVALID` | malformed nickname |
-| `NICKNAME_TAKEN` | another live connection is using that nickname |
-| `NICKNAME_NOT_FOUND` | no such online user |
-| `NICKNAME_NOT_PUBLIC` | user is not accepting invites |
-| `NOT_IN_PORTAL` | action requires being in a portal |
-| `ALREADY_IN_PORTAL` | leave first before creating/joining |
-| `PEER_NOT_FOUND` | target peer is not in your portal |
-| `NOT_OWNER` | action is owner-only |
-| `RATE_LIMITED` | per-IP rate limit hit |
-| `INTERNAL` | server-side error; retry safely |
+| `INVALID_MESSAGE` | noto'g'ri JSON yoki noma'lum tur |
+| `PORTAL_NOT_FOUND` | bunday ID li portal yo'q |
+| `PORTAL_CODE_WRONG` | noto'g'ri kirish kodi |
+| `PORTAL_FULL` | sig'im to'lgan |
+| `PORTAL_LOCKED` | egasi portalni qulflagan |
+| `NICKNAME_INVALID` | noto'g'ri taxallus |
+| `NICKNAME_TAKEN` | bu taxallus boshqa ulanishda ishlatilmoqda |
+| `NICKNAME_NOT_FOUND` | bunday foydalanuvchi onlayn emas |
+| `NICKNAME_NOT_PUBLIC` | foydalanuvchi taklif qabul qilmaydi |
+| `NOT_IN_PORTAL` | bu amal portalda bo'lishni talab qiladi |
+| `ALREADY_IN_PORTAL` | yaratish/qo'shilishdan oldin chiqib keting |
+| `PEER_NOT_FOUND` | maqsad peer sizning portalingizda yo'q |
+| `NOT_OWNER` | bu amal faqat egasi uchun |
+| `RATE_LIMITED` | per-IP rate limit ga yetildi |
+| `INTERNAL` | server xatosi; xavfsiz qayta urinish mumkin |
 
 ---
 
-## WebRTC handshake relay (bidirectional)
+## WebRTC handshake relay (ikki tomonlama)
 
-The server forwards these verbatim from sender to `to`, **after**
-overwriting the `from` field with the sender's authenticated peer ID
-(so a malicious peer cannot impersonate another).
+Server bularni yuboruvchidan `to` ga **shu jumladan** `from` maydonini
+yuboruvchining tasdiqlangan peer ID bilan qayta yozgan holda uzatadi
+(yomonniyatli peer boshqasini taqlid qila olmaydi).
 
 ### `webrtc.offer`
 
 ```json
-{ "type": "webrtc.offer", "from": "set-by-server", "to": "...", "sdp": "..." }
+{ "type": "webrtc.offer", "from": "server-shtamplaydi", "to": "...", "sdp": "..." }
 ```
 
 ### `webrtc.answer`
 
 ```json
-{ "type": "webrtc.answer", "from": "set-by-server", "to": "...", "sdp": "..." }
+{ "type": "webrtc.answer", "from": "server-shtamplaydi", "to": "...", "sdp": "..." }
 ```
 
 ### `webrtc.ice`
@@ -258,7 +260,7 @@ overwriting the `from` field with the sender's authenticated peer ID
 ```json
 {
   "type": "webrtc.ice",
-  "from": "set-by-server",
+  "from": "server-shtamplaydi",
   "to": "...",
   "candidate": "candidate:...",
   "sdp_mid": "0",
@@ -266,14 +268,15 @@ overwriting the `from` field with the sender's authenticated peer ID
 }
 ```
 
-An empty `candidate` string signals end-of-candidates per the ICE spec.
+`candidate` qiymati bo'sh satr bo'lsa — ICE specifikatsiyasiga muvofiq
+end-of-candidates signali.
 
 ---
 
-## P2P data channel: `control`
+## P2P data kanali: `control`
 
-After the WebRTC connection is up, peers exchange these JSON frames
-over the `control` data channel. The server is not involved.
+WebRTC ulanishi tugagandan so'ng peer lar shu JSON freymlarni `control`
+data kanali orqali almashishadi. Server bunda ishtirok etmaydi.
 
 ### `ping` / `pong`
 
@@ -282,9 +285,9 @@ over the `control` data channel. The server is not involved.
 { "type": "pong", "ts": 1730476800000, "echo_ts": 1730476800000 }
 ```
 
-`ts` is a unix-millisecond timestamp from the sender's local clock.
-`pong.echo_ts` echoes the originating ping's `ts` so RTT is computable
-without needing synchronised clocks. Default cadence is 5 s.
+`ts` — yuboruvchining lokal soatidan unix-millisekund timestamp.
+`pong.echo_ts` — asl ping ning `ts` ini takrorlaydi, shunda RTT ni
+soatlarni sinxronlashtirmasdan hisoblash mumkin. Standart kadensiya 5 s.
 
 ### `presence`
 
@@ -292,11 +295,11 @@ without needing synchronised clocks. Default cadence is 5 s.
 { "type": "presence", "status": "active" }
 ```
 
-`status` ∈ `"active"`, `"idle"`, `"away"`.
+`status` qiymati: `"active"`, `"idle"`, `"away"`.
 
 ### `service.expose` / `service.unexpose`
 
-Announce or retract a locally exposed service for the proxy layer.
+Proxy qatlami uchun lokal fosh qilingan xizmatni e'lon qilish yoki olib tashlash.
 
 ```json
 { "type": "service.expose", "name": "Minecraft", "protocol": "tcp", "port": 25565 }
@@ -312,12 +315,14 @@ Announce or retract a locally exposed service for the proxy layer.
 
 ---
 
-## Extension policy
+## Kengaytirish siyosati
 
-* Adding a new optional field to an existing message type is always
-  safe. Older clients ignore unknown fields.
-* Adding a new top-level message type is safe. Older clients respond
-  with `INVALID_MESSAGE`; senders should be prepared for that.
-* Renaming or removing fields is a breaking change. Don't.
-* Changing the format of `portal_id` or `code` (e.g. expanding to 8
-  digits) is a major version bump.
+* Mavjud xabar turiga yangi ixtiyoriy maydon qo'shish har doim xavfsiz.
+  Eski client lar noma'lum maydonlarni e'tiborsiz qoldiradi.
+* Yangi yuqori darajadagi xabar turi qo'shish xavfsiz. Eski client lar
+  `INVALID_MESSAGE` bilan javob beradi; yuboruvchilar bunga tayyor
+  bo'lishi kerak.
+* Maydonlarni o'zgartirish yoki olib tashlash buzuvchi o'zgarish.
+  Qilmang.
+* `portal_id` yoki `code` formatini o'zgartirish (masalan, 8 raqamga
+  kengaytirish) major versiya o'sishidir.

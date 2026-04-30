@@ -1,79 +1,88 @@
-# Roadmap
+# Yo'l xaritasi (Roadmap)
 
-Portal is being built in five phases. Each one is a working stop —
-we don't move on until the previous phase verifiably works.
+Portal beshta bosqichda quriladi. Har bir bosqich ishlaydigan to'xtash
+nuqtasi — oldingisi tasdiqlangan tarzda ishlamasdan turib keyingisiga
+o'tilmaydi.
 
-## Phase 1 — Signaling backbone ✅
+## 1-bosqich — Signal magistrali ✅
 
-The thin server that brokers WebRTC handshakes. After this phase, two
-clients can find each other on the internet given just a 6-digit ID +
-code; everything they do afterwards is direct.
+WebRTC handshake larni bog'laydigan ingichka server. Ushbu bosqichdan
+keyin ikki client faqat 6 xonali ID + kod orqali bir-birini internetda
+topa oladi; undan keyingi har bir narsa to'g'ridan-to'g'ri.
 
-- [x] WebSocket transport with per-IP rate limiting
-- [x] Portal lifecycle: create / join / kick / lock / leave
-- [x] Nickname directory with public/private/friends-only visibility
-- [x] WebRTC SDP/ICE relay, scoped strictly within a portal
-- [x] Server-stamped `from` field on every relayed frame (anti-spoof)
-- [x] TLS support (Cloudflare Origin Certificate or any PEM/key pair)
-- [x] systemd hardening profile + deployment guide
-- [x] Integration test suite + scripted end-to-end demo
+- [x] Per-IP rate limiting bilan WebSocket transport
+- [x] Portal hayot tsikli: yaratish / qo'shilish / chetlatish (kick) /
+      qulflash / chiqib ketish
+- [x] Public / private / friends-only ko'rinish bilan taxallus katalogi
+- [x] WebRTC SDP/ICE relay, qat'iy portal ichida cheklangan
+- [x] Har bir uzatilgan freym da server tomonidan qo'yilgan `from`
+      maydoni (spoof ga qarshi)
+- [x] TLS qo'llab-quvvatlash (Cloudflare Origin Certificate yoki
+      istalgan PEM/key juftligi)
+- [x] systemd hardening profili + deploy qo'llanma
+- [x] Integration test paketi + skript orqali end-to-end demo
 
-The signaling server source is private (runs on a VPS we operate). The
-wire protocol it implements is fully documented in [PROTOCOL.md](PROTOCOL.md)
-so anyone can host their own.
+Signal server kodi xususiy (bizning boshqaradigan VPS da ishlaydi). U
+amalga oshiradigan simli protokol [PROTOCOL.md](PROTOCOL.md) da to'liq
+hujjatlashtirilgan, shuning uchun istalgan kishi o'zinikini ishga
+tushira oladi.
 
-## Phase 2 — Client core (in progress)
+## 2-bosqich — Client yadrosi (jarayonda)
 
-Go-based mesh engine, no UI yet. The goal at the end of this phase is
-that two CLI test clients on different networks can:
+Go asosidagi mesh dvigateli, hali UI yo'q. Bu bosqich oxirida maqsad —
+turli tarmoqlardagi ikki CLI test client quyidagilarni qila oladigan
+bo'lishi:
 
-- [ ] Open a Wails project skeleton (`client/`)
-- [ ] Connect to the signaling URL over secure WebSocket
-- [ ] Run the WebRTC handshake using `pion/webrtc/v4`
-- [ ] Establish a full mesh between every peer
-- [ ] Multiplex four data channels: `control`, `chat`, `transfer`, `proxy`
-- [ ] Heartbeat ping/pong with round-trip-time tracking
-- [ ] Auto-reconnect with exponential backoff
-- [ ] Run a CLI smoke test: two clients exchange `ping` over the
-      `control` channel and report measured RTT
+- [ ] Wails loyiha skeletini ochish (`client/`)
+- [ ] Xavfsiz WebSocket orqali signal URL ga ulanish
+- [ ] `pion/webrtc/v4` yordamida WebRTC handshake ni o'tkazish
+- [ ] Har bir peer o'rtasida to'liq mesh hosil qilish
+- [ ] To'rtta data kanalni multipleks qilish: `control`, `chat`,
+      `transfer`, `proxy`
+- [ ] RTT kuzatuvi bilan heartbeat ping/pong
+- [ ] Eksponensial backoff bilan avtomatik qayta ulanish
+- [ ] CLI smoke test: ikkita client `control` kanali orqali `ping`
+      almashadi va o'lchangan RTT ni hisobot qiladi
 
-## Phase 3 — Desktop UI
+## 3-bosqich — Desktop UI
 
-The pieces a normal user sees.
+Oddiy foydalanuvchi ko'radigan qismlar.
 
-- [ ] Welcome screen (animated wormhole logo, nickname input,
-      Create / Join buttons)
-- [ ] Portal view (header with ID + code + QR, peer sidebar, animated
-      mesh diagram, chat panel, status bar)
-- [ ] Live mesh visualization (SVG, Framer Motion, glow on data flow)
-- [ ] Wails bindings between Go backend and React frontend
-- [ ] Dark mode default, light mode toggle
+- [ ] Welcome ekrani (animatsiyali wormhole logo, taxallus inputi,
+      Yaratish / Qo'shilish tugmalari)
+- [ ] Portal ko'rinishi (sarlavha — ID + kod + QR; peer sidebar;
+      animatsiyali mesh diagrammasi; chat paneli; status bar)
+- [ ] Jonli mesh vizualizatsiyasi (SVG, Framer Motion, ma'lumot oqimida
+      yorishish)
+- [ ] Go backend va React frontend o'rtasida Wails bog'lanishlari
+- [ ] Standart qorong'i mode, parametrlarda yorug' mode tugmasi
 
-## Phase 4 — Polish
+## 4-bosqich — Sayqal
 
-- [ ] QR code generation + scan modal
-- [ ] STUN-based NAT type detection on startup, banner for symmetric/CGNAT
-- [ ] Drag-and-drop file transfer with progress bars
-- [ ] Settings page (network, privacy, appearance, diagnostics)
-- [ ] Auto-reconnect surfaced in UI
-- [ ] SQLite persistence for settings, portal history, saved contacts
-- [ ] Bandwidth graph in settings
+- [ ] QR kod yaratish + skanerlash modal
+- [ ] Ishga tushganda STUN asosidagi NAT turi aniqlash, simmetrik / CGNAT
+      uchun banner
+- [ ] Drag-and-drop fayl uzatish va progress bar
+- [ ] Sozlamalar sahifasi (tarmoq, maxfiylik, ko'rinish, diagnostika)
+- [ ] UI da avtomatik qayta ulanish ko'rsatkichi
+- [ ] Sozlamalar, portal tarixi, saqlangan kontaktlar uchun SQLite
+- [ ] Sozlamalarda bandwidth grafigi
 
-## Phase 5 — Power features
+## 5-bosqich — Kuchli imkoniyatlar
 
-- [ ] Local TCP/UDP proxy mapping virtual IPs to the WebRTC `proxy`
-      channel (`portal expose tcp 25565`)
-- [ ] Services panel showing exposed ports across the mesh
-- [ ] Voice channel with push-to-talk
-- [ ] Built-in mini-games (tic-tac-toe over data channel) as
-      proof-of-concept demos
+- [ ] Virtual IP larni WebRTC `proxy` kanali bilan bog'laydigan lokal
+      TCP/UDP proksi (`portal expose tcp 25565`)
+- [ ] Mesh bo'ylab fosh qilingan portlarni ko'rsatadigan Services paneli
+- [ ] Push-to-talk bilan ovoz kanali
+- [ ] Demo sifatida o'rnatilgan mini-o'yinlar (data kanali ustida
+      tic-tac-toe)
 
 ---
 
-After Phase 5, the project is feature-complete relative to the original
-spec. Beyond that, likely directions:
+5-bosqichdan keyin loyiha asl spetsifikatsiyaga nisbatan funksional
+jihatdan to'liq bo'ladi. Undan keyingi mumkin bo'lgan yo'nalishlar:
 
-- Mobile companion (iOS / Android, view-only at first)
-- Federated discovery (publish portal IDs over an opt-in DHT so people
-  can find a friend's portal without sharing the 6-digit code)
-- Plugin API for third-party apps to expose services through the mesh
+- Mobil hamroh ilova (iOS / Android, dastlab faqat ko'rish rejimida)
+- Federated discovery (portal ID larni ixtiyoriy DHT da chop etish, shunda
+  do'stining portalini 6 xonali kodni ulashmasdan topish mumkin)
+- Plugin API — uchinchi tomon ilovalari mesh orqali xizmat ko'rsatishi uchun

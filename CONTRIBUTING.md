@@ -1,93 +1,99 @@
-# Contributing
+# Hissa qo'shish
 
-Thanks for wanting to help. This is currently a small project — the
-fastest way to be useful is to file a clear issue or send a focused
-patch.
+Yordam berishni xohlaganingiz uchun rahmat. Bu hozircha kichik loyiha —
+foydali bo'lishning eng tezkor yo'li aniq issue ochish yoki maqsadli
+patch yuborish.
 
-## Filing issues
+## Issue ochish
 
-Helpful issues include:
+Foydali issue tarkibida quyidagilar bo'lishi kerak:
 
-- **What you tried** (commands, screenshots, exact wording of buttons)
-- **What happened** (error message, log line, broken behaviour)
-- **What you expected** (one sentence is enough)
-- **Environment** (OS, version of Portal, signaling URL if non-default)
+- **Nima qildingiz** (buyruqlar, screenshot, tugmalar matni)
+- **Nima yuz berdi** (xato xabari, log qatori, buzilgan xatti-harakat)
+- **Nimani kutgandingiz** (bir gap yetarli)
+- **Atrof-muhit** (OS, Portal versiyasi, standart bo'lmasa signal URL)
 
-If your issue includes a log file, redact the `peer_id` UUIDs and your
-own `virtual_ip` before posting — they're harmless on their own but
-correlatable across other people's logs.
+Agar issue da log fayli bo'lsa, joylashtirishdan oldin `peer_id` UUID
+larini va o'zingizning `virtual_ip` ingizni o'chirib qo'ying — ular
+o'z-o'zicha zararsiz, lekin boshqa odamlarning loglari bilan o'zaro
+bog'lanishi mumkin.
 
 ---
 
-## Sending patches
+## Patch yuborish
 
-1. Fork and create a branch off `main`.
-2. Make the change, with a focused commit history. We squash-merge, so
-   the final commit message is what matters; intermediate commits can
-   be messy.
-3. Run the tests for whichever module you touched:
+1. Fork qiling va `main` dan branch oching.
+2. O'zgartirish kiriting; commit tarixi maqsadli bo'lsin. Biz squash-merge
+   qilamiz, shuning uchun yakuniy commit xabari muhim; oraliq commit lar
+   tartibsiz bo'lishi mumkin.
+3. O'zgartirgan modul uchun testlarni ishga tushiring:
    ```sh
    cd shared && go test ./...
    ```
-4. Run `go fmt ./...` and `go vet ./...`. CI will reject anything that
-   doesn't pass.
-5. Open a pull request. The description should explain *why* the
-   change exists, not just what it does.
+4. `go fmt ./...` va `go vet ./...` ni ishga tushiring. CI tozaligini
+   talab qiladi.
+5. Pull request oching. Tavsifda *nega* o'zgartirish kerak ekanini
+   tushuntiring, faqat *nima* qilganingizni emas.
 
 ---
 
-## Style notes
+## Stil bo'yicha eslatmalar
 
 ### Go
 
-- Standard `gofmt` style. We don't use any custom linters beyond `go vet`.
-- Prefer accepting `context.Context` as the first parameter on any
-  function that touches I/O.
-- Errors flow up. Don't `log.Fatal` from a library function.
-- Avoid panics outside `init()` and `main()`. Return errors instead.
-- Comments explain *why*, not *what*. The code already shows what.
+- Standart `gofmt` stili. `go vet` dan boshqa custom linter yo'q.
+- I/O bilan ishlaydigan har qanday funksiyada birinchi parametr sifatida
+  `context.Context` qabul qilishni afzal ko'ring.
+- Xatolar yuqoriga oqadi. Kutubxona funksiyasidan `log.Fatal` qilmang.
+- `init()` va `main()` dan tashqarida panic dan saqlaning. Xato
+  qaytaring.
+- Izohlar *nima* emas, *nega* ni tushuntiradi. Kod o'zi nima qilayotganini
+  ko'rsatadi.
 
-### TypeScript / React (when `client/` lands)
+### TypeScript / React (`client/` paydo bo'lganda)
 
-- Tailwind for styling. No CSS-in-JS, no styled-components.
-- Zustand for state, not Redux.
-- Functional components with hooks. No class components.
-- Avoid `any`. If you really need it, leave a one-line comment why.
-
----
-
-## Backwards compatibility
-
-The wire protocol in [`shared/protocol/messages.go`](shared/protocol/messages.go)
-is a public commitment. **Adding** optional fields and new message
-types is always safe; **renaming** or **removing** fields breaks every
-deployed client and server. If you think you need to do that, open an
-issue first to discuss the migration plan.
+- Stil uchun Tailwind. CSS-in-JS yoki styled-components yo'q.
+- State uchun Zustand, Redux emas.
+- Hook lar bilan funksional komponent. Class komponent yo'q.
+- `any` ni ishlatishdan saqlaning. Agar haqiqatan kerak bo'lsa, sababini
+  bir qator izohda qoldiring.
 
 ---
 
-## What's currently the most useful
+## Orqaga moslashuvchanlik
 
-See [ROADMAP.md](ROADMAP.md). Phase 2 is the active work area —
-specifically the `client/peer/` package (WebRTC mesh wiring) and the
-`client/signaling/` client (WebSocket → handshake orchestration).
-Phase 3+ will need design help on the React side.
-
----
-
-## What's out of scope
-
-- Cryptocurrency or token-based discovery
-- Mandatory account systems / centralised identity
-- Integrations with proprietary chat platforms
-- Anything that requires the signaling server to see message contents
-
-The whole point of Portal is that the operator can't read your traffic.
-Features that conflict with that aren't going to land.
+[`shared/protocol/messages.go`](shared/protocol/messages.go) dagi simli
+protokol — bu ommaviy majburiyat. Ixtiyoriy maydonlar va yangi xabar
+turlarini **qo'shish** har doim xavfsiz; maydonlarni **o'zgartirish**
+yoki **olib tashlash** ishlatilayotgan har bir client va serverni
+buzadi. Agar shunday qilish kerak deb o'ylasangiz, avval issue oching va
+migratsiya rejasini muhokama qiling.
 
 ---
 
-## Communication
+## Hozir nima eng foydali
 
-For now: GitHub issues only. If the project grows, we'll set up a
-matrix room or similar.
+[ROADMAP.md](ROADMAP.md) ga qarang. 2-bosqich faol ish maydoni —
+xususan `client/peer/` paketi (WebRTC mesh ulashlar) va
+`client/signaling/` client (WebSocket → handshake orkestratsiya).
+3+ bosqichda React tomonida dizayn yordami kerak bo'ladi.
+
+---
+
+## Qamrovga kirmaydigan narsalar
+
+- Kriptovalyuta yoki token asosidagi discovery
+- Majburiy hisob qaydnomasi tizimi / markazlashtirilgan identifikatsiya
+- Yopiq chat platformalari bilan integratsiya
+- Signal serverining xabarlar tarkibini ko'rishini talab qiladigan har
+  qanday narsa
+
+Portal ning butun maqsadi — operator sizning trafigingizni o'qiy
+olmasligi. Bunga zid funksiyalar qo'shilmaydi.
+
+---
+
+## Aloqa
+
+Hozircha: faqat GitHub issue lar. Loyiha o'sib borsa, matrix xonasi
+yoki shunga o'xshash narsa o'rnatamiz.

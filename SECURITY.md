@@ -1,69 +1,73 @@
-# Security policy
+# Xavfsizlik siyosati
 
-## Reporting a vulnerability
+## Zaiflik haqida xabar berish
 
-If you've found a security issue in Portal, please report it privately
-before disclosing publicly.
+Agar Portal da xavfsizlik muammosini topgan bo'lsangiz, ommaviy
+oshkor qilishdan oldin shaxsan xabar bering.
 
-- **Email:** *(maintainer email — TBD; use the address in `git log` for
-  now)*
-- **Subject line:** start with `[security]` so it's easy to triage.
+- **Email:** *(loyiha muallifi email — TBD; hozircha `git log` dagi
+  manzildan foydalaning)*
+- **Mavzu qatori:** triage qilish oson bo'lishi uchun `[security]` bilan
+  boshlang.
 
-Please include:
+Iltimos, quyidagilarni qo'shing:
 
-1. A description of the issue and its impact.
-2. Reproduction steps or a proof-of-concept.
-3. Whether you've already shared the details elsewhere.
+1. Muammo va uning ta'siri tavsifi.
+2. Qayta ishlash bosqichlari yoki proof-of-concept.
+3. Ma'lumotlarni boshqa joyda allaqachon ulashganmisiz.
 
-Reports get acknowledged within 72 hours. We aim to ship fixes within
-14 days of acknowledgement and credit reporters in the release notes
-unless they ask not to be named.
-
----
-
-## Scope
-
-In scope:
-
-- The desktop client (`client/`)
-- The shared wire protocol (`shared/protocol/`)
-- The signaling server design (the deployed instance is the operator's
-  responsibility, but design-level issues are in scope)
-
-Out of scope:
-
-- Vulnerabilities that require the user to install a malicious
-  third-party signaling server. Self-hosting is supported, but the
-  threat model assumes that endpoint is trusted.
-- Theoretical brute-force attacks on the 6-digit portal code that don't
-  account for per-IP rate limits (see [ARCHITECTURE.md](ARCHITECTURE.md)).
-- Bugs in dependencies (Go stdlib, Wails, pion/webrtc, gorilla/websocket).
-  Please report those upstream.
+Hisobotlar 72 soat ichida tasdiqlanadi. Tasdiqdan keyin 14 kun ichida
+yamoq chiqarish maqsadimiz va xabar beruvchini release notes da
+ko'rsatamiz (agar nomi ko'rinmasligini so'ramasa).
 
 ---
 
-## What we promise
+## Qamrov
 
-- The signaling server cannot read application traffic. If you find
-  a way to make it, that's a critical issue.
-- A peer in portal A cannot reach a peer in portal B through Portal.
-  If you find a way, that's a critical issue.
-- The `from` field on relayed `webrtc.*` messages is server-stamped
-  and cannot be forged. If you find a way to forge it, that's a high
-  issue.
+Qamrovda:
+
+- Desktop client (`client/`)
+- Shared simli protokol (`shared/protocol/`)
+- Signal serveri dizayni (deploy qilingan instance — operatorning
+  mas'uliyati, lekin dizayn darajasidagi muammolar qamrovda)
+
+Qamrovdan tashqarida:
+
+- Foydalanuvchining yomonniyatli uchinchi tomon signal serverini
+  o'rnatishini talab qiladigan zaifliklar. O'zingizniki ishga tushirish
+  qo'llab-quvvatlanadi, lekin tahdid modeli bu endpoint ga ishonchliligini
+  taxmin qiladi.
+- Per-IP rate limit ni hisobga olmaydigan 6 xonali portal kodiga
+  nazariy brute-force hujumlar (qarang [ARCHITECTURE.md](ARCHITECTURE.md)).
+- Bog'liqliklardagi xatolar (Go stdlib, Wails, pion/webrtc,
+  gorilla/websocket). Iltimos, ularni upstream ga xabar bering.
 
 ---
 
-## Hardening tips for self-hosters
+## Biz nima va'da qilamiz
 
-If you run your own signaling server:
+- Signal serveri ilova trafigini o'qiy olmaydi. Agar buni qila olishning
+  yo'lini topsangiz — bu kritik issue.
+- A portalidagi peer Portal orqali B portalidagi peer ga yeta olmaydi.
+  Agar yo'lini topsangiz — bu kritik issue.
+- Uzatilgan `webrtc.*` xabarlardagi `from` maydoni server tomonidan
+  shtamplangan va soxtalashtirib bo'lmaydi. Agar yo'lini topsangiz — bu
+  yuqori darajadagi issue.
 
-- Use TLS. Cloudflare Origin Certificates are free; see the deployment
-  guide.
-- Run behind Cloudflare (or another DDoS-mitigating CDN) with WebSocket
-  support enabled.
-- Set non-default rate limits if you expect heavy use; the defaults are
-  conservative.
-- Run as a non-root user with the supplied systemd hardening profile.
-- Rotate Origin Certificates before they expire (15-year default from
-  Cloudflare, but still — set a calendar reminder).
+---
+
+## Self-host qiluvchilar uchun hardening maslahatlari
+
+Agar o'z signal serveringizni boshqarsangiz:
+
+- TLS ishlating. Cloudflare Origin Certificate lari bepul; deploy
+  qo'llanmaga qarang.
+- Cloudflare ortida (yoki WebSocket qo'llab-quvvatlovchi DDoS-mitigating
+  CDN ortida) ishga tushiring.
+- Og'ir foydalanish kutilsa, standart bo'lmagan rate limit larni
+  o'rnating; standart qiymatlar konservativ.
+- Birga keladigan systemd hardening profili bilan root bo'lmagan
+  foydalanuvchi sifatida ishga tushiring.
+- Origin Certificate lar muddati tugashidan oldin yangilang
+  (Cloudflare standart 15 yil, lekin baribir — kalendarga eslatma
+  qo'ying).

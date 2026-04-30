@@ -2,105 +2,111 @@
 
 # Portal
 
-**Direct connections. Zero servers between you.**
+**To'g'ridan-to'g'ri ulanish. Orada hech qanday server yo'q.**
 
-Portal is a desktop app that builds a private peer-to-peer mesh network
-between people. Open a portal, share a 6-digit code, and every device
-inside connects directly to every other device — chat, transfer files,
-host a game server, share a dev URL. The signaling server only carries
-the initial handshake; everything after that is peer-to-peer.
+Portal — bu odamlar o'rtasida xususiy peer-to-peer (tengma-teng) mesh tarmoq
+quradigan desktop dastur. Portal oching, 6 xonali kodni ulashing — va
+ichidagi har bir qurilma boshqa har bir qurilma bilan to'g'ridan-to'g'ri
+ulanadi: chat, fayl uzatish, o'yin serveri, dev URL ulashish va boshqa
+narsalar uchun. Signal serveri faqat dastlabki qo'l berishish (handshake)
+uchun ishlatiladi; undan keyin hamma trafik peer-to-peer oqadi.
 
 </div>
 
 ---
 
-## What you can do with it
+## Bu loyiha bilan nima qila olasiz
 
 | | |
 | --- | --- |
-| **Connect 2 – 16 devices** | Open a portal, hand out the 6-digit ID + code. Anyone can join from anywhere on the internet — no router config, no VPN, no port forwarding. |
-| **Chat & file transfer** | Group chat, direct messages, drag-and-drop file transfer with progress bars. End-to-end encrypted with a key derived from your portal code. |
-| **Tunnel any TCP/UDP** | Each peer gets a virtual IP in `10.42.0.0/24`. Run a Minecraft server on `localhost:25565` and your friends connect at `10.42.0.3:25565` — Portal proxies the bytes through the mesh. |
-| **See your mesh live** | Animated visualization of who's connected to whom, real-time round-trip times, NAT-traversal indicators (direct vs. relayed). |
-| **Stay private** | After the WebRTC handshake, the signaling server never sees your traffic. All app data flows P2P. |
+| **2 dan 16 tagacha qurilmani ulash** | Portal oching, 6 xonali ID + kodni ulashing. Internetning istalgan joyidan kim xohlasa qo'shila oladi — router sozlamasi yo'q, VPN yo'q, port forwarding yo'q. |
+| **Chat va fayl uzatish** | Guruh chat, shaxsiy xabarlar, drag-and-drop fayl uzatish va progress bar. Portal kodidan olingan kalit yordamida uchidan-uchiga shifrlanadi. |
+| **Istalgan TCP/UDP ni tunnel qilish** | Har bir peer `10.42.0.0/24` diapazonida virtual IP oladi. Minecraft serverni `localhost:25565` da ishga tushirasiz, do'stlaringiz `10.42.0.3:25565` orqali ulanishadi — Portal baytlarni mesh orqali uzatadi. |
+| **Mesh ni jonli ko'rish** | Kim kim bilan ulangani jonli vizual ko'rinishda; haqiqiy vaqtda RTT (ping); NAT-traversal indikatorlari (to'g'ridan-to'g'ri yoki TURN orqali). |
+| **Maxfiyligingizni saqlash** | WebRTC handshake dan keyin signal serveri sizning trafigingizni hech qachon ko'rmaydi. Hamma ma'lumot peer-to-peer oqadi. |
 
-> **Status:** the signaling backbone is live. The desktop client is in
-> active development — see [ROADMAP.md](ROADMAP.md).
+> **Holat:** signal serveri tayyor va ishlamoqda. Desktop client faol
+> ishlab chiqilmoqda — qarang [ROADMAP.md](ROADMAP.md).
 
 ---
 
-## Install
+## O'rnatish
 
-> Builds for the desktop app are not yet released. Once Phase 2 ships, the
-> recommended path will be:
+> Desktop dastur uchun tayyor build hali chiqarilmagan. 2-bosqich tugagandan
+> keyin tavsiya etiladigan yo'l:
 >
-> 1. Download the installer for your OS from the **Releases** page.
-> 2. Open it, type a nickname, click **Create Portal** or **Join Portal**.
+> 1. Releases sahifasidan o'z OS uchun installerni yuklab oling.
+> 2. Oching, taxallus (nickname) yozing va **Portal yaratish** yoki
+>    **Portalga qo'shilish** ni bosing.
 >
-> No CLI, no setup, no account.
+> CLI yo'q, sozlash yo'q, hisob qaydnomasi yo'q.
 
-While we get there, you can build from source — see [INSTALL.md](INSTALL.md).
+Hozircha manbadan build qilishingiz mumkin — qarang [INSTALL.md](INSTALL.md).
 
-### Required on your machine
+### Sizning kompyuteringizda nima bo'lishi kerak
 
-| Platform | What you need | Why |
+| Platforma | Nima kerak | Nega |
 | --- | --- | --- |
-| Any  | Internet connection that supports WebRTC (almost all do) | Mesh transport |
-| macOS 12+ | Xcode Command Line Tools | code signing, native webview |
-| Windows 10+ | WebView2 runtime (preinstalled on 11) | embedded UI |
-| Linux | `webkit2gtk-4.1`, `libgtk-3` | embedded UI |
+| Hammasi | WebRTC ni qo'llab-quvvatlovchi internet ulanishi (deyarli barchasi qo'llab-quvvatlaydi) | Mesh transport |
+| macOS 12+ | Xcode Command Line Tools | imzolash, native webview |
+| Windows 10+ | WebView2 runtime (Win 11 da o'rnatilgan) | UI |
+| Linux | `webkit2gtk-4.1`, `libgtk-3` | UI |
 
-If you're behind a strict NAT (CGNAT or symmetric), connections will
-auto-fall-back to a TURN relay — see [ARCHITECTURE.md](ARCHITECTURE.md#nat--turn-fallback).
-
----
-
-## How a session looks
-
-```
-1. You open the app, type a nickname.
-2. Click Create Portal.
-3. Portal shows you:           ID:   428591
-                                CODE: 739204
-   (or scan a QR code from the modal)
-4. Friend opens the app, types nickname, clicks Join Portal.
-5. They type your ID + code. They're in.
-6. Live mesh diagram: every peer connected to every other peer, directly.
-```
+Agar siz qattiq NAT (CGNAT yoki simmetrik) ortida bo'lsangiz, ulanish
+avtomatik tarzda TURN relay ga o'tadi — qarang
+[ARCHITECTURE.md](ARCHITECTURE.md#nat-va-turn-zaxiraga-otish).
 
 ---
 
-## Documentation
+## Sessiya qanday ko'rinadi
 
-| Doc | What's in it |
+```
+1. Dasturni ochasiz, taxallus yozasiz.
+2. "Portal yaratish" ni bosasiz.
+3. Portal sizga ko'rsatadi:    ID:    428591
+                                KOD:  739204
+   (yoki QR kodni skanerlatib oling)
+4. Do'stingiz dasturni ochadi, taxallus yozib "Portalga qo'shilish" ni bosadi.
+5. ID + kodni kiritadi. Ichkariga kirdi.
+6. Jonli mesh diagrammasi: har bir peer to'g'ridan-to'g'ri boshqa har bir peer ga ulangan.
+```
+
+---
+
+## Hujjatlar
+
+| Hujjat | Nima haqida |
 | --- | --- |
-| [ROADMAP.md](ROADMAP.md) | Phases 1–5 with current status |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Mesh topology, NAT traversal, encryption, threat model |
-| [PROTOCOL.md](PROTOCOL.md) | Wire protocol reference for both signaling and P2P channels |
-| [INSTALL.md](INSTALL.md) | Build-from-source instructions per platform |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to file issues, send patches, run tests |
+| [ROADMAP.md](ROADMAP.md) | 1–5 bosqichlar va joriy holat |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Mesh topologiyasi, NAT traversal, shifrlash, tahdid modeli |
+| [PROTOCOL.md](PROTOCOL.md) | Signal va P2P kanallar uchun simli protokol |
+| [INSTALL.md](INSTALL.md) | Har bir platforma uchun manbadan build qilish |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Qanday hissa qo'shish, issue ochish, testlarni ishga tushirish |
+| [SECURITY.md](SECURITY.md) | Xavfsizlik siyosati va zaifliklarni xabar qilish |
 
 ---
 
-## Repository layout
+## Repository tuzilishi
 
 ```
 portal_traffic/
-├── shared/        Wire protocol shared by every client (this is here)
-├── client/        Wails + React desktop app (Phase 2 — coming up)
-└── server/        Signaling server (private — runs on a single VPS we operate)
+├── shared/        Har bir client tomonidan ishlatiladigan simli protokol (shu yerda)
+├── client/        Wails + React desktop dastur (2-bosqich — yo'lda)
+└── server/        Signal serveri (xususiy — bizning VPS da ishlaydi, repodan tashqarida)
 ```
 
-The signaling server source is intentionally not part of this repository.
-Portal clients connect to whichever signaling URL they're configured for,
-so the server is effectively interchangeable. If you want to host your
-own, the wire protocol is fully documented in [PROTOCOL.md](PROTOCOL.md)
-and [`shared/protocol/messages.go`](shared/protocol/messages.go) — a
-compatible signaling server is a few hundred lines of Go.
+Signal serveri kodi ataylab ushbu repoga kiritilmagan. Portal client
+o'zi sozlangan istalgan signal URL ga ulanadi, shuning uchun server
+deyarli almashtirib qo'yiladigan komponent. Agar siz o'zingizniki ishga
+tushirmoqchi bo'lsangiz, simli protokol to'liq
+[PROTOCOL.md](PROTOCOL.md) va
+[`shared/protocol/messages.go`](shared/protocol/messages.go) da
+hujjatlashtirilgan — mos signal server bir necha yuz qator Go kodi.
 
 ---
 
-## License
+## Litsenziya
 
-License TBD. Until one is chosen, this code is provided for reference;
-contact the maintainer before redistributing.
+Litsenziya hozircha tanlanmagan (TBD). Tanlangunga qadar bu kod faqat
+ma'lumot uchun taqdim etilmoqda; qayta tarqatishdan oldin muallif
+bilan bog'laning.
