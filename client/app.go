@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/webrtc/v4"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"portal_traffic_client/mesh"
@@ -519,6 +520,146 @@ func (a *App) SendChat(text string) int {
 // ----------------------------------------------------------------------------
 // Service / proxy bindings
 // ----------------------------------------------------------------------------
+
+// TurnTestResult is what TestTurn returns.
+type TurnTestResult struct {
+	OK          bool     `json:"ok"`
+	Message     string   `json:"message"`
+	Types       []string `json:"types"`       // candidate types we saw
+	HadRelay    bool     `json:"hadRelay"`
+	GatherMs    int64    `json:"gatherMs"`
+	URLs        []string `json:"urls"`
+}
+
+// TestTurn spins up a temporary RTCPeerConnection with the currently
+// configured TURN servers and reports which kinds of ICE candidates
+// it gathers within a 5-second window. If the result includes a
+// "relay" candidate, TURN is reachable and the peer mesh should
+// succeed even on Symmetric NAT.
+//
+// This is the single most informative diagnostic for "why aren't my
+// peers connecting?" because it sidesteps the rest of the WebRTC
+// state machine and tests just the TURN reachability.
+func (a *App) TestTurn() TurnTestResult {
+	t := a.GetTurnConfig()
+	res := TurnTestResult{}
+
+	iceServers := []webrtc.ICEServer{
+		{URLs: []string{"stun:stun.l.google.com:19302"}},
+	}
+	if t.URL != "" {
+		urls := splitTurnURLsForTest(t.URL)
+		res.URLs = urls
+		if len(urls) > 0 {
+			iceServers = append(iceServers, webrtc.ICEServer{
+				URLs:       urls,
+				Username:   t.Username,
+				Credential: t.Credential,
+			})
+		}
+	} else {
+		res.Message = "TURN sozlanmagan — Settings → TURN bo'limidan sozlang"
+		return res
+	}
+
+	api := webrtc.NewAPI()
+	pc, err := api.NewPeerConnection(webrtc.Configuration{ICEServers: iceServers})
+	if err != nil {
+		res.Message = "PeerConnection yaratib bo'lmadi: " + err.Error()
+		return res
+	}
+	defer pc.Close()
+
+	// We need at least one transceiver/data channel to trigger
+	// candidate gathering. A throwaway data channel does the job.
+	if _, err := pc.CreateDataChannel("test", nil); err != nil {
+		res.Message = "test channel: " + err.Error()
+		return res
+	}
+
+	seen := map[string]int{}
+	var seenMu sync.Mutex
+	pc.OnICECandidate(func(cand *webrtc.ICECandidate) {
+		if cand == nil {
+			return
+		}
+		seenMu.Lock()
+		seen[cand.Typ.String()]++
+		seenMu.Unlock()
+		a.logger.Info("turn test candidate",
+			"type", cand.Typ.String(),
+			"addr", cand.Address,
+			"port", cand.Port,
+		)
+	})
+
+	offer, err := pc.CreateOffer(nil)
+	if err != nil {
+		res.Message = "CreateOffer: " + err.Error()
+		return res
+	}
+	if err := pc.SetLocalDescription(offer); err != nil {
+		res.Message = "SetLocalDescription: " + err.Error()
+		return res
+	}
+
+	deadline := time.After(6 * time.Second)
+	start := time.Now()
+loop:
+	for {
+		select {
+		case <-deadline:
+			break loop
+		case <-time.After(150 * time.Millisecond):
+			seenMu.Lock()
+			if seen["relay"] > 0 {
+				seenMu.Unlock()
+				break loop
+			}
+			seenMu.Unlock()
+		}
+	}
+	res.GatherMs = time.Since(start).Milliseconds()
+
+	seenMu.Lock()
+	for k := range seen {
+		res.Types = append(res.Types, k)
+	}
+	res.HadRelay = seen["relay"] > 0
+	seenMu.Unlock()
+	sort.Strings(res.Types)
+
+	res.OK = res.HadRelay
+	switch {
+	case res.HadRelay:
+		res.Message = "TURN ishlamoqda — ulanish hosil bo'lishi kerak ✓"
+	case len(res.Types) == 0:
+		res.Message = "Bironta candidate yig'ilmadi — tarmoq bloklayotgan bo'lishi mumkin"
+	default:
+		res.Message = "TURN dan relay candidate kelmadi — credentials noto'g'ri yoki TURN serveri yiqilgan"
+	}
+	a.logger.Info("turn test", "ok", res.OK, "types", res.Types, "hadRelay", res.HadRelay)
+	return res
+}
+
+// splitTurnURLsForTest mirrors mesh.splitTurnURLs but is duplicated
+// here to avoid importing the mesh package's internal helper.
+func splitTurnURLsForTest(s string) []string {
+	out := []string{}
+	for _, raw := range strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || r == '\n' || r == ' ' || r == '\t' || r == ';'
+	}) {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		if !strings.HasPrefix(raw, "turn:") && !strings.HasPrefix(raw, "turns:") {
+			continue
+		}
+		out = append(out, raw)
+	}
+	return out
+}
 
 // LogLines returns the last `n` lines of the in-memory log ring.
 // Used by Settings → Diagnostika to surface what the app has been

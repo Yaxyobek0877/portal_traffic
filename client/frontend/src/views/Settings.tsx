@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
-import type { HistoryEntry, TurnConfig } from "../types";
+import type { HistoryEntry, TurnConfig, TurnTestResult } from "../types";
 
 export function Settings() {
   const setScreen = usePortalStore((s) => s.setScreen);
@@ -38,6 +38,9 @@ export function Settings() {
   const [logs, setLogs] = useState<string[]>([]);
   const [logPath, setLogPath] = useState("");
   const [logsOpen, setLogsOpen] = useState(false);
+
+  const [turnTest, setTurnTest] = useState<TurnTestResult | null>(null);
+  const [turnTesting, setTurnTesting] = useState(false);
 
   useEffect(() => {
     setDraftUrl(signalingUrl);
@@ -93,9 +96,10 @@ export function Settings() {
   // Open Relay Project public TURN. We list every variant they
   // expose: UDP/80, TCP/80, TLS/443. Pion picks whichever the
   // network actually permits, which matters a lot on mobile carriers
-  // that block UDP outbound or specific ports.
-  const fillFreePublicTurn = () => {
-    setTurn({
+  // that block UDP outbound or specific ports. Auto-saves on click —
+  // forgetting to click Saqlash was the most-reported step.
+  const fillFreePublicTurn = async () => {
+    const c = {
       url: [
         "turn:openrelay.metered.ca:80",
         "turn:openrelay.metered.ca:80?transport=tcp",
@@ -103,7 +107,26 @@ export function Settings() {
       ].join("\n"),
       username: "openrelayproject",
       credential: "openrelayproject",
-    });
+    };
+    setTurn(c);
+    try {
+      await app.SetTurnConfig(c);
+      setTurnSavedAt(Date.now());
+      setTurnError("");
+    } catch (e: any) {
+      setTurnError(e?.message || String(e));
+    }
+  };
+
+  const runTurnTest = async () => {
+    setTurnTesting(true);
+    setTurnTest(null);
+    try {
+      const r = await app.TestTurn();
+      setTurnTest(r);
+    } finally {
+      setTurnTesting(false);
+    }
   };
 
   const showLogs = async () => {
@@ -239,6 +262,48 @@ export function Settings() {
             "Bepul TURN" — tezda sinash uchun: Open Relay Project ning ommaviy
             relay, doim ishlamasligi mumkin.
           </p>
+
+          <div className="mt-4 pt-4 border-t border-white/5">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs uppercase tracking-widest text-zinc-500">
+                TURN ni sinash
+              </div>
+              <button
+                onClick={runTurnTest}
+                disabled={turnTesting}
+                className="text-xs px-3 py-1.5 rounded-btn bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 disabled:opacity-50"
+              >
+                {turnTesting ? "Tekshirilmoqda..." : "Sinash"}
+              </button>
+            </div>
+            {turnTest && (
+              <div
+                className={`panel rounded-input p-3 text-xs space-y-1 ${
+                  turnTest.ok
+                    ? "border-emerald-500/30 bg-emerald-500/5"
+                    : "border-rose-500/30 bg-rose-500/5"
+                }`}
+              >
+                <div className={turnTest.ok ? "text-emerald-300" : "text-rose-300"}>
+                  {turnTest.ok ? "✓ " : "✗ "}{turnTest.message}
+                </div>
+                {turnTest.types.length > 0 && (
+                  <div className="text-zinc-400">
+                    Topilgan candidate turlari:{" "}
+                    <span className="font-mono">{turnTest.types.join(", ")}</span>
+                  </div>
+                )}
+                {turnTest.urls.length > 0 && (
+                  <div className="text-zinc-500 font-mono text-[10px] truncate">
+                    URLs: {turnTest.urls.join("  ·  ")}
+                  </div>
+                )}
+                <div className="text-zinc-600">
+                  Yig'ish vaqti: {turnTest.gatherMs} ms
+                </div>
+              </div>
+            )}
+          </div>
         </Section>
 
         {/* Logs */}

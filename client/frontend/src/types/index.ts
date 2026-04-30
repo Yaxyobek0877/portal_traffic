@@ -87,3 +87,12 @@ export type LocalListener = {
   pid: number;
   local: string;
 };
+
+export type TurnTestResult = {
+  ok: boolean;
+  message: string;
+  types: string[];
+  hadRelay: boolean;
+  gatherMs: number;
+  urls: string[];
+};

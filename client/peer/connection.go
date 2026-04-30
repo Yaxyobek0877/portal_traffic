@@ -99,13 +99,41 @@ func (s State) String() string {
 	return [...]string{"connecting", "connected", "failed", "closed"}[s]
 }
 
+// candidateSummary tracks which ICE candidate types we ever saw so
+// the post-failure diagnostic can say "we had host+srflx but no
+// relay" instead of just "ICE failed".
+type candidateSummary struct {
+	mu    sync.Mutex
+	types map[string]int
+}
+
+func (s *candidateSummary) add(t string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.types == nil {
+		s.types = make(map[string]int)
+	}
+	s.types[t]++
+}
+
+func (s *candidateSummary) snapshot() map[string]int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]int, len(s.types))
+	for k, v := range s.types {
+		out[k] = v
+	}
+	return out
+}
+
 // Connection is a single peer-to-peer relationship. Each instance
 // owns one webrtc.PeerConnection and four data channels.
 type Connection struct {
 	cfg    Config
 	logger *slog.Logger
 
-	pc *webrtc.PeerConnection
+	pc       *webrtc.PeerConnection
+	cands    candidateSummary
 
 	mu       sync.Mutex
 	channels map[string]*webrtc.DataChannel
@@ -159,9 +187,7 @@ func New(cfg Config) (*Connection, error) {
 		var init webrtc.ICECandidateInit
 		if cand != nil {
 			init = cand.ToJSON()
-			// host = LAN IP, srflx = STUN-discovered public IP,
-			// relay = via TURN. If we never see "relay" while behind
-			// symmetric NAT, that's why the peer can't connect.
+			c.cands.add(cand.Typ.String())
 			c.logger.Info("local ice candidate",
 				"type", cand.Typ.String(),
 				"addr", cand.Address,
@@ -175,10 +201,6 @@ func New(cfg Config) (*Connection, error) {
 	})
 
 	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
-		// Bumped from Debug to Info so users can see ICE progress in
-		// Settings → Loglar without flipping a debug switch. This is
-		// the single most useful piece of information when peers fail
-		// to connect.
 		c.logger.Info("peer state", "state", s.String())
 		newState := translateState(s)
 		c.mu.Lock()
@@ -188,6 +210,22 @@ func New(cfg Config) (*Connection, error) {
 		case <-c.closed:
 		case c.stateCh <- newState:
 		default:
+		}
+		// On failure, summarise the ICE candidates we ever saw. This
+		// turns the silent "ICE failed" into an actionable diagnostic:
+		//   "had host+srflx, no relay → TURN required for this NAT type"
+		if newState == StateFailed {
+			summary := c.cands.snapshot()
+			hadRelay := summary["relay"] > 0
+			hint := "TURN serveri zarur — siz Simmetrik NAT ortidasiz"
+			if hadRelay {
+				hint = "TURN orqali ham urinish qilindi, lekin ulanmadi (TURN balki yiqilgan)"
+			}
+			c.logger.Warn("peer ice failed — diagnostic",
+				"candidate_types", summary,
+				"had_relay", hadRelay,
+				"hint", hint,
+			)
 		}
 		if newState == StateClosed || newState == StateFailed {
 			_ = c.Close()

@@ -13,6 +13,7 @@ import type {
   HistoryEntry,
   TurnConfig,
   LocalListener,
+  TurnTestResult,
 } from "../types";
 
 type Bridge = {
@@ -42,6 +43,7 @@ type Bridge = {
   LogFilePath: () => Promise<string>;
   OpenLogFolder: () => Promise<void>;
   ClearLogs: () => Promise<void>;
+  TestTurn: () => Promise<TurnTestResult>;
 };
 
 declare global {
@@ -111,6 +113,14 @@ const stub: Bridge = {
   LogFilePath: async () => "~/.portal/logs/portal.log",
   OpenLogFolder: async () => {},
   ClearLogs: async () => {},
+  TestTurn: async () => ({
+    ok: false,
+    message: "preview mode",
+    types: [],
+    hadRelay: false,
+    gatherMs: 0,
+    urls: [],
+  }),
 };
 
 export const app: Bridge =
