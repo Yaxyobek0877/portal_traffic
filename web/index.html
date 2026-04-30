@@ -36,6 +36,7 @@
     --accent-2:  #6366f1;
     --accent-3:  #22d3ee;
     --gradient:  linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #22d3ee 100%);
+    --gradient-anim: linear-gradient(135deg, #8b5cf6 0%, #6366f1 25%, #22d3ee 50%, #6366f1 75%, #8b5cf6 100%);
     --gradient-soft: linear-gradient(135deg, rgba(139,92,246,.18), rgba(99,102,241,.12) 60%, rgba(34,211,238,.06));
     --radius:    12px;
     --radius-sm: 8px;
@@ -45,6 +46,7 @@
 
   *, *::before, *::after { box-sizing: border-box; }
 
+  html { scroll-behavior: smooth; }
   html, body {
     margin: 0; padding: 0;
     background: var(--bg);
@@ -57,16 +59,28 @@
     overflow-x: hidden;
   }
 
-  /* ambient mesh background */
+  /* particle network behind everything */
+  #particles {
+    position: fixed; inset: 0;
+    z-index: -3;
+    pointer-events: none;
+  }
+
+  /* ambient gradient pools */
   body::before {
     content: "";
     position: fixed; inset: 0;
     background:
-      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139,92,246,.15), transparent 60%),
-      radial-gradient(ellipse 60% 50% at 90% 30%, rgba(34,211,238,.08), transparent 60%),
-      radial-gradient(ellipse 60% 50% at 10% 90%, rgba(99,102,241,.10), transparent 60%);
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139,92,246,.18), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 30%, rgba(34,211,238,.10), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 10% 90%, rgba(99,102,241,.12), transparent 60%);
     z-index: -2;
     pointer-events: none;
+    animation: bgshift 30s ease-in-out infinite alternate;
+  }
+  @keyframes bgshift {
+    0%   { background-position: 0% 0%, 0% 0%, 0% 0%; }
+    100% { background-position: 30% 30%, -30% 0%, 0% -30%; }
   }
   body::after {
     content: "";
@@ -96,8 +110,13 @@
     z-index: 50;
     backdrop-filter: blur(20px) saturate(140%);
     -webkit-backdrop-filter: blur(20px) saturate(140%);
-    background: rgba(10,14,26,.65);
-    border-bottom: 1px solid var(--border);
+    background: rgba(10,14,26,.55);
+    border-bottom: 1px solid transparent;
+    transition: border-color .25s, background .25s;
+  }
+  nav.top.scrolled {
+    background: rgba(10,14,26,.78);
+    border-bottom-color: var(--border);
   }
   nav.top .row {
     display: flex; align-items: center; justify-content: space-between;
@@ -108,18 +127,30 @@
     font-weight: 700; font-size: 17px; letter-spacing: -0.01em;
     text-decoration: none;
   }
-  nav.top .brand .mark { width: 26px; height: 26px; }
+  nav.top .brand .mark {
+    width: 26px; height: 26px;
+    animation: brandSpin 30s linear infinite;
+  }
+  @keyframes brandSpin { to { transform: rotate(360deg); } }
   nav.top .links {
     display: flex; gap: 28px; align-items: center;
   }
   nav.top .links a {
     color: var(--text-dim); text-decoration: none; font-size: 14px;
     transition: color .15s ease;
+    position: relative;
   }
   nav.top .links a:hover { color: var(--text); }
+  nav.top .links a:not(.cta)::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -6px;
+    height: 2px; background: var(--gradient); border-radius: 2px;
+    transform: scaleX(0); transform-origin: left;
+    transition: transform .25s ease;
+  }
+  nav.top .links a:not(.cta):hover::after { transform: scaleX(1); }
   nav.top .cta {
     background: var(--gradient);
-    color: white; padding: 8px 16px; border-radius: var(--radius-sm);
+    color: white !important; padding: 8px 16px; border-radius: var(--radius-sm);
     font-size: 14px; font-weight: 600;
     text-decoration: none;
     box-shadow: 0 4px 20px -4px rgba(139,92,246,.5);
@@ -135,30 +166,39 @@
     padding: 80px 0 60px;
     text-align: center;
     position: relative;
+    perspective: 1200px;
   }
   .hero .wormhole-wrap {
     width: 220px; height: 220px;
     margin: 0 auto 40px;
     position: relative;
+    transform-style: preserve-3d;
+    will-change: transform;
   }
   .hero .wormhole-wrap::after {
     content: "";
     position: absolute; inset: -30%;
-    background: radial-gradient(circle, rgba(139,92,246,.35), transparent 60%);
+    background: radial-gradient(circle, rgba(139,92,246,.4), transparent 60%);
     z-index: -1;
     filter: blur(20px);
     animation: pulse 4s ease-in-out infinite;
   }
   @keyframes pulse {
     0%, 100% { opacity: .55; transform: scale(1); }
-    50%      { opacity: .85; transform: scale(1.06); }
+    50%      { opacity: .9;  transform: scale(1.08); }
   }
   .wormhole circle { fill: none; stroke-linecap: round; }
   .wormhole .ring1 { animation: spin 14s linear infinite; transform-origin: 100px 100px; }
   .wormhole .ring2 { animation: spin 9s linear infinite reverse; transform-origin: 100px 100px; }
   .wormhole .ring3 { animation: spin 6s linear infinite; transform-origin: 100px 100px; }
   .wormhole .ring4 { animation: spin 4s linear infinite reverse; transform-origin: 100px 100px; }
+  .wormhole .ring5 { animation: spin 2.5s linear infinite; transform-origin: 100px 100px; }
+  .wormhole .core { animation: corePulse 2s ease-in-out infinite; transform-origin: 100px 100px; }
   @keyframes spin { from {transform:rotate(0)} to {transform:rotate(360deg)} }
+  @keyframes corePulse {
+    0%,100% { transform: scale(1); opacity: .95; }
+    50%     { transform: scale(1.25); opacity: 1; }
+  }
 
   .hero h1 {
     font-size: clamp(40px, 7vw, 80px);
@@ -169,6 +209,11 @@
     background: linear-gradient(180deg, #ffffff 0%, #c9cfde 100%);
     -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent;
+    animation: heroIn .9s cubic-bezier(.25,.46,.45,.94) both;
+  }
+  @keyframes heroIn {
+    from { opacity: 0; transform: translateY(14px); filter: blur(10px); }
+    to   { opacity: 1; transform: translateY(0);   filter: blur(0); }
   }
   .hero p.tagline {
     font-size: clamp(17px, 1.6vw, 21px);
@@ -176,16 +221,32 @@
     max-width: 620px;
     margin: 0 auto 36px;
     line-height: 1.55;
+    animation: heroIn 1.1s cubic-bezier(.25,.46,.45,.94) .15s both;
   }
   .hero p.tagline strong {
     color: var(--text);
     font-weight: 600;
   }
+  .hero .typewriter-line {
+    margin-top: 14px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    color: var(--accent-3);
+    height: 1.6em;
+  }
+  .hero .typewriter-line::before { content: "$ "; color: var(--text-faint); }
+  .hero .typewriter-line::after {
+    content: "▍"; color: var(--accent-3);
+    animation: blink 1.05s steps(1) infinite;
+    margin-left: 2px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
 
   .pills {
     display: inline-flex; gap: 8px; flex-wrap: wrap;
     justify-content: center;
     margin-bottom: 36px;
+    animation: heroIn 1s cubic-bezier(.25,.46,.45,.94) .25s both;
   }
   .pill {
     display: inline-flex; align-items: center; gap: 6px;
@@ -196,11 +257,27 @@
     font-size: 12px; color: var(--text-dim);
     font-family: "JetBrains Mono", monospace;
   }
-  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 10px #22c55e; }
-  .pill.amber .dot { background: #f59e0b; box-shadow: 0 0 10px #f59e0b; }
+  .pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 0 rgba(34,197,94,0.7);
+    animation: dotPulse 1.8s infinite;
+  }
+  .pill.amber .dot { background: #f59e0b; box-shadow: 0 0 0 0 rgba(245,158,11,0.7); animation-name: dotPulseAmber; }
+  @keyframes dotPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(34,197,94,.7); }
+    70%  { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+    100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+  }
+  @keyframes dotPulseAmber {
+    0%   { box-shadow: 0 0 0 0 rgba(245,158,11,.7); }
+    70%  { box-shadow: 0 0 0 8px rgba(245,158,11,0); }
+    100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); }
+  }
 
   .cta-row {
     display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+    animation: heroIn 1s cubic-bezier(.25,.46,.45,.94) .35s both;
   }
   .btn {
     display: inline-flex; align-items: center; gap: 8px;
@@ -210,13 +287,28 @@
     text-decoration: none;
     transition: transform .15s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
     cursor: pointer; border: 1px solid transparent;
+    position: relative; overflow: hidden;
   }
   .btn-primary {
-    background: var(--gradient);
     color: white;
+    background: var(--gradient-anim);
+    background-size: 200% 200%;
     box-shadow: 0 8px 28px -8px rgba(139,92,246,.55);
+    animation: gradientShift 6s ease-in-out infinite;
+  }
+  @keyframes gradientShift {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+  }
+  .btn-primary::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.35) 50%, transparent 65%);
+    transform: translateX(-100%);
+    transition: transform .7s ease;
   }
   .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px -10px rgba(139,92,246,.7); }
+  .btn-primary:hover::after { transform: translateX(100%); }
   .btn-ghost {
     background: var(--surface);
     border-color: var(--border);
@@ -266,23 +358,26 @@
     padding: 28px;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    transition: transform .25s ease, border-color .2s ease, background .2s ease;
+    transition: border-color .2s ease, background .2s ease;
     position: relative;
     overflow: hidden;
+    will-change: transform;
+    --mx: 50%;
+    --my: 50%;
   }
-  .card:hover {
-    transform: translateY(-3px);
-    border-color: var(--border-2);
-    background: var(--surface-2);
-  }
+  .card.tilt { transform-style: preserve-3d; }
   .card::before {
     content: "";
     position: absolute; inset: 0;
-    background: var(--gradient-soft);
+    background:
+      radial-gradient(circle 200px at var(--mx) var(--my), rgba(139,92,246,.18), transparent 60%),
+      var(--gradient-soft);
     opacity: 0; transition: opacity .3s ease;
     pointer-events: none;
   }
-  .card:hover::before { opacity: .5; }
+  .card:hover { border-color: var(--border-2); background: var(--surface-2); }
+  .card:hover::before { opacity: 1; }
+  .card > * { position: relative; z-index: 1; }
   .card .icon-wrap {
     width: 40px; height: 40px;
     border-radius: 10px;
@@ -291,7 +386,9 @@
     color: white;
     margin-bottom: 18px;
     box-shadow: 0 8px 24px -10px rgba(139,92,246,.6);
+    transition: transform .3s cubic-bezier(.25,.46,.45,.94);
   }
+  .card:hover .icon-wrap { transform: scale(1.06) rotate(-3deg); }
   .card .icon-wrap svg { width: 20px; height: 20px; stroke-width: 1.7; }
   .card h3 {
     font-size: 18px; font-weight: 600; letter-spacing: -0.01em;
@@ -304,7 +401,52 @@
     line-height: 1.6;
   }
 
-  /* ---------- how it works ---------- */
+  /* ---------- live mesh visualization ---------- */
+  .mesh-section {
+    text-align: center;
+  }
+  .mesh-stage {
+    background: linear-gradient(180deg, var(--surface), transparent);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px 16px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    margin-top: 32px;
+    overflow: hidden;
+    position: relative;
+  }
+  .mesh-stage::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 60% 60% at 50% 50%, rgba(139,92,246,.1), transparent 70%);
+    pointer-events: none;
+  }
+  .mesh-stage svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .mesh-node { transition: transform .2s ease; }
+  @keyframes nodePulse {
+    0%, 100% { transform: scale(1);   opacity: 0.95; }
+    50%      { transform: scale(1.2); opacity: 1;    }
+  }
+  .stats-row {
+    display: flex; justify-content: center; gap: 56px; flex-wrap: wrap;
+    margin-top: 32px;
+  }
+  .stat .num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 38px; font-weight: 600;
+    background: var(--gradient);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1;
+  }
+  .stat .label {
+    color: var(--text-faint); font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-top: 6px;
+  }
+
+  /* ---------- how it works steps ---------- */
   .steps {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -319,7 +461,9 @@
     padding: 28px;
     position: relative;
     counter-increment: step;
+    transition: transform .2s ease, border-color .2s ease;
   }
+  .step:hover { transform: translateY(-3px); border-color: var(--border-2); }
   .step::before {
     content: "0" counter(step);
     position: absolute; top: 24px; right: 24px;
@@ -345,15 +489,6 @@
   .step .demo .id, .step .demo .code { color: var(--accent-3); font-weight: 600; }
   .step .demo .label { color: var(--text-faint); }
 
-  /* ---------- mesh diagram ---------- */
-  .mesh-section {
-    text-align: center;
-  }
-  .mesh-svg {
-    max-width: 100%; height: auto;
-    margin-top: 24px;
-  }
-
   /* ---------- code block / install ---------- */
   .install-card {
     background: var(--bg-2);
@@ -362,7 +497,16 @@
     padding: 0;
     overflow: hidden;
     margin-bottom: 18px;
+    position: relative;
   }
+  .install-card::after {
+    content: "";
+    position: absolute; inset: -1px;
+    background: linear-gradient(135deg, rgba(139,92,246,.3), transparent 30%, transparent 70%, rgba(34,211,238,.3));
+    z-index: -1; border-radius: inherit;
+    opacity: 0; transition: opacity .3s;
+  }
+  .install-card:hover::after { opacity: 1; }
   .install-card .head {
     display: flex; justify-content: space-between; align-items: center;
     padding: 12px 18px;
@@ -381,6 +525,7 @@
     transition: background .15s ease, color .15s ease;
   }
   .install-card .head .copy:hover { background: var(--surface); color: var(--text); }
+  .install-card .head .copy.flash { background: rgba(34,211,238,.15); color: var(--accent-3); }
   .install-card pre {
     margin: 0; padding: 18px;
     font-family: "JetBrains Mono", monospace;
@@ -404,7 +549,9 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
+    transition: border-color .2s ease, transform .2s ease;
   }
+  .roadmap-row:hover { border-color: var(--border-2); transform: translateX(4px); }
   .roadmap-row .num {
     font-family: "JetBrains Mono", monospace;
     color: var(--text-faint); font-size: 13px; letter-spacing: 0.1em;
@@ -447,8 +594,13 @@
   .big-cta::before {
     content: "";
     position: absolute; inset: 0;
-    background: radial-gradient(ellipse 50% 100% at 50% 100%, rgba(139,92,246,.18), transparent 70%);
+    background: radial-gradient(ellipse 50% 100% at 50% 100%, rgba(139,92,246,.22), transparent 70%);
     pointer-events: none;
+    animation: bgFloat 8s ease-in-out infinite;
+  }
+  @keyframes bgFloat {
+    0%, 100% { background-position: 50% 100%; }
+    50%      { background-position: 50% 80%; }
   }
   .big-cta h2 { margin-bottom: 12px; }
   .big-cta p { color: var(--text-dim); max-width: 520px; margin: 0 auto 32px; }
@@ -471,9 +623,11 @@
 
   /* ---------- text gradient ---------- */
   .gradient-text {
-    background: var(--gradient);
+    background: var(--gradient-anim);
+    background-size: 200% 200%;
     -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent;
+    animation: gradientShift 8s ease-in-out infinite;
   }
 
   /* ---------- reveal-on-scroll ---------- */
@@ -484,9 +638,19 @@
   .reveal.in { opacity: 1; transform: translateY(0); }
 
   ::selection { background: rgba(139,92,246,.4); color: white; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 </style>
 </head>
 <body>
+
+<canvas id="particles" aria-hidden="true"></canvas>
 
 <nav class="top">
   <div class="container row">
@@ -506,6 +670,7 @@
     </a>
     <div class="links">
       <a href="#imkoniyatlar">Imkoniyatlar</a>
+      <a href="#mesh">Mesh</a>
       <a href="#qadamlar">Qanday ishlaydi</a>
       <a href="#roadmap">Roadmap</a>
       <a class="gh" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">GitHub</a>
@@ -529,23 +694,25 @@
             <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
           </radialGradient>
         </defs>
-        <circle cx="100" cy="100" r="14" fill="url(#wgGlow)" opacity=".8"/>
-        <circle cx="100" cy="100" r="6"  fill="#fff" opacity=".95"/>
+        <g class="core">
+          <circle cx="100" cy="100" r="14" fill="url(#wgGlow)" opacity=".8"/>
+          <circle cx="100" cy="100" r="6"  fill="#fff" opacity=".95"/>
+        </g>
 
         <g class="ring1">
           <circle cx="100" cy="100" r="92" stroke="url(#wg)" stroke-width="1.2" stroke-dasharray="3 9" opacity=".55"/>
         </g>
         <g class="ring2">
-          <circle cx="100" cy="100" r="74" stroke="url(#wg)" stroke-width="1.4" stroke-dasharray="6 4" opacity=".7"/>
+          <circle cx="100" cy="100" r="78" stroke="url(#wg)" stroke-width="1.4" stroke-dasharray="6 4" opacity=".7"/>
         </g>
         <g class="ring3">
-          <circle cx="100" cy="100" r="56" stroke="url(#wg)" stroke-width="1.8" stroke-dasharray="2 6" opacity=".85"/>
+          <circle cx="100" cy="100" r="62" stroke="url(#wg)" stroke-width="1.7" stroke-dasharray="2 6" opacity=".82"/>
         </g>
         <g class="ring4">
-          <circle cx="100" cy="100" r="38" stroke="url(#wg)" stroke-width="2.2" stroke-dasharray="14 6"/>
+          <circle cx="100" cy="100" r="46" stroke="url(#wg)" stroke-width="2.1" stroke-dasharray="14 6"/>
         </g>
-        <g class="ring2">
-          <circle cx="100" cy="100" r="24" stroke="url(#wg)" stroke-width="1.5" opacity=".6"/>
+        <g class="ring5">
+          <circle cx="100" cy="100" r="30" stroke="url(#wg)" stroke-width="1.6" opacity=".65"/>
         </g>
       </svg>
     </div>
@@ -577,6 +744,8 @@
         Manbadan build
       </a>
     </div>
+
+    <div class="typewriter-line"><span id="typewriter"></span></div>
   </div>
 </section>
 
@@ -585,10 +754,10 @@
   <div class="container">
     <p class="eyebrow reveal">Imkoniyatlar</p>
     <h2 class="reveal">Bir portal ichida — istalgan narsa.</h2>
-    <p class="lede reveal">Bir marta kod ulashing va do'stlaringiz bilan birga ishlash uchun zarur bo'lgan barcha narsa qo'lingizda. Hech qanday markaziy server, hech qanday hisob qaydnomasi, hech qanday port forwarding.</p>
+    <p class="lede reveal">Bir marta kod ulashing va do'stlaringiz bilan birga ishlash uchun zarur bo'lgan barcha narsa qo'lingizda. Hech qanday markaziy server, hisob qaydnomasi yoki port forwarding kerak emas.</p>
 
     <div class="grid">
-      <div class="card reveal">
+      <div class="card tilt reveal">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"/><path d="M12 2a15.3 15.3 0 0 0-4 10 15.3 15.3 0 0 0 4 10"/>
@@ -598,7 +767,7 @@
         <p>6 xonali ID + kod ulashing, internetning istalgan joyidan kim xohlasa qo'shiladi. Router sozlash yo'q, VPN yo'q, port forwarding yo'q.</p>
       </div>
 
-      <div class="card reveal">
+      <div class="card tilt reveal">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -608,17 +777,17 @@
         <p>Guruh chat, shaxsiy xabar, drag-and-drop fayl uzatish. Ma'lumot portal kodidan olingan kalit bilan uchidan-uchiga shifrlanadi.</p>
       </div>
 
-      <div class="card reveal">
+      <div class="card tilt reveal">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
           </svg>
         </div>
         <h3>TCP/UDP tunnel</h3>
-        <p>Minecraft serverni <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">localhost:25565</code> da oching, do'stlaringiz <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">10.42.0.3:25565</code> orqali ulanadi. Mesh ichida har qanday port.</p>
+        <p>Minecraft serverni <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">localhost:25565</code> da oching, do'stlaringiz <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">10.42.0.3:25565</code> orqali ulanadi.</p>
       </div>
 
-      <div class="card reveal">
+      <div class="card tilt reveal">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/>
@@ -629,7 +798,7 @@
         <p>Kim kim bilan ulangani jonli vizual ko'rinishda. Haqiqiy vaqt RTT, NAT-traversal indikatorlari (to'g'ridan-to'g'ri yoki TURN orqali).</p>
       </div>
 
-      <div class="card reveal">
+      <div class="card tilt reveal">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -639,7 +808,7 @@
         <p>WebRTC handshake dan keyin signal serveri sizning trafigingizni hech qachon ko'rmaydi. DTLS + portal kodidan kelgan secretbox.</p>
       </div>
 
-      <div class="card reveal">
+      <div class="card tilt reveal">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -653,6 +822,50 @@
         </div>
         <h3>QR + 6 xonali kod</h3>
         <p>Yonidagi do'stga QR ni ko'rsating yoki masofadagi do'stga ID + kodni yuboring. Hisob qaydnomasi yoki email kerak emas.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== mesh visualization =================== -->
+<section id="mesh" class="mesh-section">
+  <div class="container">
+    <p class="eyebrow reveal">Mesh ichida</p>
+    <h2 class="reveal">Har bir peer — boshqa har biriga.</h2>
+    <p class="lede reveal" style="margin-left:auto;margin-right:auto;text-align:left">Tarmoq topologiyasi to'liq mesh: 5 ta qurilmada <strong style="color:var(--text)">10 ta</strong> to'g'ridan-to'g'ri ulanish, 16 ta qurilmada <strong style="color:var(--text)">120 ta</strong>. Server faqat handshake da ishtirok etadi, undan keyin hech qanday rolda emas.</p>
+
+    <div class="mesh-stage reveal">
+      <svg id="live-mesh" viewBox="0 0 500 400" width="500" height="400" aria-hidden="true">
+        <defs>
+          <linearGradient id="edgeGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#8b5cf6"/>
+            <stop offset="100%" stop-color="#22d3ee"/>
+          </linearGradient>
+          <radialGradient id="nodeFill" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#fff"/>
+            <stop offset="60%" stop-color="#a78bfa"/>
+            <stop offset="100%" stop-color="#6366f1"/>
+          </radialGradient>
+          <linearGradient id="nodeRing" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#22d3ee"/>
+            <stop offset="100%" stop-color="#8b5cf6"/>
+          </linearGradient>
+        </defs>
+      </svg>
+
+      <div class="stats-row">
+        <div class="stat">
+          <div class="num"><span data-count="10" data-suffix="">0</span></div>
+          <div class="label">faol ulanish</div>
+        </div>
+        <div class="stat">
+          <div class="num"><span data-count="0.4" data-suffix="ms">0</span></div>
+          <div class="label">o'rtacha RTT (lokal)</div>
+        </div>
+        <div class="stat">
+          <div class="num"><span data-count="4" data-suffix="">0</span></div>
+          <div class="label">data kanal har juftlikka</div>
+        </div>
       </div>
     </div>
   </div>
@@ -789,7 +1002,7 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
 
 <footer>
   <div class="container row">
-    <div>© 2026 Portal · MIT*</div>
+    <div>© 2026 Portal · 1pro.uz</div>
     <div class="links">
       <a href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">GitHub</a>
       <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/ROADMAP.md" target="_blank" rel="noreferrer">Roadmap</a>
@@ -800,27 +1013,6 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
   </div>
 </footer>
 
-<script>
-  // reveal-on-scroll
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
-    }
-  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
-  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
-
-  // copy buttons
-  document.querySelectorAll('.copy[data-copy]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(btn.dataset.copy);
-        const old = btn.textContent;
-        btn.textContent = 'copied ✓';
-        setTimeout(() => { btn.textContent = old; }, 1400);
-      } catch (e) { /* noop */ }
-    });
-  });
-</script>
-
+<script src="/app.js" defer></script>
 </body>
 </html>
