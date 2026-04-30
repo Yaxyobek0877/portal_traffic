@@ -19,9 +19,9 @@ Backwards compatibility on `shared/protocol/messages.go` is a hard contract: onl
 
 Phase-1 mesh client implemented. `./gradlew assembleDebug` produces a working APK. The on-the-wire behavior is byte-compatible with the desktop client (verified: same protocol message types, same channel IDs, same PBKDF2 + secretbox parameters), so an Android peer can join a portal alongside Wails desktop peers.
 
-Working features: create / join portal, full-mesh WebRTC handshake, encrypted broadcast chat, RTT heartbeat, peer roster.
+Working features: create / join portal, full-mesh WebRTC handshake, encrypted broadcast chat, RTT heartbeat, peer roster, **chunked file transfer** (sender streams via `ContentResolver.openInputStream`; receiver streams to a `.part` file on app-private external storage and renames on END), **QR display + scan** (desktop-compatible plaintext invite format), **DataStore-backed settings** (nickname + signal URL + last 10 portals for one-tap rejoin), **auto-reconnect for joiners** (8 attempts, exponential backoff up to 60 s, mirrors `../client/mesh/manager.go attemptReconnect`).
 
-Not yet implemented (would mirror named files under `../client/`): file transfer (`transfer/`), TCP/UDP proxy (`proxy/`), service expose UI, NAT-type detection, auto-reconnect, settings persistence, QR scan/display, join-by-nick.
+Not yet implemented (would mirror named files under `../client/`): TCP/UDP proxy (`proxy/`), service expose UI, NAT-type detection, join-by-nick.
 
 Source layout under `app/src/main/java/uz/aihealth/portal_mobile/`:
 
@@ -31,8 +31,10 @@ Source layout under `app/src/main/java/uz/aihealth/portal_mobile/`:
 | `crypt/` | `../client/crypt/` | PBKDF2-SHA256 KDF + libsodium secretbox via lazysodium-android |
 | `signaling/` | `../client/signaling/` | OkHttp WebSocket → typed `SignalingEvent` Flow |
 | `peer/` | `../client/peer/` | Stream-WebRTC `PeerConnection` + 4 negotiated data channels |
-| `mesh/` | `../client/mesh/` | Orchestrator: handshake glare-free rule, heartbeat, chat fan-out |
-| `ui/` | (no Go counterpart — Compose is its own thing) | `PortalViewModel` + Welcome/Join/Portal screens |
+| `mesh/` | `../client/mesh/` | Orchestrator: handshake, heartbeat, chat, transfer dispatch, joiner reconnect |
+| `transfer/` | `../client/transfer/` | Chunked file transfer wire format (FRAME_START/CHUNK/END/ABORT). Receiver streams to disk (the desktop still buffers in memory in v1). |
+| `data/` | (mobile-only) | `PortalSettings` — Preferences DataStore wrapper for nickname / signal URL / recent portals |
+| `ui/` | (no Go counterpart — Compose is its own thing) | `PortalViewModel` + Welcome/Join/Portal screens; `QrUtils` for invite gen + scan-result parsing |
 
 ## Toolchain pins (mismatches will break builds)
 

@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,6 +24,26 @@ import (
 	"portal_traffic_client/peer"
 	"portal_traffic_client/signaling"
 )
+
+// splitTurnURLs accepts a free-form list of URLs (separated by
+// newlines, commas, or spaces) and returns those that look like turn:
+// or turns: schemes. Empty input yields an empty slice.
+func splitTurnURLs(s string) []string {
+	out := []string{}
+	for _, raw := range strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || r == '\n' || r == ' ' || r == '\t' || r == ';'
+	}) {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		if !strings.HasPrefix(raw, "turn:") && !strings.HasPrefix(raw, "turns:") {
+			continue
+		}
+		out = append(out, raw)
+	}
+	return out
+}
 
 // Config holds the runtime parameters for a Manager.
 type Config struct {
@@ -204,17 +225,21 @@ func New(cfg Config) *Manager {
 	if cfg.ICEServers == nil {
 		cfg.ICEServers = DefaultICEServers
 	}
-	// Append the configured TURN server, if any. We pass URLs
-	// covering UDP (3478), TLS (443), and TCP (80) when the user gives
-	// a base host:port, so ICE has a fallback path through restrictive
-	// firewalls. If they pass a full URL we trust them.
+	// Append the configured TURN server(s), if any. TurnURL may be a
+	// single URL or several separated by newlines / commas / spaces —
+	// we split and feed all variants to pion. Networks block ports
+	// and protocols inconsistently (mobile carriers especially love
+	// blocking UDP-only TURN), so listing TCP/UDP/TLS variants
+	// dramatically improves connect success.
 	if cfg.TurnURL != "" {
-		urls := []string{cfg.TurnURL}
-		cfg.ICEServers = append(cfg.ICEServers, webrtc.ICEServer{
-			URLs:       urls,
-			Username:   cfg.TurnUsername,
-			Credential: cfg.TurnCredential,
-		})
+		urls := splitTurnURLs(cfg.TurnURL)
+		if len(urls) > 0 {
+			cfg.ICEServers = append(cfg.ICEServers, webrtc.ICEServer{
+				URLs:       urls,
+				Username:   cfg.TurnUsername,
+				Credential: cfg.TurnCredential,
+			})
+		}
 	}
 	return &Manager{
 		cfg:           cfg,

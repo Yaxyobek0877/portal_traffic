@@ -90,12 +90,17 @@ export function Settings() {
     }
   };
 
-  // Open Relay Project public TURN — works for everyone, no signup,
-  // but adds latency. Useful for symmetric-NAT users to verify the
-  // mesh works end-to-end before they set up a private TURN.
+  // Open Relay Project public TURN. We list every variant they
+  // expose: UDP/80, TCP/80, TLS/443. Pion picks whichever the
+  // network actually permits, which matters a lot on mobile carriers
+  // that block UDP outbound or specific ports.
   const fillFreePublicTurn = () => {
     setTurn({
-      url: "turn:openrelay.metered.ca:80",
+      url: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:80?transport=tcp",
+        "turns:openrelay.metered.ca:443?transport=tcp",
+      ].join("\n"),
       username: "openrelayproject",
       credential: "openrelayproject",
     });
@@ -173,13 +178,14 @@ export function Settings() {
             yoki o'zingizning coturn instance dan kredensiallarni shu yerga
             kiriting.
           </p>
-          <Field label="TURN URL">
-            <input
-              type="text"
-              placeholder="turn:turn.example.com:3478"
+          <Field label="TURN URL (har qatorga bittadan ham yozish mumkin)">
+            <textarea
+              rows={3}
+              placeholder={"turn:turn.example.com:3478\nturn:turn.example.com:3478?transport=tcp\nturns:turn.example.com:5349"}
               value={turn.url}
               onChange={(e) => setTurn({ ...turn, url: e.target.value })}
-              className="input-base w-full font-mono text-sm"
+              className="input-base w-full font-mono text-xs resize-none leading-relaxed"
+              spellCheck={false}
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">

@@ -20,6 +20,7 @@ import uz.aihealth.portal_mobile.crypt.Crypt
 import uz.aihealth.portal_mobile.crypt.PortalKey
 import uz.aihealth.portal_mobile.peer.CHAN_CHAT
 import uz.aihealth.portal_mobile.peer.CHAN_CONTROL
+import uz.aihealth.portal_mobile.peer.CHAN_TRANSFER
 import uz.aihealth.portal_mobile.peer.PeerMessage
 import uz.aihealth.portal_mobile.peer.PeerState
 import uz.aihealth.portal_mobile.peer.PortalPeerConnection
@@ -126,6 +127,10 @@ class MeshManager(
      * applying the normal state transitions. Used by the reconnect loop.
      */
     @Volatile private var pendingReconnectOutcome: CompletableDeferred<Boolean>? = null
+
+    /** Optional file-transfer engine. When non-null, decrypted frames on
+     * the transfer channel are routed to it; otherwise they're dropped. */
+    @Volatile var transferHandler: ((peerId: String, payload: ByteArray) -> Unit)? = null
 
     private val _state = MutableStateFlow<MeshState>(MeshState.Idle)
     val state: StateFlow<MeshState> = _state.asStateFlow()
@@ -442,8 +447,33 @@ class MeshManager(
         when (msg.channel) {
             CHAN_CONTROL -> handleControl(p, msg)
             CHAN_CHAT -> handleChat(p, msg)
-            // transfer / proxy: deferred
+            CHAN_TRANSFER -> handleTransfer(p, msg)
+            // proxy: deferred
         }
+    }
+
+    private fun handleTransfer(p: MeshPeer, msg: PeerMessage) {
+        val handler = transferHandler ?: return
+        val k = portalKey ?: return
+        val plain: ByteArray = if (msg.text) msg.data else (Crypt.open(k, msg.data) ?: return)
+        handler(p.id, plain)
+    }
+
+    /** Encrypt `payload` with the portal-derived key and send it on the
+     * transfer channel to `peerId`. Used by [uz.aihealth.portal_mobile.transfer.TransferEngine]. */
+    fun sendTransferFrame(peerId: String, payload: ByteArray): Boolean {
+        val k = portalKey ?: return false
+        val mp = peers[peerId] ?: return false
+        if (!mp.conn.channelOpen(CHAN_TRANSFER)) return false
+        return mp.conn.sendBinary(CHAN_TRANSFER, Crypt.seal(k, payload))
+    }
+
+    /** UI label for a peer — falls back to the peer-id prefix when the
+     * server didn't supply a nickname (e.g. the empty-string placeholder
+     * used during glare). */
+    fun nicknameOf(peerId: String): String {
+        val mp = peers[peerId] ?: return peerId.take(8)
+        return mp.nickname.ifBlank { peerId.take(8) }
     }
 
     private fun handleControl(p: MeshPeer, msg: PeerMessage) {

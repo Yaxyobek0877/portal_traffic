@@ -267,9 +267,24 @@ func (a *App) SetTurnConfig(c TurnConfig) error {
 	c.Credential = strings.TrimSpace(c.Credential)
 
 	if c.URL != "" {
-		if !strings.HasPrefix(c.URL, "turn:") &&
-			!strings.HasPrefix(c.URL, "turns:") {
-			return errors.New("URL turn:// yoki turns:// bilan boshlanishi kerak")
+		// Accept one or more URLs separated by newlines/commas/spaces.
+		// Each must start with turn:/turns:.
+		anyValid := false
+		for _, raw := range strings.FieldsFunc(c.URL, func(r rune) bool {
+			return r == ',' || r == '\n' || r == ' ' || r == '\t' || r == ';'
+		}) {
+			raw = strings.TrimSpace(raw)
+			if raw == "" {
+				continue
+			}
+			if !strings.HasPrefix(raw, "turn:") && !strings.HasPrefix(raw, "turns:") {
+				return errors.New(
+					"har bir URL turn: yoki turns: bilan boshlanishi kerak (topildi: " + raw + ")")
+			}
+			anyValid = true
+		}
+		if !anyValid {
+			return errors.New("kamida bitta turn:// URL bering")
 		}
 	}
 	_ = store.PutSetting(storage.KeyTurnURL, c.URL)

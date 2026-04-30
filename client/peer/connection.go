@@ -159,8 +159,15 @@ func New(cfg Config) (*Connection, error) {
 		var init webrtc.ICECandidateInit
 		if cand != nil {
 			init = cand.ToJSON()
+			// host = LAN IP, srflx = STUN-discovered public IP,
+			// relay = via TURN. If we never see "relay" while behind
+			// symmetric NAT, that's why the peer can't connect.
+			c.logger.Info("local ice candidate",
+				"type", cand.Typ.String(),
+				"addr", cand.Address,
+				"port", cand.Port,
+			)
 		}
-		// Don't risk panicking on a closed connection during teardown.
 		select {
 		case <-c.closed:
 		case c.localICE <- init:
@@ -168,14 +175,15 @@ func New(cfg Config) (*Connection, error) {
 	})
 
 	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
-		c.logger.Debug("pc state change", "state", s.String())
+		// Bumped from Debug to Info so users can see ICE progress in
+		// Settings → Loglar without flipping a debug switch. This is
+		// the single most useful piece of information when peers fail
+		// to connect.
+		c.logger.Info("peer state", "state", s.String())
 		newState := translateState(s)
 		c.mu.Lock()
 		c.state = newState
 		c.mu.Unlock()
-		// Use closed as a guard so a callback firing after Close() doesn't
-		// panic on a teardown race. Consumers should range over StateChanges
-		// with select+Done().
 		select {
 		case <-c.closed:
 		case c.stateCh <- newState:
@@ -184,6 +192,17 @@ func New(cfg Config) (*Connection, error) {
 		if newState == StateClosed || newState == StateFailed {
 			_ = c.Close()
 		}
+	})
+
+	// ICE-level events at Info too — the gathering phase is where
+	// most "stuck connecting" failures happen and the candidate types
+	// we surface ("host", "srflx", "relay") tell you whether STUN
+	// worked or you're going to need TURN.
+	pc.OnICEConnectionStateChange(func(s webrtc.ICEConnectionState) {
+		c.logger.Info("ice state", "state", s.String())
+	})
+	pc.OnICEGatheringStateChange(func(s webrtc.ICEGatheringState) {
+		c.logger.Info("ice gathering", "state", s.String())
 	})
 
 	// Pre-create all four data channels with negotiated IDs. Both sides

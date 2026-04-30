@@ -1,5 +1,7 @@
 package uz.aihealth.portal_mobile.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -53,6 +55,8 @@ import uz.aihealth.portal_mobile.mesh.ChatMessage
 import uz.aihealth.portal_mobile.mesh.MeshState
 import uz.aihealth.portal_mobile.mesh.PeerSnapshot
 import uz.aihealth.portal_mobile.peer.PeerState
+import uz.aihealth.portal_mobile.transfer.Direction
+import uz.aihealth.portal_mobile.transfer.FileTransfer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +66,7 @@ fun PortalScreen(
 ) {
     val state by vm.meshState.collectAsState()
     val peers by vm.peers.collectAsState()
+    val transfers by vm.transfers.collectAsState()
 
     Scaffold(
         topBar = {
@@ -95,7 +100,11 @@ fun PortalScreen(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             HeaderCard(state = state)
             HorizontalDivider()
-            PeerListSection(peers = peers, modifier = Modifier.fillMaxWidth())
+            PeerListSection(peers = peers, vm = vm, modifier = Modifier.fillMaxWidth())
+            if (transfers.isNotEmpty()) {
+                HorizontalDivider()
+                TransferListSection(transfers = transfers, modifier = Modifier.fillMaxWidth())
+            }
             HorizontalDivider()
             ChatSection(
                 vm = vm,
@@ -217,7 +226,11 @@ private fun ItemRow(label: String, value: String, mono: Boolean) {
 }
 
 @Composable
-private fun PeerListSection(peers: List<PeerSnapshot>, modifier: Modifier = Modifier) {
+private fun PeerListSection(
+    peers: List<PeerSnapshot>,
+    vm: PortalViewModel,
+    modifier: Modifier = Modifier,
+) {
     Column(modifier = modifier.padding(16.dp)) {
         Text(
             text = if (peers.isEmpty()) "Hech kim ulangan emas" else "Peer'lar (${peers.size})",
@@ -225,14 +238,17 @@ private fun PeerListSection(peers: List<PeerSnapshot>, modifier: Modifier = Modi
         )
         Spacer(Modifier.height(8.dp))
         peers.forEach { p ->
-            PeerRow(p)
+            PeerRow(p, onSendFile = { uri -> vm.sendFile(p.id, uri) })
             Spacer(Modifier.height(4.dp))
         }
     }
 }
 
 @Composable
-private fun PeerRow(peer: PeerSnapshot) {
+private fun PeerRow(peer: PeerSnapshot, onSendFile: (android.net.Uri) -> Unit) {
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) onSendFile(uri)
+    }
     val (color, label) = when (peer.state) {
         PeerState.CONNECTED -> Color(0xFF4CAF50) to "ulangan"
         PeerState.CONNECTING -> Color(0xFFFFC107) to "ulanmoqda"
@@ -260,7 +276,76 @@ private fun PeerRow(peer: PeerSnapshot) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(Modifier.width(8.dp))
+        TextButton(
+            onClick = { picker.launch(arrayOf("*/*")) },
+            enabled = peer.state == PeerState.CONNECTED,
+        ) {
+            Text("📎")
+        }
     }
+}
+
+@Composable
+private fun TransferListSection(transfers: List<FileTransfer>, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(
+            text = "Fayllar (${transfers.size})",
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Spacer(Modifier.height(4.dp))
+        transfers.forEach { t ->
+            TransferRow(t)
+            Spacer(Modifier.height(4.dp))
+        }
+    }
+}
+
+@Composable
+private fun TransferRow(t: FileTransfer) {
+    val arrow = if (t.direction == Direction.SEND) "↑" else "↓"
+    val pct = if (t.manifest.size > 0) {
+        (t.bytes.toDouble() / t.manifest.size.toDouble() * 100).coerceIn(0.0, 100.0).toInt()
+    } else 0
+    val sub = when {
+        t.error != null -> "xato: ${t.error}"
+        t.done && t.savePath != null -> "tayyor — ${t.savePath}"
+        t.done -> "tayyor"
+        t.manifest.size > 0 -> "$pct% · ${humanBytes(t.bytes)} / ${humanBytes(t.manifest.size)}"
+        else -> humanBytes(t.bytes)
+    }
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "$arrow ${t.manifest.name}",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                t.peerNickname,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            sub,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (t.error != null) MaterialTheme.colorScheme.error
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun humanBytes(n: Long): String {
+    if (n < 0) return "?"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var v = n.toDouble()
+    var i = 0
+    while (v >= 1024.0 && i < units.lastIndex) {
+        v /= 1024.0
+        i++
+    }
+    return if (i == 0) "${n} ${units[0]}" else String.format("%.1f %s", v, units[i])
 }
 
 @Composable
