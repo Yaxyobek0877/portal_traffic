@@ -163,6 +163,11 @@ class PortalViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settings.setNickname(nickname.trim()) }
     }
 
+    fun saveSignalUrl(value: String) {
+        signalUrl = value
+        viewModelScope.launch { settings.setSignalUrl(value) }
+    }
+
     /** Watch the next Ready transition and persist the portal so the user
      * can quick-rejoin from the welcome screen. */
     private fun observeForRecent(asOwner: Boolean, joinedId: String, joinedCode: String) {

@@ -20,6 +20,7 @@ import uz.aihealth.portal_mobile.mesh.MeshState
 import uz.aihealth.portal_mobile.ui.JoinScreen
 import uz.aihealth.portal_mobile.ui.PortalScreen
 import uz.aihealth.portal_mobile.ui.PortalViewModel
+import uz.aihealth.portal_mobile.ui.SettingsScreen
 import uz.aihealth.portal_mobile.ui.WelcomeScreen
 import uz.aihealth.portal_mobile.ui.theme.Portal_mobileTheme
 
@@ -41,6 +42,7 @@ private object Routes {
     const val WELCOME = "welcome"
     const val JOIN = "join"
     const val PORTAL = "portal"
+    const val SETTINGS = "settings"
 }
 
 @Composable
@@ -80,6 +82,7 @@ fun PortalApp(modifier: Modifier = Modifier) {
                 vm = vm,
                 onCreate = { vm.createPortal() },
                 onGoToJoin = { nav.navigate(Routes.JOIN) },
+                onGoToSettings = { nav.navigate(Routes.SETTINGS) },
             )
         }
         composable(Routes.JOIN) {
@@ -93,6 +96,12 @@ fun PortalApp(modifier: Modifier = Modifier) {
             PortalScreen(
                 vm = vm,
                 onLeave = { /* state-driven nav handles this */ },
+            )
+        }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                vm = vm,
+                onBack = { nav.popBackStack() },
             )
         }
     }

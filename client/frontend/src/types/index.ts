@@ -96,3 +96,8 @@ export type TurnTestResult = {
   gatherMs: number;
   urls: string[];
 };
+
+export type CloudflareTurnConfig = {
+  tokenId: string;
+  apiToken: string;
+};

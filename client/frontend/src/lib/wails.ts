@@ -14,6 +14,7 @@ import type {
   TurnConfig,
   LocalListener,
   TurnTestResult,
+  CloudflareTurnConfig,
 } from "../types";
 
 type Bridge = {
@@ -44,6 +45,9 @@ type Bridge = {
   OpenLogFolder: () => Promise<void>;
   ClearLogs: () => Promise<void>;
   TestTurn: () => Promise<TurnTestResult>;
+  GetCloudflareTurn: () => Promise<CloudflareTurnConfig>;
+  SetCloudflareTurn: (c: CloudflareTurnConfig) => Promise<void>;
+  TestCloudflareTurn: () => Promise<TurnTestResult>;
 };
 
 declare global {
@@ -116,6 +120,16 @@ const stub: Bridge = {
   TestTurn: async () => ({
     ok: false,
     message: "preview mode",
+    types: [],
+    hadRelay: false,
+    gatherMs: 0,
+    urls: [],
+  }),
+  GetCloudflareTurn: async () => ({ tokenId: "", apiToken: "" }),
+  SetCloudflareTurn: async () => {},
+  TestCloudflareTurn: async () => ({
+    ok: false,
+    message: "preview",
     types: [],
     hadRelay: false,
     gatherMs: 0,

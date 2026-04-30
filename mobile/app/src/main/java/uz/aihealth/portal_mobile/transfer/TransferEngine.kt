@@ -36,14 +36,64 @@ import java.util.concurrent.atomic.AtomicLong
 // MeshManager (see [MeshManager.sendTransferFrame] / [MeshManager.handleTransfer]).
 // The bytes that hit the data channel are nonce(24) || ciphertext(...).
 
-private const val FRAME_START: Byte = 0x10
-private const val FRAME_CHUNK: Byte = 0x11
-private const val FRAME_END: Byte = 0x12
-private const val FRAME_ABORT: Byte = 0x13
+internal const val FRAME_START: Byte = 0x10
+internal const val FRAME_CHUNK: Byte = 0x11
+internal const val FRAME_END: Byte = 0x12
+internal const val FRAME_ABORT: Byte = 0x13
 
 /** WebRTC data channels cap at ~64 KiB per message; stay well under to
  * leave room for the secretbox envelope and SCTP framing. */
 private const val CHUNK_SIZE = 16 * 1024
+
+/** Wire-format frame as it appears on the transfer data channel (after
+ * the secretbox envelope is opened). Made internal so unit tests in the
+ * same module can verify round-tripping. */
+internal data class TransferFrame(
+    val type: Byte,
+    val xferId: Long,
+    val header: ByteArray,
+    val body: ByteArray,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is TransferFrame) return false
+        return type == other.type &&
+            xferId == other.xferId &&
+            header.contentEquals(other.header) &&
+            body.contentEquals(other.body)
+    }
+    override fun hashCode(): Int {
+        var result = type.toInt()
+        result = 31 * result + xferId.hashCode()
+        result = 31 * result + header.contentHashCode()
+        result = 31 * result + body.contentHashCode()
+        return result
+    }
+}
+
+internal fun encodeTransferFrame(type: Byte, xferId: Long, header: ByteArray, body: ByteArray): ByteArray {
+    require(header.size <= 0xFFFF) { "transfer: header too large" }
+    val out = ByteArray(11 + header.size + body.size)
+    val bb = ByteBuffer.wrap(out).order(ByteOrder.BIG_ENDIAN)
+    bb.put(0, type)
+    bb.putLong(1, xferId)
+    bb.putShort(9, header.size.toShort())
+    System.arraycopy(header, 0, out, 11, header.size)
+    System.arraycopy(body, 0, out, 11 + header.size, body.size)
+    return out
+}
+
+internal fun decodeTransferFrame(payload: ByteArray): TransferFrame? {
+    if (payload.size < 11) return null
+    val bb = ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN)
+    val type = bb.get(0)
+    val xferId = bb.getLong(1)
+    val hdrLen = bb.getShort(9).toInt() and 0xFFFF
+    if (11 + hdrLen > payload.size) return null
+    val header = payload.copyOfRange(11, 11 + hdrLen)
+    val body = payload.copyOfRange(11 + hdrLen, payload.size)
+    return TransferFrame(type, xferId, header, body)
+}
 
 private const val TAG = "Transfer"
 
@@ -219,7 +269,7 @@ class TransferEngine(
     /** Called by [uz.aihealth.portal_mobile.mesh.MeshManager] for every
      * inbound frame on the transfer channel — payload is already decrypted. */
     fun handleFrame(peerId: String, payload: ByteArray) {
-        val frame = decode(payload) ?: return
+        val frame = decodeTransferFrame(payload) ?: return
         when (frame.type) {
             FRAME_START -> onStart(peerId, frame.xferId, frame.header)
             FRAME_CHUNK -> onChunk(peerId, frame.xferId, frame.body)
@@ -324,34 +374,11 @@ class TransferEngine(
         }
     }
 
-    // ------------------------------------------------------------------------
-    // Wire format
-    // ------------------------------------------------------------------------
-
-    private data class Frame(val type: Byte, val xferId: Long, val header: ByteArray, val body: ByteArray)
-
-    private fun decode(payload: ByteArray): Frame? {
-        if (payload.size < 11) return null
-        val bb = ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN)
-        val type = bb.get(0)
-        val xferId = bb.getLong(1)
-        val hdrLen = bb.getShort(9).toInt() and 0xFFFF
-        if (11 + hdrLen > payload.size) return null
-        val header = payload.copyOfRange(11, 11 + hdrLen)
-        val body = payload.copyOfRange(11 + hdrLen, payload.size)
-        return Frame(type, xferId, header, body)
-    }
-
+    // Send a single wire-format frame. Encoding lives at the top level
+    // of this file so the unit tests can verify round-tripping without
+    // a full Engine instance.
     private fun sendFrame(peerId: String, type: Byte, xferId: Long, header: ByteArray, body: ByteArray): Boolean {
-        require(header.size <= 0xFFFF) { "transfer: header too large" }
-        val out = ByteArray(11 + header.size + body.size)
-        val bb = ByteBuffer.wrap(out).order(ByteOrder.BIG_ENDIAN)
-        bb.put(0, type)
-        bb.putLong(1, xferId)
-        bb.putShort(9, header.size.toShort())
-        System.arraycopy(header, 0, out, 11, header.size)
-        System.arraycopy(body, 0, out, 11 + header.size, body.size)
-        return mesh.sendTransferFrame(peerId, out)
+        return mesh.sendTransferFrame(peerId, encodeTransferFrame(type, xferId, header, body))
     }
 
     // ------------------------------------------------------------------------

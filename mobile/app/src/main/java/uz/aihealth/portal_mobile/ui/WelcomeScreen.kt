@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,6 +38,7 @@ fun WelcomeScreen(
     vm: PortalViewModel,
     onCreate: () -> Unit,
     onGoToJoin: () -> Unit,
+    onGoToSettings: () -> Unit,
 ) {
     val recents by vm.recentPortals.collectAsState()
 
@@ -77,7 +79,12 @@ fun WelcomeScreen(
                 enabled = vm.nickname.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Mavjud portalga qo'shilish") }
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(8.dp))
+            TextButton(
+                onClick = onGoToSettings,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Sozlamalar") }
+            Spacer(Modifier.height(24.dp))
         }
         if (recents.isNotEmpty()) {
             item {

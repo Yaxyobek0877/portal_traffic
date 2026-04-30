@@ -114,6 +114,10 @@ type App struct {
 
 	// natResult is the cached startup NAT classification.
 	natResult nat.Result
+
+	// cfTurnCache caches Cloudflare TURN credentials between
+	// CreatePortal/JoinPortal calls. See cloudflareturn.go.
+	cfTurnCache cloudflareTurnCache
 }
 
 // NewApp constructs the app singleton; main.go binds it.
@@ -815,6 +819,11 @@ func (a *App) bringUpMesh(nickname string) error {
 
 	url := a.SignalingURL()
 	turn := a.GetTurnConfig()
+	// Try Cloudflare TURN first; if creds work the call returns ICE
+	// servers (STUN defaults + Cloudflare relay) and we use them
+	// directly. nil means "fall back to mesh defaults plus the manual
+	// TurnURL field if any".
+	cfICE := a.resolveICEServers()
 	a.mu.Lock()
 	a.nick = nickname
 	a.mesh = mesh.New(mesh.Config{
@@ -822,6 +831,7 @@ func (a *App) bringUpMesh(nickname string) error {
 		Nickname:          nickname,
 		HeartbeatInterval: 3 * time.Second,
 		Logger:            a.logger,
+		ICEServers:        cfICE, // nil → mesh.DefaultICEServers
 		TurnURL:           turn.URL,
 		TurnUsername:      turn.Username,
 		TurnCredential:    turn.Credential,

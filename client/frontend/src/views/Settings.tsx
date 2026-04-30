@@ -15,7 +15,12 @@ import {
 } from "lucide-react";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
-import type { HistoryEntry, TurnConfig, TurnTestResult } from "../types";
+import type {
+  HistoryEntry,
+  TurnConfig,
+  TurnTestResult,
+  CloudflareTurnConfig,
+} from "../types";
 
 export function Settings() {
   const setScreen = usePortalStore((s) => s.setScreen);
@@ -41,6 +46,37 @@ export function Settings() {
 
   const [turnTest, setTurnTest] = useState<TurnTestResult | null>(null);
   const [turnTesting, setTurnTesting] = useState(false);
+
+  const [cf, setCf] = useState<CloudflareTurnConfig>({ tokenId: "", apiToken: "" });
+  const [cfSavedAt, setCfSavedAt] = useState<number | null>(null);
+  const [cfError, setCfError] = useState("");
+  const [cfTest, setCfTest] = useState<TurnTestResult | null>(null);
+  const [cfTesting, setCfTesting] = useState(false);
+
+  useEffect(() => {
+    app.GetCloudflareTurn().then(setCf);
+  }, []);
+
+  const saveCf = async () => {
+    setCfError("");
+    try {
+      await app.SetCloudflareTurn(cf);
+      setCfSavedAt(Date.now());
+    } catch (e: any) {
+      setCfError(e?.message || String(e));
+    }
+  };
+
+  const testCf = async () => {
+    setCfTesting(true);
+    setCfTest(null);
+    try {
+      const r = await app.TestCloudflareTurn();
+      setCfTest(r);
+    } finally {
+      setCfTesting(false);
+    }
+  };
 
   useEffect(() => {
     setDraftUrl(signalingUrl);
@@ -192,8 +228,82 @@ export function Settings() {
           </Field>
         </Section>
 
-        {/* TURN */}
-        <Section icon={<Shield className="w-4 h-4" />} title="TURN serveri (Simmetrik NAT uchun)">
+        {/* Cloudflare TURN — preferred path */}
+        <Section icon={<Zap className="w-4 h-4" />} title="Cloudflare TURN (tavsiya etiladi)">
+          <div className="text-xs text-zinc-500 -mt-2 space-y-1.5">
+            <p>
+              Simmetrik NAT (CGNAT, mobile internet) ortida bo'lsangiz —
+              bu eng oson va ishonchli yo'l. Bepul tarif: 1 TB/oy.
+            </p>
+            <ol className="list-decimal list-inside space-y-0.5 text-zinc-400">
+              <li>Cloudflare dashboard → <strong>Calls → TURN</strong></li>
+              <li><strong>"Create TURN Service"</strong> → nom: <code className="text-violet-300">portal</code></li>
+              <li>Yangi yaratilgan service → <strong>"View Credentials"</strong></li>
+              <li><strong>Token ID</strong> va <strong>API Token</strong> ni shu yerga yopishtiring</li>
+            </ol>
+          </div>
+          <Field label="Token ID">
+            <input
+              type="text"
+              placeholder="abc123..."
+              value={cf.tokenId}
+              onChange={(e) => setCf({ ...cf, tokenId: e.target.value.trim() })}
+              className="input-base w-full font-mono text-xs"
+              spellCheck={false}
+            />
+          </Field>
+          <Field label="API Token">
+            <input
+              type="password"
+              placeholder="••••••••••••••••"
+              value={cf.apiToken}
+              onChange={(e) => setCf({ ...cf, apiToken: e.target.value.trim() })}
+              className="input-base w-full font-mono text-xs"
+              spellCheck={false}
+            />
+          </Field>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={saveCf}
+              className="btn-primary rounded-btn px-4 py-2 text-sm font-medium"
+            >
+              Saqlash
+            </button>
+            <button
+              onClick={testCf}
+              disabled={cfTesting || !cf.tokenId || !cf.apiToken}
+              className="panel rounded-btn px-3 py-2 text-xs hover:bg-white/[0.07] disabled:opacity-50"
+            >
+              {cfTesting ? "Sinalmoqda..." : "Sinash"}
+            </button>
+            {cfError && <span className="text-xs text-rose-400">{cfError}</span>}
+            {cfSavedAt && !cfError && (
+              <span className="text-xs text-emerald-400">Saqlandi ✓</span>
+            )}
+          </div>
+          {cfTest && (
+            <div
+              className={`panel rounded-input p-3 text-xs space-y-1 ${
+                cfTest.ok
+                  ? "border-emerald-500/30 bg-emerald-500/5"
+                  : "border-rose-500/30 bg-rose-500/5"
+              }`}
+            >
+              <div className={cfTest.ok ? "text-emerald-300" : "text-rose-300"}>
+                {cfTest.ok ? "✓ " : "✗ "}{cfTest.message}
+              </div>
+              {cfTest.urls.length > 0 && (
+                <div className="text-zinc-500 font-mono text-[10px] truncate">
+                  URLs: {cfTest.urls.join(", ")}
+                </div>
+              )}
+              <div className="text-zinc-600">Yig'ish vaqti: {cfTest.gatherMs} ms</div>
+            </div>
+          )}
+        </Section>
+
+        {/* Manual TURN — for self-hosted coturn or other providers */}
+        <Section icon={<Shield className="w-4 h-4" />} title="Qo'lda TURN (o'z serveringiz)">
           <p className="text-xs text-zinc-500 -mt-2">
             Agar siz va do'stingiz har xil tarmoqlarda Simmetrik NAT ortida
             bo'lsangiz, to'g'ridan-to'g'ri ulanish ishlamaydi — TURN serveri

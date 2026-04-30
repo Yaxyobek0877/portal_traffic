@@ -63,33 +63,18 @@ type Config struct {
 	TurnCredential string
 }
 
-// Default ICE servers — public STUN plus a public TURN fallback.
+// Default ICE servers — public STUN only.
 //
-// Including the Open Relay Project TURN servers by default means
-// peers behind symmetric NAT or CGNAT (most mobile users in Uzbekistan
-// for example) connect on first launch with zero configuration. Users
-// can override this entirely by setting their own TurnURL — the
-// override REPLACES the default ICE server set, it doesn't append.
-//
-// Pion's ICE prefers host > srflx > relay, so peers on a friendly
-// network never actually use TURN — the relay candidates are
-// gathered but lose the priority race. The cost of always including
-// them is a few extra UDP packets at gather time.
-//
-// Open Relay's free tier is shared and rate-limited; for serious use
-// we still recommend running coturn or a paid service.
+// We tried bundling a public TURN fallback (Open Relay Project) but
+// their service no longer accepts the legacy openrelayproject creds,
+// so peers got `had_relay=false` and silently failed instead of being
+// helped. STUN-only is the honest baseline: peers on cone NAT
+// connect, peers on symmetric NAT need a TURN configured in
+// Settings → TURN. The doc NAT-VA-TURN.md walks the user through
+// Cloudflare TURN setup (free / pay-as-you-go).
 var DefaultICEServers = []webrtc.ICEServer{
 	{URLs: []string{"stun:stun.l.google.com:19302"}},
 	{URLs: []string{"stun:stun.cloudflare.com:3478"}},
-	{
-		URLs: []string{
-			"turn:openrelay.metered.ca:80",
-			"turn:openrelay.metered.ca:80?transport=tcp",
-			"turns:openrelay.metered.ca:443?transport=tcp",
-		},
-		Username:   "openrelayproject",
-		Credential: "openrelayproject",
-	},
 }
 
 // Peer is the mesh's view of another participant in the portal.
