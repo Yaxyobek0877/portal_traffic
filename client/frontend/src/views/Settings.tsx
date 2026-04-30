@@ -56,7 +56,7 @@ export function Settings() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="draggable h-[60px] flex items-center gap-3 px-4 border-b border-white/5">
+      <div className="draggable titlebar-pad flex items-center gap-3 px-4 border-b border-white/5" style={{ height: 88 }}>
         <button
           onClick={() => setScreen("welcome")}
           className="no-drag p-2 rounded-md hover:bg-white/5 text-zinc-400"

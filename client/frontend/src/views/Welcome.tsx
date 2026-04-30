@@ -63,7 +63,7 @@ export function Welcome() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="draggable h-[40px] flex justify-end items-center px-3">
+      <div className="draggable titlebar-pad flex justify-end items-center px-3" style={{ height: 68 }}>
         <button
           className="no-drag p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-white/5"
           title="Sozlamalar"

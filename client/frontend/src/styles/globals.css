@@ -115,3 +115,8 @@ input.input-base:focus, textarea.input-base:focus {
 /* drag region for the title bar (Wails on macOS uses CSS for this) */
 .draggable { -webkit-app-region: drag; }
 .no-drag { -webkit-app-region: no-drag; }
+
+/* macOS title bar reserve so our content doesn't sit under the
+   traffic-light buttons. Set on every top-level view's first
+   element. 28px is the standard macOS title bar height. */
+.titlebar-pad { padding-top: 28px; }

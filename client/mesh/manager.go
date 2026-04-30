@@ -389,7 +389,7 @@ func (m *Manager) attemptReconnect() bool {
 		// fail. Best UX is to surface this and let the user decide.
 		m.emit(MeshEvent{
 			Type: EventError,
-			Err:  errors.New("egasi sifatida ulangansiz; signal uzilgani sababli portal yopildi. Qaytadan yarating."),
+			Err:  errors.New("Tarmoq vaqtinchalik uzildi. Yangi do'stlar qo'shilishi uchun portalni qaytadan oching."),
 		})
 		return false
 	}

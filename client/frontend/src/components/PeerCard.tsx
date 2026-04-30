@@ -28,11 +28,19 @@ export function PeerCard({ peer, highlighted, onClick }: Props) {
       type="button"
       onClick={onClick}
       layout
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      whileHover={{ scale: 1.01 }}
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      initial={{ opacity: 0, y: 12, scale: 0.92, boxShadow: "0 0 0px 0px rgba(139,92,246,0)" }}
+      animate={{
+        opacity: 1, y: 0, scale: 1,
+        boxShadow: peer.state === "connected"
+          ? ["0 0 0px 0px rgba(139,92,246,0)", "0 0 20px -4px rgba(139,92,246,0.45)", "0 0 0px 0px rgba(139,92,246,0)"]
+          : "0 0 0px 0px rgba(139,92,246,0)",
+      }}
+      exit={{ opacity: 0, scale: 0.92, x: -6 }}
+      whileHover={{ scale: 1.015, y: -1 }}
+      transition={{
+        type: "spring", stiffness: 300, damping: 28,
+        boxShadow: { duration: 1.4 },
+      }}
       className={`panel rounded-card w-full text-left p-3 flex items-center gap-3 transition-colors ${
         highlighted ? "border-accent2/50 bg-white/[0.06]" : ""
       }`}

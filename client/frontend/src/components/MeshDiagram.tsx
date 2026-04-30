@@ -104,6 +104,28 @@ export function MeshDiagram({ selfNickname, selfVip, peers, hovered, onHover }: 
     hovered != null && (n.id === hovered || n.id === "self");
 
   return (
+    <div className="relative w-full max-w-[640px] mx-auto">
+      {others.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
+          className="absolute left-1/2 -translate-x-1/2"
+          style={{ top: 60 }}
+        >
+          <div className="text-center text-zinc-500">
+            <div className="text-xs uppercase tracking-widest text-violet-300/70 mb-1.5">
+              Kutilmoqda
+            </div>
+            <div className="text-sm">
+              Hech kim hali qo'shilmagan.<br />
+              <span className="text-zinc-600 text-xs">
+                ID + KOD ni do'stingizga ulashing — meshda ko'rinadi.
+              </span>
+            </div>
+          </div>
+        </motion.div>
+      )}
     <svg
       viewBox={`0 0 ${W} ${H}`}
       className="max-w-full h-auto"
@@ -237,6 +259,7 @@ export function MeshDiagram({ selfNickname, selfVip, peers, hovered, onHover }: 
         })}
       </AnimatePresence>
     </svg>
+    </div>
   );
 }
 

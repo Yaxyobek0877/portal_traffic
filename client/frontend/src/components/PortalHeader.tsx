@@ -1,18 +1,22 @@
 import React, { useState } from "react";
-import { Copy, QrCode, LogOut, Check } from "lucide-react";
+import { Copy, QrCode, LogOut, Check, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import type { PortalView } from "../types";
-import { app } from "../lib/wails";
 
 type Props = {
   portal: PortalView;
   onLeave: () => void;
 };
 
+const HIDDEN_PLACEHOLDER = "••••••";
+
 export function PortalHeader({ portal, onLeave }: Props) {
   const [copiedField, setCopiedField] = useState<"id" | "code" | "both" | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
+  // Default to hidden so the code isn't shoulder-surfed in screen-shares
+  // or screenshots. The user reveals deliberately.
+  const [codeVisible, setCodeVisible] = useState(false);
 
   const copy = async (text: string, field: "id" | "code" | "both") => {
     try {
@@ -22,10 +26,12 @@ export function PortalHeader({ portal, onLeave }: Props) {
     } catch {}
   };
 
-  const inviteText = `Portal\nID:   ${portal.portalId}\nCode: ${portal.code}`;
+  const inviteText = portal.code
+    ? `Portal\nID:   ${portal.portalId}\nCode: ${portal.code}`
+    : `Portal\nID:   ${portal.portalId}`;
 
   return (
-    <div className="draggable px-5 h-[68px] flex items-center justify-between border-b border-white/5 bg-black/10 backdrop-blur-md">
+    <div className="draggable titlebar-pad px-5 h-[96px] flex items-center justify-between border-b border-white/5 bg-black/10 backdrop-blur-md">
       <div className="no-drag flex items-center gap-5">
         <Stat
           label="ID"
@@ -33,6 +39,7 @@ export function PortalHeader({ portal, onLeave }: Props) {
           field="id"
           copiedField={copiedField}
           onCopy={() => copy(portal.portalId, "id")}
+          revealed
         />
         {portal.code && (
           <Stat
@@ -41,11 +48,13 @@ export function PortalHeader({ portal, onLeave }: Props) {
             field="code"
             copiedField={copiedField}
             onCopy={() => copy(portal.code, "code")}
+            revealed={codeVisible}
+            onToggleVisibility={() => setCodeVisible((v) => !v)}
           />
         )}
         <button
           onClick={() => copy(inviteText, "both")}
-          title="Ikkalasini birga nusxa olish"
+          title="ID + KOD ni birga nusxa olish"
           className="no-drag h-9 px-3 panel rounded-btn flex items-center gap-1.5 text-xs hover:bg-white/[0.07]"
         >
           {copiedField === "both" ? (
@@ -81,36 +90,41 @@ export function PortalHeader({ portal, onLeave }: Props) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm flex items-center justify-center"
+            className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md flex items-center justify-center p-6"
             onClick={() => setQrOpen(false)}
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 26 }}
-              className="bg-[#0d1322] panel rounded-card p-8 flex flex-col items-center gap-4"
+              initial={{ scale: 0.9, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 12 }}
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
+              className="bg-[#0d1322] panel rounded-card p-8 flex flex-col items-center gap-4 max-w-sm w-full"
               onClick={(e) => e.stopPropagation()}
             >
-              <QRCodeSVG
-                value={inviteText}
-                size={260}
-                bgColor="#0d1322"
-                fgColor="#ffffff"
-                level="M"
-                includeMargin={false}
-              />
-              <div className="text-center">
-                <div className="font-mono text-2xl tracking-wider gradient-text">
+              <div className="bg-white p-3 rounded-lg">
+                <QRCodeSVG
+                  value={inviteText}
+                  size={220}
+                  bgColor="#ffffff"
+                  fgColor="#0a0e1a"
+                  level="M"
+                  includeMargin={false}
+                />
+              </div>
+              <div className="text-center w-full">
+                <div className="text-xs uppercase tracking-widest text-zinc-500 mb-1.5">
+                  ID + KOD
+                </div>
+                <div className="font-mono text-2xl tracking-wider gradient-text font-semibold">
                   {portal.portalId} · {portal.code}
                 </div>
-                <div className="text-xs text-zinc-500 mt-2">
-                  QR ni kameraga tutsangiz, do'stlaringiz portalga kiradi.
+                <div className="text-xs text-zinc-500 mt-3">
+                  QR ni do'stingizning kamerasiga tutsangiz, portalga to'g'ridan-to'g'ri kiradi.
                 </div>
               </div>
               <button
                 onClick={() => setQrOpen(false)}
-                className="text-xs text-zinc-400 hover:text-white mt-2"
+                className="text-xs text-zinc-400 hover:text-white mt-1 px-4 py-1.5 rounded-md hover:bg-white/[0.05]"
               >
                 yopish
               </button>
@@ -128,29 +142,54 @@ function Stat({
   field,
   copiedField,
   onCopy,
+  revealed,
+  onToggleVisibility,
 }: {
   label: string;
   value: string;
   field: "id" | "code";
   copiedField: "id" | "code" | "both" | null;
   onCopy: () => void;
+  revealed: boolean;
+  onToggleVisibility?: () => void;
 }) {
   const copied = copiedField === field;
+  const display = revealed ? value : HIDDEN_PLACEHOLDER;
   return (
-    <button
-      onClick={onCopy}
-      className="no-drag flex flex-col items-start group"
-      title="Nusxa olish"
-    >
+    <div className="no-drag flex flex-col items-start group">
       <div className="text-[10px] uppercase tracking-widest text-zinc-500">{label}</div>
-      <div className="font-mono text-lg gradient-text font-semibold tracking-wide flex items-center gap-1.5">
-        {value}
-        {copied ? (
-          <Check className="w-3.5 h-3.5 text-emerald-400" />
-        ) : (
-          <Copy className="w-3 h-3 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={onCopy}
+          title={revealed ? "Nusxa olish" : "Avval ko'rsatish kerak"}
+          disabled={!revealed && onToggleVisibility !== undefined}
+          className="font-mono text-lg gradient-text font-semibold tracking-wide flex items-center gap-1.5 disabled:cursor-not-allowed"
+        >
+          <span style={{ minWidth: "5.5em" }} className="tabular-nums">
+            {display}
+          </span>
+          {copied ? (
+            <Check className="w-3.5 h-3.5 text-emerald-400" />
+          ) : (
+            revealed && (
+              <Copy className="w-3 h-3 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+            )
+          )}
+        </button>
+        {onToggleVisibility && (
+          <button
+            onClick={onToggleVisibility}
+            title={revealed ? "Yashirish" : "Ko'rsatish"}
+            className="p-1 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.05]"
+          >
+            {revealed ? (
+              <EyeOff className="w-3.5 h-3.5" strokeWidth={2} />
+            ) : (
+              <Eye className="w-3.5 h-3.5" strokeWidth={2} />
+            )}
+          </button>
         )}
       </div>
-    </button>
+    </div>
   );
 }

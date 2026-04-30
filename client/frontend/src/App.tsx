@@ -23,6 +23,14 @@ export default function App() {
   const clearMessages = usePortalStore((s) => s.clearMessages);
   const setBanner = usePortalStore((s) => s.setBanner);
   const banner = usePortalStore((s) => s.banner);
+
+  // Auto-dismiss the banner after a few seconds so transient blips
+  // don't linger on screen.
+  useEffect(() => {
+    if (!banner) return;
+    const t = setTimeout(() => setBanner(""), 7000);
+    return () => clearTimeout(t);
+  }, [banner, setBanner]);
   const setNat = usePortalStore((s) => s.setNat);
   const upsertTransfer = usePortalStore((s) => s.upsertTransfer);
   const setSaveDir = usePortalStore((s) => s.setSaveDir);

@@ -428,6 +428,24 @@
     0%, 100% { transform: scale(1);   opacity: 0.95; }
     50%      { transform: scale(1.2); opacity: 1;    }
   }
+  @keyframes haloPulse {
+    0%, 100% { transform: scale(1);   opacity: 0.35; }
+    50%      { transform: scale(1.6); opacity: 0;    }
+  }
+  /* constant data-flow on every edge — small dashes that crawl
+     along the line so each link reads as "live" even between
+     bigger pulses. */
+  @keyframes meshFlow      { to { stroke-dashoffset: -80; } }
+  @keyframes meshFlowRev   { to { stroke-dashoffset:  80; } }
+  .mesh-edge-flow {
+    animation: meshFlow 2.4s linear infinite;
+  }
+  .mesh-edge-flow.reverse {
+    animation-name: meshFlowRev;
+  }
+  .mesh-edge-base {
+    transition: opacity .25s ease, stroke-width .25s ease;
+  }
   .stats-row {
     display: flex; justify-content: center; gap: 56px; flex-wrap: wrap;
     margin-top: 32px;
@@ -639,6 +657,15 @@
 
   ::selection { background: rgba(139,92,246,.4); color: white; }
 
+  /* keyboard focus ring (visible only on keyboard nav) */
+  :focus { outline: none; }
+  a:focus-visible, button:focus-visible, .btn:focus-visible {
+    outline: 2px solid var(--accent-3);
+    outline-offset: 3px;
+    border-radius: var(--radius-xs);
+  }
+  .btn:focus-visible { outline-offset: 4px; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
@@ -719,7 +746,7 @@
 
     <div class="pills">
       <span class="pill"><span class="dot"></span> signaling.1pro.uz · jonli</span>
-      <span class="pill amber"><span class="dot"></span> v0.2 · 2-bosqich tugadi</span>
+      <span class="pill"><span class="dot"></span> v0.5 · 5-bosqich tugadi</span>
     </div>
 
     <h1>To'g'ridan-to'g'ri ulanish.<br/>Orada hech qanday <span class="gradient-text">server yo'q</span>.</h1>
@@ -837,10 +864,6 @@
     <div class="mesh-stage reveal">
       <svg id="live-mesh" viewBox="0 0 500 400" width="500" height="400" aria-hidden="true">
         <defs>
-          <linearGradient id="edgeGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="#8b5cf6"/>
-            <stop offset="100%" stop-color="#22d3ee"/>
-          </linearGradient>
           <radialGradient id="nodeFill" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stop-color="#fff"/>
             <stop offset="60%" stop-color="#a78bfa"/>
@@ -917,7 +940,7 @@
   <div class="container">
     <p class="eyebrow reveal">Boshlash</p>
     <h2 class="reveal">Uchta buyruq, mesh tayyor.</h2>
-    <p class="lede reveal">Desktop binary 3-bosqichda chiqadi. Hozircha CLI test harness ham to'liq mesh ni quradi va RTT ni ko'rsatadi.</p>
+    <p class="lede reveal">Desktop binary tayyor (Wails + React). CLI test harness ham to'liq mesh ni quradi va RTT ni ko'rsatadi — har ikkala yo'l ham ishlaydi.</p>
 
     <div class="install-card reveal">
       <div class="head">
@@ -950,7 +973,7 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
   <div class="container">
     <p class="eyebrow reveal">Joriy holat</p>
     <h2 class="reveal">Beshta bosqichda quriladi.</h2>
-    <p class="lede reveal">Har bir bosqich ishlaydigan to'xtash nuqtasi — oldingisi tasdiqlangan tarzda ishlamasdan turib keyingisiga o'tilmaydi.</p>
+    <p class="lede reveal">Beshta bosqich tugadi — Portal funksional jihatdan to'liq. Har bir bosqich ishlaydigan to'xtash nuqtasi: oldingisi tasdiqlangan tarzda ishlamasdan turib keyingisiga o'tilmaydi.</p>
 
     <div class="roadmap">
       <div class="roadmap-row reveal">
@@ -965,17 +988,22 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
       </div>
       <div class="roadmap-row reveal">
         <span class="num">03</span>
-        <span class="name">Desktop UI<span class="desc">Wails skelet, welcome ekrani, animatsiyali mesh diagrammasi, chat</span></span>
-        <span class="status wip">jarayonda</span>
+        <span class="name">Desktop UI<span class="desc">Wails + React, welcome ekrani, animatsiyali mesh diagrammasi, chat, QR</span></span>
+        <span class="status done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">04</span>
-        <span class="name">Sayqal<span class="desc">QR, NAT detection, fayl uzatish, sozlamalar, SQLite, auto-reconnect</span></span>
-        <span class="status next">keyin</span>
+        <span class="name">Sayqal<span class="desc">NAT detection, fayl uzatish, sozlamalar, SQLite, yaqindagi portallar</span></span>
+        <span class="status done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">05</span>
-        <span class="name">Kuchli imkoniyatlar<span class="desc">Lokal TCP/UDP proxy, ovoz kanali, services panel</span></span>
+        <span class="name">Kuchli imkoniyatlar<span class="desc">TCP/UDP proxy, secretbox shifrlash, auto-reconnect, bandwidth metrikasi</span></span>
+        <span class="status done">tugadi</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">06</span>
+        <span class="name">Kelajak<span class="desc">Ovoz kanali (push-to-talk), mobil hamroh ilova, plugin API</span></span>
         <span class="status next">keyin</span>
       </div>
     </div>

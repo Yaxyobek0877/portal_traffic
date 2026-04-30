@@ -46,9 +46,9 @@ func main() {
 		Mac: &mac.Options{
 			TitleBar: &mac.TitleBar{
 				TitlebarAppearsTransparent: true,
-				HideTitle:                  false,
+				HideTitle:                  true, // we draw our own header; macOS title text was overlapping the ID/KOD
 				HideTitleBar:               false,
-				FullSizeContent:            false,
+				FullSizeContent:            true, // content under the title bar — we add 28px padding via .titlebar-pad
 				UseToolbar:                 false,
 				HideToolbarSeparator:       true,
 			},

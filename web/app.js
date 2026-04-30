@@ -36,7 +36,48 @@
     });
   });
 
-  if (reduced) return; // motion-sensitive users get static UI from here
+  if (reduced) {
+    // Render a static mesh so the section is still meaningful for
+    // motion-sensitive users — no animation, just nodes and edges.
+    const svg = document.getElementById('live-mesh');
+    if (svg) {
+      const NS = 'http://www.w3.org/2000/svg';
+      const N = 5, cx = 250, cy = 200, R = 130;
+      const peers = Array.from({ length: N }, (_, i) => {
+        const a = (i / N) * Math.PI * 2 - Math.PI / 2;
+        return { x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R };
+      });
+      for (let i = 0; i < N; i++) {
+        for (let j = i + 1; j < N; j++) {
+          const ln = document.createElementNS(NS, 'line');
+          ln.setAttribute('x1', peers[i].x); ln.setAttribute('y1', peers[i].y);
+          ln.setAttribute('x2', peers[j].x); ln.setAttribute('y2', peers[j].y);
+          ln.setAttribute('stroke', '#6366f1');
+          ln.setAttribute('stroke-width', '1');
+          ln.setAttribute('opacity', '0.6');
+          svg.appendChild(ln);
+        }
+      }
+      peers.forEach((p, i) => {
+        const dot = document.createElementNS(NS, 'circle');
+        dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y);
+        dot.setAttribute('r', 8);
+        dot.setAttribute('fill', 'url(#nodeFill)');
+        svg.appendChild(dot);
+        const lbl = document.createElementNS(NS, 'text');
+        const ang = Math.atan2(p.y - cy, p.x - cx);
+        lbl.setAttribute('x', p.x + Math.cos(ang) * 28);
+        lbl.setAttribute('y', p.y + Math.sin(ang) * 28 + 4);
+        lbl.setAttribute('text-anchor', 'middle');
+        lbl.setAttribute('fill', '#98a2b3');
+        lbl.setAttribute('font-family', 'JetBrains Mono, monospace');
+        lbl.setAttribute('font-size', '11');
+        lbl.textContent = `peer-${i + 1}`;
+        svg.appendChild(lbl);
+      });
+    }
+    return;
+  }
 
   // ---------------------------------------------------------------
   // 3. Particle network canvas
@@ -212,9 +253,10 @@
 
   // ---------------------------------------------------------------
   // 7. Live mesh visualization (animated SVG)
-  //    A small physics-light rendering: 5 peers around a circle,
-  //    full mesh edges, pulses traveling along edges in random
-  //    directions to evoke "data flowing".
+  //    5 peers in a circle, full mesh (10 edges). Every edge has a
+  //    constant dashed flow so it always reads as "live". On top of
+  //    that, multiple concurrent comet-style pulses travel along
+  //    edges in round-robin order, so every link gets activity.
   // ---------------------------------------------------------------
   const meshSvg = document.getElementById('live-mesh');
   if (meshSvg) {
@@ -236,31 +278,83 @@
     const pulseLayer = layer('mesh-pulses');
     const nodeLayer = layer('mesh-nodes');
 
-    // Edges
+    // Edges — each gets its own gradient aligned with the line so
+    // every link reads identically regardless of orientation, plus
+    // a constant dashed flow animation on top of the static base.
+    const defs = meshSvg.querySelector('defs') || (() => {
+      const d = document.createElementNS(NS, 'defs');
+      meshSvg.insertBefore(d, meshSvg.firstChild);
+      return d;
+    })();
+
     const edges = [];
+    let edgeIdx = 0;
     for (let i = 0; i < N; i++) {
       for (let j = i + 1; j < N; j++) {
         const a = peers[i], b = peers[j];
-        const ln = document.createElementNS(NS, 'line');
-        ln.setAttribute('x1', a.x); ln.setAttribute('y1', a.y);
-        ln.setAttribute('x2', b.x); ln.setAttribute('y2', b.y);
-        ln.setAttribute('stroke', 'url(#edgeGrad)');
-        ln.setAttribute('stroke-width', '1');
-        ln.setAttribute('opacity', '0.35');
-        lineLayer.appendChild(ln);
-        edges.push({ a, b, line: ln });
+
+        // Per-edge gradient in user space so direction is consistent.
+        const gid = `edgeGrad-${edgeIdx++}`;
+        const g = document.createElementNS(NS, 'linearGradient');
+        g.setAttribute('id', gid);
+        g.setAttribute('gradientUnits', 'userSpaceOnUse');
+        g.setAttribute('x1', a.x); g.setAttribute('y1', a.y);
+        g.setAttribute('x2', b.x); g.setAttribute('y2', b.y);
+        g.innerHTML =
+          '<stop offset="0%" stop-color="#8b5cf6"/>' +
+          '<stop offset="50%" stop-color="#6366f1"/>' +
+          '<stop offset="100%" stop-color="#22d3ee"/>';
+        defs.appendChild(g);
+
+        // Static base line — always visible so the mesh reads as
+        // "all connected" even between pulses.
+        const base = document.createElementNS(NS, 'line');
+        base.setAttribute('x1', a.x); base.setAttribute('y1', a.y);
+        base.setAttribute('x2', b.x); base.setAttribute('y2', b.y);
+        base.setAttribute('stroke', `url(#${gid})`);
+        base.setAttribute('stroke-width', '1.1');
+        base.setAttribute('opacity', '0.55');
+        base.setAttribute('class', 'mesh-edge-base');
+        lineLayer.appendChild(base);
+
+        // Flow line — same path with dashed stroke that animates,
+        // giving every edge a subtle constant data-flow look.
+        const flow = document.createElementNS(NS, 'line');
+        flow.setAttribute('x1', a.x); flow.setAttribute('y1', a.y);
+        flow.setAttribute('x2', b.x); flow.setAttribute('y2', b.y);
+        flow.setAttribute('stroke', '#22d3ee');
+        flow.setAttribute('stroke-width', '1');
+        flow.setAttribute('stroke-dasharray', '3 7');
+        flow.setAttribute('opacity', '0.45');
+        flow.setAttribute('class', 'mesh-edge-flow');
+        flow.style.animationDelay = (edgeIdx * 0.18) + 's';
+        // Half the edges flow in the opposite direction so traffic
+        // looks bidirectional across the mesh.
+        if ((i + j) % 2 === 0) flow.classList.add('reverse');
+        lineLayer.appendChild(flow);
+
+        edges.push({ a, b, base, flow });
       }
     }
 
     // Nodes
     peers.forEach((p, i) => {
+      const halo = document.createElementNS(NS, 'circle');
+      halo.setAttribute('cx', p.x); halo.setAttribute('cy', p.y);
+      halo.setAttribute('r', 14);
+      halo.setAttribute('fill', 'rgba(139,92,246,0.25)');
+      halo.setAttribute('class', 'mesh-halo');
+      halo.style.transformOrigin = `${p.x}px ${p.y}px`;
+      halo.style.animation = `haloPulse 2.6s ease-in-out infinite ${i * 0.35}s`;
+      nodeLayer.appendChild(halo);
+
       const ring = document.createElementNS(NS, 'circle');
       ring.setAttribute('cx', p.x); ring.setAttribute('cy', p.y);
       ring.setAttribute('r', 18);
       ring.setAttribute('fill', 'none');
       ring.setAttribute('stroke', 'url(#nodeRing)');
       ring.setAttribute('stroke-width', '1');
-      ring.setAttribute('opacity', '0.5');
+      ring.setAttribute('opacity', '0.6');
       nodeLayer.appendChild(ring);
 
       const dot = document.createElementNS(NS, 'circle');
@@ -285,46 +379,83 @@
       nodeLayer.appendChild(lbl);
     });
 
-    // Periodic pulses traveling along random edges
-    function emitPulse() {
-      if (document.hidden) { setTimeout(emitPulse, 800); return; }
-      const e = edges[Math.floor(Math.random() * edges.length)];
+    // Round-robin pulse scheduler: shuffle, walk through every edge
+    // once, then reshuffle. Guarantees every link is exercised on
+    // each cycle instead of relying on chance.
+    const order = edges.map((_, i) => i);
+    let cursor = 0;
+    function nextEdge() {
+      if (cursor === 0) {
+        for (let k = order.length - 1; k > 0; k--) {
+          const r = Math.floor(Math.random() * (k + 1));
+          [order[k], order[r]] = [order[r], order[k]];
+        }
+      }
+      const e = edges[order[cursor]];
+      cursor = (cursor + 1) % order.length;
+      return e;
+    }
+
+    // Comet-style pulse: a head plus a fading trail of dots.
+    function spawnPulse() {
+      const e = nextEdge();
       const reverse = Math.random() > 0.5;
       const a = reverse ? e.b : e.a;
       const b = reverse ? e.a : e.b;
 
-      const p = document.createElementNS(NS, 'circle');
-      p.setAttribute('r', '3');
-      p.setAttribute('fill', '#22d3ee');
-      p.setAttribute('opacity', '0.95');
-      p.style.filter = 'drop-shadow(0 0 6px #22d3ee)';
-      pulseLayer.appendChild(p);
+      const TRAIL = 5;
+      const trail = [];
+      for (let i = 0; i < TRAIL; i++) {
+        const c = document.createElementNS(NS, 'circle');
+        c.setAttribute('r', String(3 - i * 0.4));
+        c.setAttribute('fill', '#22d3ee');
+        c.setAttribute('opacity', String(0.95 * (1 - i / TRAIL)));
+        c.style.filter = i === 0 ? 'drop-shadow(0 0 8px #22d3ee)' : 'none';
+        pulseLayer.appendChild(c);
+        trail.push(c);
+      }
 
-      const dur = 600 + Math.random() * 500;
+      const dur = 700 + Math.random() * 400;
       const start = performance.now();
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.hypot(dx, dy);
+      const segLen = Math.min(22, len * 0.16);
+
       function step(t) {
         const k = Math.min(1, (t - start) / dur);
-        const x = a.x + (b.x - a.x) * k;
-        const y = a.y + (b.y - a.y) * k;
-        p.setAttribute('cx', x);
-        p.setAttribute('cy', y);
-        p.setAttribute('opacity', String(0.95 * (1 - k * 0.5)));
+        for (let i = 0; i < TRAIL; i++) {
+          const back = i * (segLen / len);
+          const kk = Math.max(0, k - back * 0.9);
+          trail[i].setAttribute('cx', a.x + dx * kk);
+          trail[i].setAttribute('cy', a.y + dy * kk);
+          trail[i].setAttribute('opacity', String(0.95 * (1 - i / TRAIL) * (1 - k * 0.3)));
+        }
         if (k < 1) requestAnimationFrame(step);
-        else p.remove();
+        else trail.forEach((c) => c.remove());
       }
       requestAnimationFrame(step);
 
-      // Highlight the edge briefly.
-      e.line.setAttribute('opacity', '0.9');
-      e.line.setAttribute('stroke-width', '1.7');
+      // Boost the base line briefly so the active edge stands out.
+      e.base.setAttribute('opacity', '1');
+      e.base.setAttribute('stroke-width', '1.9');
       setTimeout(() => {
-        e.line.setAttribute('opacity', '0.35');
-        e.line.setAttribute('stroke-width', '1');
+        e.base.setAttribute('opacity', '0.55');
+        e.base.setAttribute('stroke-width', '1.1');
       }, dur);
-
-      setTimeout(emitPulse, 220 + Math.random() * 380);
     }
-    setTimeout(emitPulse, 600);
+
+    // Multiple concurrent emitters so several edges are active at
+    // once — keeps the mesh feeling alive across all 10 links.
+    function emitter(period, jitter) {
+      function tick() {
+        if (!document.hidden) spawnPulse();
+        setTimeout(tick, period + Math.random() * jitter);
+      }
+      setTimeout(tick, Math.random() * period);
+    }
+    emitter(420, 260);
+    emitter(520, 320);
+    emitter(680, 360);
   }
 
   // ---------------------------------------------------------------
