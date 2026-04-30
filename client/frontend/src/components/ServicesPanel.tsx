@@ -1,7 +1,7 @@
-import React, { useState } from "react";
-import { Plus, Server, Link2, Trash2, Globe } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Plus, Server, Link2, Trash2, Globe, Search, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { PeerView, ServiceView } from "../types";
+import type { LocalListener, PeerView, ServiceView } from "../types";
 import { app } from "../lib/wails";
 import { shortId } from "../lib/format";
 
@@ -17,6 +17,31 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
   const [error, setError] = useState("");
   const [dialing, setDialing] = useState<{ peerId: string; port: number } | null>(null);
   const [dialedAddrs, setDialedAddrs] = useState<Record<string, string>>({});
+  const [detected, setDetected] = useState<LocalListener[]>([]);
+  const [scanning, setScanning] = useState(false);
+
+  const refreshDetected = async () => {
+    setScanning(true);
+    try {
+      const list = await app.LocalListeners();
+      setDetected(list);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshDetected();
+  }, []);
+
+  const exposeDetected = async (l: LocalListener) => {
+    try {
+      await app.ExposeService(l.process || `tcp:${l.port}`, l.port);
+      await refreshLocalServices();
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    }
+  };
 
   const submitExpose = async () => {
     setError("");
@@ -119,7 +144,55 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
         </AnimatePresence>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-5">
+        <div>
+          <div className="flex items-center justify-between mb-2.5">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Search className="w-4 h-4 text-amber-400" strokeWidth={2} />
+              Lokalda topilgan portlar
+            </h3>
+            <button
+              onClick={refreshDetected}
+              disabled={scanning}
+              className="text-[11px] text-zinc-400 hover:text-white disabled:opacity-50"
+            >
+              {scanning ? "Skanerlanmoqda..." : "Yangilash"}
+            </button>
+          </div>
+          {detected.length === 0 && !scanning && (
+            <div className="text-xs text-zinc-500 panel rounded-input px-3 py-3 text-center">
+              Lokalda port topilmadi (yoki barchasi tizim portlari).
+            </div>
+          )}
+          <div className="space-y-1.5">
+            {detected.map((d) => {
+              const exposed = localServices.some((s) => s.port === d.port);
+              return (
+                <div
+                  key={d.port}
+                  className="panel rounded-input px-3 py-2 flex items-center justify-between text-sm"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
+                    <span className="truncate">{d.process || "?"}</span>
+                    <span className="font-mono text-xs text-zinc-500">tcp:{d.port}</span>
+                  </div>
+                  {exposed ? (
+                    <span className="text-[11px] text-emerald-400 font-medium">ochilgan ✓</span>
+                  ) : (
+                    <button
+                      onClick={() => exposeDetected(d)}
+                      className="px-2 py-1 rounded text-[11px] font-medium bg-violet-500/15 text-violet-300 hover:bg-violet-500/25"
+                    >
+                      Bir click bilan och
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
           <Link2 className="w-4 h-4 text-cyan-400" strokeWidth={2} />
           Boshqa peerlardagi servislar

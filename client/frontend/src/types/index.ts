@@ -74,3 +74,16 @@ export type HistoryEntry = {
   joinedAt: string;
   lastSeen: string;
 };
+
+export type TurnConfig = {
+  url: string;
+  username: string;
+  credential: string;
+};
+
+export type LocalListener = {
+  port: number;
+  process: string;
+  pid: number;
+  local: string;
+};

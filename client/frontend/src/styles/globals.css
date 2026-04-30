@@ -33,6 +33,12 @@ body {
   50%      { transform: scale(1.18); opacity: 1;    }
 }
 
+@keyframes ringPulse {
+  0%   { stroke-opacity: 0.6; r: var(--r-from, 38); }
+  70%  { stroke-opacity: 0;   r: var(--r-to, 56);   }
+  100% { stroke-opacity: 0;   r: var(--r-to, 56);   }
+}
+
 @keyframes spin360 { to { transform: rotate(360deg); } }
 
 @keyframes blinkCursor { 50% { opacity: 0; } }

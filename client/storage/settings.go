@@ -67,9 +67,13 @@ func (s *Store) AllSettings() (map[string]string, error) {
 
 // Canonical setting keys.
 const (
-	KeySignalingURL    = "signaling_url"
-	KeyNickname        = "nickname"
-	KeyPublicNickname  = "public_nickname"
-	KeyTheme           = "theme"
-	KeyAnimationLevel  = "animation_level"
+	KeySignalingURL   = "signaling_url"
+	KeyNickname       = "nickname"
+	KeyPublicNickname = "public_nickname"
+	KeyTheme          = "theme"
+	KeyAnimationLevel = "animation_level"
+
+	KeyTurnURL        = "turn_url"
+	KeyTurnUsername   = "turn_username"
+	KeyTurnCredential = "turn_credential"
 )

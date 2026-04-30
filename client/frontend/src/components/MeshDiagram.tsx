@@ -28,8 +28,8 @@ type Node = {
   y: number;
 };
 
-const W = 560;
-const H = 460;
+const W = 720;
+const H = 540;
 const CX = W / 2;
 const CY = H / 2;
 
@@ -39,7 +39,9 @@ export function MeshDiagram({ selfNickname, selfVip, peers, hovered, onHover }: 
 
   // Position: self in the centre; peers around a circle.
   const others = peers.filter((p) => p.peerId);
-  const radius = others.length === 0 ? 0 : Math.min(190, 80 + others.length * 12);
+  const radius = others.length === 0
+    ? 0
+    : Math.min(220, 110 + others.length * 14);
   const nodes: Node[] = [
     {
       id: "self",
@@ -186,10 +188,12 @@ export function MeshDiagram({ selfNickname, selfVip, peers, hovered, onHover }: 
       {/* Nodes */}
       <AnimatePresence>
         {nodes.map((n) => {
-          const r = n.isSelf ? 22 : 17;
+          const r = n.isSelf ? 30 : 24;
           const color = avatarColor(n.label);
           const initial = avatarInitial(n.label);
           const highlighted = isHighlighted(n);
+          const isConnecting = !n.isSelf && n.state === "connecting";
+          const isFailed = !n.isSelf && (n.state === "failed" || n.state === "closed");
           return (
             <motion.g
               key={n.id}
@@ -202,56 +206,92 @@ export function MeshDiagram({ selfNickname, selfVip, peers, hovered, onHover }: 
               onMouseLeave={() => !n.isSelf && onHover?.(null)}
               style={{ cursor: n.isSelf ? "default" : "pointer" }}
             >
+              {/* Outer pulsing ring while connecting; goes amber */}
+              {isConnecting && (
+                <circle
+                  cx={n.x}
+                  cy={n.y}
+                  r={r + 14}
+                  fill="none"
+                  stroke="#fbbf24"
+                  strokeWidth={1.5}
+                  style={{ animation: "ringPulse 1.4s ease-in-out infinite" }}
+                />
+              )}
               <circle
                 cx={n.x}
                 cy={n.y}
-                r={r + 6}
+                r={r + 8}
                 fill="none"
-                stroke="url(#edgeGradMesh)"
-                strokeWidth={1}
-                opacity={highlighted ? 0.9 : 0.4}
+                stroke={isFailed ? "#fb7185" : "url(#edgeGradMesh)"}
+                strokeWidth={highlighted ? 2 : 1.2}
+                opacity={highlighted ? 0.95 : isFailed ? 0.7 : 0.5}
               />
               <circle
                 cx={n.x}
                 cy={n.y}
                 r={r}
-                fill={n.isSelf ? "url(#nodeFillSelf)" : `url(#nodeFillPeer)`}
-                style={{ animation: `nodePulse 3s ease-in-out infinite` }}
+                fill={
+                  isFailed
+                    ? "#3f1d2a"
+                    : n.isSelf
+                    ? "url(#nodeFillSelf)"
+                    : "url(#nodeFillPeer)"
+                }
+                opacity={isFailed ? 0.5 : 1}
+                style={{
+                  animation: isConnecting
+                    ? `nodePulse 1.4s ease-in-out infinite`
+                    : `nodePulse 3s ease-in-out infinite`,
+                }}
               />
               <text
                 x={n.x}
-                y={n.y + 4}
+                y={n.y + 5}
                 textAnchor="middle"
                 fill="#0a0e1a"
                 fontFamily="Inter"
                 fontWeight={700}
-                fontSize={n.isSelf ? 14 : 12}
+                fontSize={n.isSelf ? 18 : 15}
+                opacity={isFailed ? 0.6 : 1}
               >
                 {initial}
               </text>
               {/* Label */}
               <text
                 x={n.x}
-                y={n.y + r + 18}
+                y={n.y + r + 22}
                 textAnchor="middle"
                 fill="#e6e9ef"
                 fontFamily="Inter"
-                fontSize="11"
-                fontWeight={500}
+                fontSize="13"
+                fontWeight={600}
               >
                 {n.label}
               </text>
               <text
                 x={n.x}
-                y={n.y + r + 32}
+                y={n.y + r + 38}
                 textAnchor="middle"
                 fill="#5b6479"
                 fontFamily="JetBrains Mono"
-                fontSize="10"
+                fontSize="11"
               >
                 {n.vip}
                 {n.isSelf ? "" : ` · ${rttLabel(n.rttMs)}`}
               </text>
+              {isConnecting && (
+                <text
+                  x={n.x}
+                  y={n.y + r + 52}
+                  textAnchor="middle"
+                  fill="#fbbf24"
+                  fontFamily="JetBrains Mono"
+                  fontSize="9"
+                >
+                  ulanmoqda...
+                </text>
+              )}
               {/* fallback color hint */}
               <circle cx={n.x + r - 4} cy={n.y - r + 4} r={3} fill={color} opacity={0.7} />
             </motion.g>

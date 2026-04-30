@@ -11,6 +11,8 @@ import type {
   ChatMessage,
   NATResult,
   HistoryEntry,
+  TurnConfig,
+  LocalListener,
 } from "../types";
 
 type Bridge = {
@@ -33,6 +35,9 @@ type Bridge = {
   OpenSaveDir: () => Promise<void>;
   RecentPortals: (n: number) => Promise<HistoryEntry[]>;
   ClearHistory: () => Promise<void>;
+  GetTurnConfig: () => Promise<TurnConfig>;
+  SetTurnConfig: (c: TurnConfig) => Promise<void>;
+  LocalListeners: () => Promise<LocalListener[]>;
 };
 
 declare global {
@@ -95,6 +100,9 @@ const stub: Bridge = {
   OpenSaveDir: async () => {},
   RecentPortals: async () => [],
   ClearHistory: async () => {},
+  GetTurnConfig: async () => ({ url: "", username: "", credential: "" }),
+  SetTurnConfig: async () => {},
+  LocalListeners: async () => [],
 };
 
 export const app: Bridge =

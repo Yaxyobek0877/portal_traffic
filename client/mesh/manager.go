@@ -26,12 +26,20 @@ import (
 
 // Config holds the runtime parameters for a Manager.
 type Config struct {
-	SignalingURL string
-	Nickname     string
-	PublicNick   bool
-	ICEServers   []webrtc.ICEServer
+	SignalingURL      string
+	Nickname          string
+	PublicNick        bool
+	ICEServers        []webrtc.ICEServer
 	HeartbeatInterval time.Duration
-	Logger       *slog.Logger
+	Logger            *slog.Logger
+
+	// Optional TURN server. If TurnURL is non-empty it's appended
+	// to ICEServers along with the credentials. Required for
+	// peers behind symmetric NAT or CGNAT — without TURN those
+	// connections silently fail to establish.
+	TurnURL        string
+	TurnUsername   string
+	TurnCredential string
 }
 
 // Default ICE servers — public STUN. TURN is left to deploy-time
@@ -195,6 +203,18 @@ func New(cfg Config) *Manager {
 	}
 	if cfg.ICEServers == nil {
 		cfg.ICEServers = DefaultICEServers
+	}
+	// Append the configured TURN server, if any. We pass URLs
+	// covering UDP (3478), TLS (443), and TCP (80) when the user gives
+	// a base host:port, so ICE has a fallback path through restrictive
+	// firewalls. If they pass a full URL we trust them.
+	if cfg.TurnURL != "" {
+		urls := []string{cfg.TurnURL}
+		cfg.ICEServers = append(cfg.ICEServers, webrtc.ICEServer{
+			URLs:       urls,
+			Username:   cfg.TurnUsername,
+			Credential: cfg.TurnCredential,
+		})
 	}
 	return &Manager{
 		cfg:           cfg,

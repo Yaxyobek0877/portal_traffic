@@ -7,11 +7,12 @@ import {
   History,
   Info,
   RefreshCcw,
+  Shield,
   Trash2,
 } from "lucide-react";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
-import type { HistoryEntry } from "../types";
+import type { HistoryEntry, TurnConfig } from "../types";
 
 export function Settings() {
   const setScreen = usePortalStore((s) => s.setScreen);
@@ -27,6 +28,10 @@ export function Settings() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState("");
 
+  const [turn, setTurn] = useState<TurnConfig>({ url: "", username: "", credential: "" });
+  const [turnSavedAt, setTurnSavedAt] = useState<number | null>(null);
+  const [turnError, setTurnError] = useState("");
+
   useEffect(() => {
     setDraftUrl(signalingUrl);
   }, [signalingUrl]);
@@ -34,6 +39,7 @@ export function Settings() {
   useEffect(() => {
     app.SaveDir().then(setSaveDir);
     app.RecentPortals(20).then(setHistory);
+    app.GetTurnConfig().then(setTurn);
   }, [setSaveDir, setHistory]);
 
   const saveUrl = async () => {
@@ -52,6 +58,29 @@ export function Settings() {
     usePortalStore.getState().setNat(r);
     const h = await app.RecentPortals(20);
     setHistory(h);
+    const t = await app.GetTurnConfig();
+    setTurn(t);
+  };
+
+  const saveTurn = async () => {
+    setTurnError("");
+    try {
+      await app.SetTurnConfig(turn);
+      setTurnSavedAt(Date.now());
+    } catch (e: any) {
+      setTurnError(e?.message || String(e));
+    }
+  };
+
+  const clearTurn = async () => {
+    const empty = { url: "", username: "", credential: "" };
+    setTurn(empty);
+    try {
+      await app.SetTurnConfig(empty);
+      setTurnSavedAt(Date.now());
+    } catch (e: any) {
+      setTurnError(e?.message || String(e));
+    }
   };
 
   return (
@@ -99,6 +128,67 @@ export function Settings() {
               Standart: <span className="font-mono">wss://signaling.1pro.uz/ws</span>
             </p>
           </Field>
+        </Section>
+
+        {/* TURN */}
+        <Section icon={<Shield className="w-4 h-4" />} title="TURN serveri (Simmetrik NAT uchun)">
+          <p className="text-xs text-zinc-500 -mt-2">
+            Agar siz va do'stingiz har xil tarmoqlarda Simmetrik NAT ortida
+            bo'lsangiz, to'g'ridan-to'g'ri ulanish ishlamaydi — TURN serveri
+            ma'lumotni o'tkazib beradi. Cloudflare / Twilio / Metered.ca
+            yoki o'zingizning coturn instance dan kredensiallarni shu yerga
+            kiriting.
+          </p>
+          <Field label="TURN URL">
+            <input
+              type="text"
+              placeholder="turn:turn.example.com:3478"
+              value={turn.url}
+              onChange={(e) => setTurn({ ...turn, url: e.target.value })}
+              className="input-base w-full font-mono text-sm"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Foydalanuvchi nomi">
+              <input
+                type="text"
+                value={turn.username}
+                onChange={(e) => setTurn({ ...turn, username: e.target.value })}
+                className="input-base w-full font-mono text-sm"
+              />
+            </Field>
+            <Field label="Parol / kredensial">
+              <input
+                type="password"
+                value={turn.credential}
+                onChange={(e) => setTurn({ ...turn, credential: e.target.value })}
+                className="input-base w-full font-mono text-sm"
+              />
+            </Field>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={saveTurn}
+              className="btn-primary rounded-btn px-4 py-2 text-sm font-medium"
+            >
+              Saqlash
+            </button>
+            {turn.url && (
+              <button
+                onClick={clearTurn}
+                className="px-3 py-2 text-xs text-zinc-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-btn"
+              >
+                Tozalash
+              </button>
+            )}
+            {turnError && <span className="text-xs text-rose-400">{turnError}</span>}
+            {turnSavedAt && !turnError && (
+              <span className="text-xs text-emerald-400">Saqlandi ✓</span>
+            )}
+          </div>
+          <p className="text-xs text-zinc-600 mt-1">
+            Sozlangandan keyin keyingi portal yaratish/qo'shilishda kuchga kiradi.
+          </p>
         </Section>
 
         {/* Diagnostics */}

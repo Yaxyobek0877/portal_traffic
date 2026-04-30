@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -73,6 +74,22 @@ type SignalingStatus struct {
 	URL       string `json:"url"`
 	Connected bool   `json:"connected"`
 	Error     string `json:"error,omitempty"`
+}
+
+// TurnConfig is the JSON shape the frontend uses to read/write TURN
+// credentials. Empty URL means "no TURN configured".
+type TurnConfig struct {
+	URL        string `json:"url"`
+	Username   string `json:"username"`
+	Credential string `json:"credential"`
+}
+
+// LocalListener describes a TCP port the OS reports as listening.
+type LocalListener struct {
+	Port    int    `json:"port"`
+	Process string `json:"process"`
+	PID     int    `json:"pid"`
+	Local   string `json:"local"`
 }
 
 // App is the Wails-bound singleton.
@@ -215,6 +232,49 @@ func (a *App) SetSignalingURL(url string) error {
 	if store != nil {
 		_ = store.PutSetting(storage.KeySignalingURL, url)
 	}
+	return nil
+}
+
+// GetTurnConfig returns the persisted TURN credentials. Empty URL
+// means "not configured" — without TURN, peers behind symmetric NAT
+// can't connect.
+func (a *App) GetTurnConfig() TurnConfig {
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return TurnConfig{}
+	}
+	return TurnConfig{
+		URL:        store.GetOr(storage.KeyTurnURL, ""),
+		Username:   store.GetOr(storage.KeyTurnUsername, ""),
+		Credential: store.GetOr(storage.KeyTurnCredential, ""),
+	}
+}
+
+// SetTurnConfig persists TURN credentials. Empty URL clears the
+// configuration; whitespace-only fields are treated as empty. Takes
+// effect on the next CreatePortal / JoinPortal call.
+func (a *App) SetTurnConfig(c TurnConfig) error {
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return errors.New("storage mavjud emas")
+	}
+	c.URL = strings.TrimSpace(c.URL)
+	c.Username = strings.TrimSpace(c.Username)
+	c.Credential = strings.TrimSpace(c.Credential)
+
+	if c.URL != "" {
+		if !strings.HasPrefix(c.URL, "turn:") &&
+			!strings.HasPrefix(c.URL, "turns:") {
+			return errors.New("URL turn:// yoki turns:// bilan boshlanishi kerak")
+		}
+	}
+	_ = store.PutSetting(storage.KeyTurnURL, c.URL)
+	_ = store.PutSetting(storage.KeyTurnUsername, c.Username)
+	_ = store.PutSetting(storage.KeyTurnCredential, c.Credential)
 	return nil
 }
 
@@ -445,6 +505,52 @@ func (a *App) SendChat(text string) int {
 // Service / proxy bindings
 // ----------------------------------------------------------------------------
 
+// LocalListeners enumerates TCP ports the OS reports as listening.
+// Used by the Services panel to offer one-click "expose" for the
+// services already running on the user's machine.
+//
+// Implementation: shell out to `lsof -nP -iTCP -sTCP:LISTEN -F pcPLn`
+// (macOS) or fall back to `ss -lntp` (Linux). Both produce parseable
+// output. Errors are returned as an empty list so the UI stays
+// usable on platforms where neither is available (Windows, sandboxed
+// environments).
+func (a *App) LocalListeners() []LocalListener {
+	out := []LocalListener{}
+	cmd, parser := localListenersCommand()
+	if cmd == nil {
+		return out
+	}
+	stdout, err := cmd.Output()
+	if err != nil {
+		a.logger.Debug("local listeners enumerate failed", "err", err)
+		return out
+	}
+	rows := parser(string(stdout))
+	// Filter out the noise: ports < 1024 are mostly system services
+	// (most users won't want to expose mDNS, AirPlay, etc.); also
+	// drop the well-known infra (cloudflared metrics, our own
+	// signaling, our embedded webview). The user can still type any
+	// port manually.
+	systemNoise := map[string]bool{
+		"ControlCe": true, "rapportd": true, "cloudflar": true,
+		"identitys": true, "sharingd": true,
+		"Portal": true, "portal-si": true, "portal-cl": true,
+	}
+	seen := map[int]bool{}
+	for _, r := range rows {
+		if r.Port < 1024 || systemNoise[r.Process] {
+			continue
+		}
+		if seen[r.Port] {
+			continue
+		}
+		seen[r.Port] = true
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Port < out[j].Port })
+	return out
+}
+
 // LocalServices returns the services we are currently exposing.
 func (a *App) LocalServices() []ServiceView {
 	a.mu.RLock()
@@ -522,6 +628,7 @@ func (a *App) bringUpMesh(nickname string) error {
 	a.tearDown()
 
 	url := a.SignalingURL()
+	turn := a.GetTurnConfig()
 	a.mu.Lock()
 	a.nick = nickname
 	a.mesh = mesh.New(mesh.Config{
@@ -529,6 +636,9 @@ func (a *App) bringUpMesh(nickname string) error {
 		Nickname:          nickname,
 		HeartbeatInterval: 3 * time.Second,
 		Logger:            a.logger,
+		TurnURL:           turn.URL,
+		TurnUsername:      turn.Username,
+		TurnCredential:    turn.Credential,
 	})
 	a.fwd = proxy.New(a.mesh, a.logger)
 	a.mesh.SetProxyHandler(a.fwd)

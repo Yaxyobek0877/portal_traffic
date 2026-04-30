@@ -54,6 +54,6 @@ There is no Go or Node tooling in this directory; those live in `../client/` and
 
 - **Read `../shared/protocol/messages.go` first.** Field names, JSON tags, and message types are what the live signal server already emits — mirror them exactly.
 - **Channel IDs/labels are negotiated, not auto-assigned.** The reference client uses fixed IDs for `control`, `chat`, `transfer`, `proxy`. Peers across clients won't talk if these drift.
-- **Encryption is two layers, not one.** WebRTC DTLS-SRTP is automatic; on top of that, app-layer NaCl secretbox wraps every chat/file/proxy payload, with the key derived from the 6-digit portal code via PBKDF2 with **100,000** iterations. See `../client/crypt/` — match the KDF parameters or peers can't decrypt each other.
+- **Encryption is two layers, not one.** WebRTC DTLS-SRTP is automatic; on top of that, app-layer NaCl secretbox wraps every chat/file/proxy payload, with the key derived from the 6-digit portal code via PBKDF2-SHA256 with **200,000** iterations and salt `"portal-app-v1:secretbox"` (32-byte key, 24-byte random nonce per frame). See `../client/crypt/crypt.go` — these constants must match exactly or peers can't decrypt each other.
 - **Default signal endpoint:** `wss://signaling.1pro.uz/ws`. Make it overridable in settings, same as the desktop client.
 - **WebRTC on Android:** the standard option is `org.webrtc:google-webrtc`. The reference client uses pion in Go — APIs differ but the SDP/ICE flow on the wire is identical.
