@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, LogIn, Settings, History as HistoryIcon } from "lucide-react";
 import { Logo } from "../components/Logo";
@@ -23,6 +23,12 @@ export function Welcome() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // generation counter so we can ignore a late-arriving result from a
+  // connect attempt the user already cancelled. Without this, clicking
+  // "Orqaga" while the request is in flight just lets the eventual
+  // success drag the user back to the portal view.
+  const genRef = useRef(0);
+
   useEffect(() => {
     app.SignalingURL().then(setSignalingUrl);
     app.RecentPortals(5).then(setHistory);
@@ -34,30 +40,48 @@ export function Welcome() {
     setCode(c);
   };
 
+  const cancel = async () => {
+    genRef.current++;
+    setBusy(false);
+    setMode("idle");
+    setError("");
+    // Tear down whatever half-formed mesh the backend is currently
+    // assembling. Without this, a stuck join can hold sockets open
+    // until the next connect attempt collides.
+    try {
+      await app.Leave();
+    } catch {}
+  };
+
   const submit = async () => {
     setError("");
     if (!nickname.trim()) {
       setError("Avval taxallus yozing");
       return;
     }
+    if (mode === "join" && (!portalId.trim() || !code.trim())) {
+      setError("ID va kod ikkalasi kerak");
+      return;
+    }
+    const myGen = ++genRef.current;
     setBusy(true);
     try {
-      let p;
-      if (mode === "create") {
-        p = await app.CreatePortal(nickname.trim(), false);
-      } else {
-        if (!portalId.trim() || !code.trim()) {
-          setError("ID va kod ikkalasi kerak");
-          return;
-        }
-        p = await app.JoinPortal(nickname.trim(), portalId.trim(), code.trim());
+      const p =
+        mode === "create"
+          ? await app.CreatePortal(nickname.trim(), false)
+          : await app.JoinPortal(nickname.trim(), portalId.trim(), code.trim());
+      if (myGen !== genRef.current) {
+        // The user cancelled while we were waiting. Drop the result
+        // silently — they're back on the welcome screen already.
+        return;
       }
       setPortal(p);
       setScreen("portal");
     } catch (e: any) {
+      if (myGen !== genRef.current) return;
       setError(e?.message || String(e));
     } finally {
-      setBusy(false);
+      if (myGen === genRef.current) setBusy(false);
     }
   };
 
@@ -172,11 +196,10 @@ export function Welcome() {
             ) : (
               <div className="grid grid-cols-2 gap-3 pt-3">
                 <button
-                  onClick={() => setMode("idle")}
+                  onClick={busy ? cancel : () => setMode("idle")}
                   className="panel rounded-btn h-11 text-sm hover:bg-white/[0.07]"
-                  disabled={busy}
                 >
-                  Orqaga
+                  {busy ? "Bekor qilish" : "Orqaga"}
                 </button>
                 <button
                   onClick={submit}
