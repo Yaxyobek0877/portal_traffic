@@ -1,6 +1,7 @@
-import React from "react";
-import { Crown, Zap, Cloud, Wifi, WifiOff, Loader2 } from "lucide-react";
-import type { PeerView } from "../types";
+import React, { useState } from "react";
+import { Crown, Zap, Cloud, Wifi, WifiOff, Loader2, Gauge, Network } from "lucide-react";
+import type { PeerView, BandwidthResult } from "../types";
+import { app } from "../lib/wails";
 import { avatarColor, avatarInitial } from "../lib/avatar";
 import { rttLabel, shortId } from "../lib/format";
 
@@ -17,6 +18,42 @@ function bytesShort(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
   return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function isPrivateAddr(addr: string): boolean {
+  if (!addr) return false;
+  // Strip port/zone, leave bare IP. Handles "192.168.1.1:54538" and
+  // "[fe80::1%en0]:5000".
+  let host = addr;
+  if (host.startsWith("[")) {
+    const end = host.indexOf("]");
+    host = end > 0 ? host.slice(1, end) : host;
+  } else {
+    const i = host.lastIndexOf(":");
+    if (i > 0) host = host.slice(0, i);
+  }
+  if (host.startsWith("10.") || host.startsWith("192.168.")) return true;
+  if (host.startsWith("172.")) {
+    const second = parseInt(host.split(".")[1] || "0", 10);
+    if (second >= 16 && second <= 31) return true;
+  }
+  if (host === "127.0.0.1" || host.startsWith("169.254.")) return true;
+  if (host.startsWith("fe80:") || host.startsWith("fc") || host.startsWith("fd")) return true;
+  return false;
+}
+
+// Classify the path so the user knows whether the connection is just
+// LAN (same Wi-Fi), real internet, or a TURN relay. The transport
+// signal already differentiates direct vs relay; we add LAN vs WAN
+// based on whether both endpoints look like private (RFC1918) IPs.
+function classifyPath(peer: PeerView): { label: string; tone: "lan" | "internet" | "relay" | "unknown" } {
+  if (peer.transport === "relay") return { label: "TURN relay", tone: "relay" };
+  if (!peer.pathLocalAddr || !peer.pathRemoteAddr) return { label: "—", tone: "unknown" };
+  const localPriv = isPrivateAddr(peer.pathLocalAddr);
+  const remotePriv = isPrivateAddr(peer.pathRemoteAddr);
+  if (localPriv && remotePriv) return { label: "LAN — bir tarmoq ichida", tone: "lan" };
+  if (!localPriv && !remotePriv) return { label: "Internet — turli tarmoq", tone: "internet" };
+  return { label: "Aralash (NAT srflx)", tone: "internet" };
 }
 
 export function PeerTable({ selfNickname, selfVip, peers, hovered, onHover }: Props) {
@@ -43,7 +80,8 @@ export function PeerTable({ selfNickname, selfVip, peers, hovered, onHover }: Pr
                 <th className="text-left font-medium px-3 py-2">Holat</th>
                 <th className="text-left font-medium px-3 py-2">RTT</th>
                 <th className="text-left font-medium px-3 py-2">Yo'l</th>
-                <th className="text-right font-medium px-4 py-2">Trafik</th>
+                <th className="text-right font-medium px-3 py-2">Trafik</th>
+                <th className="text-right font-medium px-4 py-2">Tezligi</th>
               </tr>
             </thead>
             <tbody>
@@ -109,7 +147,8 @@ function SelfRow({ nickname, vip }: { nickname: string; vip: string }) {
       </td>
       <td className="px-3 py-2.5 text-zinc-500 text-xs font-mono">—</td>
       <td className="px-3 py-2.5 text-zinc-500 text-xs">—</td>
-      <td className="px-4 py-2.5 text-right text-xs text-zinc-500 font-mono">—</td>
+      <td className="px-3 py-2.5 text-right text-xs text-zinc-500 font-mono">—</td>
+      <td className="px-4 py-2.5 text-right text-xs text-zinc-600">—</td>
     </tr>
   );
 }
@@ -127,6 +166,24 @@ function PeerRow({
 }) {
   const color = avatarColor(peer.nickname || peer.peerId);
   const initial = avatarInitial(peer.nickname || peer.peerId);
+  const path = classifyPath(peer);
+  const [bw, setBw] = useState<BandwidthResult | null>(null);
+  const [bwRunning, setBwRunning] = useState(false);
+  const [bwError, setBwError] = useState<string | null>(null);
+
+  const runSpeedTest = async () => {
+    setBwError(null);
+    setBwRunning(true);
+    try {
+      const r = await app.MeasureBandwidth(peer.peerId);
+      setBw(r);
+    } catch (e: any) {
+      setBwError(e?.message || String(e));
+    } finally {
+      setBwRunning(false);
+    }
+  };
+
   const stateNode = (() => {
     switch (peer.state) {
       case "connected":
@@ -156,63 +213,118 @@ function PeerRow({
     }
   })();
 
+  const pathToneClass = {
+    lan: "text-emerald-300/80",
+    internet: "text-cyan-300/80",
+    relay: "text-amber-300/80",
+    unknown: "text-zinc-500",
+  }[path.tone];
+
+  const showPathRow = peer.state === "connected" && (peer.pathLocalAddr || peer.pathRemoteAddr);
+  const hasSecondRow = showPathRow || bwError;
+
   return (
-    <tr
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      className={`border-b border-white/5 last:border-b-0 transition-colors ${
-        highlighted ? "bg-white/[0.05]" : "hover:bg-white/[0.03]"
-      }`}
-    >
-      <td className="px-4 py-2.5">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center font-semibold text-xs text-white shrink-0"
-            style={{ background: `linear-gradient(135deg, ${color} 0%, #6366f1 100%)` }}
-          >
-            {initial}
-          </div>
-          <div className="min-w-0 flex items-center gap-1.5">
-            <span className="font-medium truncate">
-              {peer.nickname || shortId(peer.peerId)}
-            </span>
-            {peer.isOwner && (
-              <Crown className="w-3 h-3 text-amber-400 shrink-0" strokeWidth={2.5} />
-            )}
-          </div>
-        </div>
-      </td>
-      <td className="px-3 py-2.5 font-mono text-xs text-zinc-300">{peer.virtualIp}</td>
-      <td className="px-3 py-2.5">{stateNode}</td>
-      <td className="px-3 py-2.5 font-mono text-xs text-zinc-300">
-        {rttLabel(peer.rttMs)}
-      </td>
-      <td className="px-3 py-2.5">
-        {peer.state === "connected" && peer.transport ? (
-          peer.transport === "direct" ? (
-            <span
-              title="To'g'ridan-to'g'ri P2P (host/srflx) — trafik server orqali emas"
-              className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-300/90 bg-emerald-400/10 border border-emerald-400/20 rounded px-1.5 py-0.5"
+    <>
+      <tr
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        className={`transition-colors ${
+          hasSecondRow ? "" : "border-b border-white/5 last:border-b-0"
+        } ${highlighted ? "bg-white/[0.05]" : "hover:bg-white/[0.03]"}`}
+      >
+        <td className="px-4 pt-2.5 pb-1">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center font-semibold text-xs text-white shrink-0"
+              style={{ background: `linear-gradient(135deg, ${color} 0%, #6366f1 100%)` }}
             >
-              <Zap className="w-3 h-3" strokeWidth={2.5} /> P2P
-            </span>
+              {initial}
+            </div>
+            <div className="min-w-0 flex items-center gap-1.5">
+              <span className="font-medium truncate">
+                {peer.nickname || shortId(peer.peerId)}
+              </span>
+              {peer.isOwner && (
+                <Crown className="w-3 h-3 text-amber-400 shrink-0" strokeWidth={2.5} />
+              )}
+            </div>
+          </div>
+        </td>
+        <td className="px-3 pt-2.5 pb-1 font-mono text-xs text-zinc-300">{peer.virtualIp}</td>
+        <td className="px-3 pt-2.5 pb-1">{stateNode}</td>
+        <td className="px-3 pt-2.5 pb-1 font-mono text-xs text-zinc-300">
+          {rttLabel(peer.rttMs)}
+        </td>
+        <td className="px-3 pt-2.5 pb-1">
+          {peer.state === "connected" && peer.transport ? (
+            peer.transport === "direct" ? (
+              <span
+                title="To'g'ridan-to'g'ri P2P (host/srflx) — trafik server orqali emas"
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-300/90 bg-emerald-400/10 border border-emerald-400/20 rounded px-1.5 py-0.5"
+              >
+                <Zap className="w-3 h-3" strokeWidth={2.5} /> P2P
+              </span>
+            ) : (
+              <span
+                title="TURN serveri orqali relay qilinmoqda — shifrlangan, lekin TURN'dan o'tadi"
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-300/90 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5"
+              >
+                <Cloud className="w-3 h-3" strokeWidth={2.5} /> TURN
+              </span>
+            )
           ) : (
-            <span
-              title="TURN serveri orqali relay qilinmoqda — shifrlangan, lekin TURN'dan o'tadi"
-              className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-300/90 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5"
+            <span className="text-zinc-600 text-xs">—</span>
+          )}
+        </td>
+        <td className="px-3 pt-2.5 pb-1 text-right font-mono text-xs text-zinc-400 whitespace-nowrap">
+          <span className="text-violet-300/80">↑ {bytesShort(peer.bytesSent)}</span>
+          <span className="mx-1.5 text-zinc-600">·</span>
+          <span className="text-cyan-300/80">↓ {bytesShort(peer.bytesRecv)}</span>
+        </td>
+        <td className="px-4 pt-2.5 pb-1 text-right">
+          {peer.state === "connected" ? (
+            <button
+              onClick={runSpeedTest}
+              disabled={bwRunning}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-violet-300 bg-violet-500/15 hover:bg-violet-500/25 disabled:opacity-50 rounded px-2 py-1 transition-colors"
+              title="3 sekundlik bandwidth probe — peer'ga binar oqim yuborib, qabul qiluvchi tomondan o'lchaydi"
             >
-              <Cloud className="w-3 h-3" strokeWidth={2.5} /> TURN
-            </span>
-          )
-        ) : (
-          <span className="text-zinc-600 text-xs">—</span>
-        )}
-      </td>
-      <td className="px-4 py-2.5 text-right font-mono text-xs text-zinc-400 whitespace-nowrap">
-        <span className="text-violet-300/80">↑ {bytesShort(peer.bytesSent)}</span>
-        <span className="mx-1.5 text-zinc-600">·</span>
-        <span className="text-cyan-300/80">↓ {bytesShort(peer.bytesRecv)}</span>
-      </td>
-    </tr>
+              {bwRunning ? (
+                <Loader2 className="w-3 h-3 animate-spin" strokeWidth={2.5} />
+              ) : (
+                <Gauge className="w-3 h-3" strokeWidth={2.5} />
+              )}
+              {bw ? `${bw.mbps.toFixed(1)} Mbps` : bwRunning ? "tekshirilmoqda…" : "Tezligi"}
+            </button>
+          ) : (
+            <span className="text-zinc-600 text-xs">—</span>
+          )}
+        </td>
+      </tr>
+      {(showPathRow || bwError) && (
+        <tr
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+          className={`border-b border-white/5 last:border-b-0 ${
+            highlighted ? "bg-white/[0.05]" : ""
+          }`}
+        >
+          <td colSpan={7} className="px-4 pt-0 pb-2.5">
+            {showPathRow && (
+              <div className="flex items-center gap-2 text-[11px] text-zinc-500 pl-9">
+                <Network className="w-3 h-3 shrink-0" strokeWidth={2} />
+                <span className="font-mono text-zinc-400">{peer.pathLocalAddr || "—"}</span>
+                <span className="text-zinc-600">↔</span>
+                <span className="font-mono text-zinc-400">{peer.pathRemoteAddr || "—"}</span>
+                <span className={`ml-1 ${pathToneClass}`}>· {path.label}</span>
+              </div>
+            )}
+            {bwError && (
+              <div className="text-[11px] text-rose-400 pl-9 mt-1">{bwError}</div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }

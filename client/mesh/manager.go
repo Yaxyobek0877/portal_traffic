@@ -218,6 +218,13 @@ type Manager struct {
 
 	events chan MeshEvent
 
+	// Bandwidth-probe state. bwIn tracks sessions where we are the
+	// receiver (a peer is streaming us bytes); bwOut tracks ones we
+	// initiated and are waiting for an ack on. See bandwidth.go.
+	bwMu  sync.Mutex
+	bwIn  map[string]*bwInbound
+	bwOut map[string]bwOutboundAckCh
+
 	closeOnce sync.Once
 	closed    chan struct{}
 	wg        sync.WaitGroup

@@ -30,6 +30,17 @@ export type PeerView = {
   transport: "" | "direct" | "relay";
   transportLocal: string;
   transportRemote: string;
+  // Selected ICE pair addresses (e.g. "192.168.1.53:54538"). Lets
+  // the UI tell LAN apart from internet apart from TURN.
+  pathLocalAddr: string;
+  pathRemoteAddr: string;
+};
+
+export type BandwidthResult = {
+  peerId: string;
+  mbps: number;
+  bytesSent: number;
+  durationMs: number;
 };
 
 export type ChatMessage = {

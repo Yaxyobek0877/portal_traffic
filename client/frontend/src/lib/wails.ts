@@ -15,6 +15,7 @@ import type {
   LocalListener,
   TurnTestResult,
   CloudflareTurnConfig,
+  BandwidthResult,
 } from "../types";
 
 type Bridge = {
@@ -48,6 +49,7 @@ type Bridge = {
   GetCloudflareTurn: () => Promise<CloudflareTurnConfig>;
   SetCloudflareTurn: (c: CloudflareTurnConfig) => Promise<void>;
   TestCloudflareTurn: () => Promise<TurnTestResult>;
+  MeasureBandwidth: (peerId: string) => Promise<BandwidthResult>;
 
   // Updater + crash reporting (added v0.4.0)
   AppVersion: () => Promise<string>;
@@ -166,6 +168,12 @@ const stub: Bridge = {
     hadRelay: false,
     gatherMs: 0,
     urls: [],
+  }),
+  MeasureBandwidth: async (peerId: string) => ({
+    peerId,
+    mbps: 0,
+    bytesSent: 0,
+    durationMs: 0,
   }),
   AppVersion: async () => "0.4.0-preview",
   CheckForUpdate: async () => ({

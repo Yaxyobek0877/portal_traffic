@@ -61,6 +61,11 @@ type PeerView struct {
 	Transport       string `json:"transport"`        // "direct" | "relay" | "" (unknown)
 	TransportLocal  string `json:"transportLocal"`   // raw ICE type — "host" | "srflx" | "prflx" | "relay"
 	TransportRemote string `json:"transportRemote"`  // raw ICE type from the other side
+
+	// Selected-pair addresses ("192.168.1.53:54538"). Lets the UI
+	// answer "is this LAN or internet?" — both 192.168.x.x means LAN.
+	PathLocalAddr  string `json:"pathLocalAddr"`
+	PathRemoteAddr string `json:"pathRemoteAddr"`
 }
 
 // ServiceView is a peer's announced service.
@@ -496,6 +501,37 @@ func (a *App) CurrentPortal() PortalView {
 		return PortalView{}
 	}
 	return portalToView(m.Portal())
+}
+
+// BandwidthResult mirrors mesh.BandwidthResult for the JSON wire to
+// the frontend. Receiver-measured Mbps is the honest number.
+type BandwidthResult struct {
+	PeerID     string  `json:"peerId"`
+	Mbps       float64 `json:"mbps"`
+	BytesSent  int64   `json:"bytesSent"`
+	DurationMs float64 `json:"durationMs"`
+}
+
+// MeasureBandwidth runs a 3s active probe with the named peer and
+// returns the receiver-measured throughput. Blocks; the UI should
+// call this from a worker context (Wails handles that automatically).
+func (a *App) MeasureBandwidth(peerID string) (BandwidthResult, error) {
+	a.mu.RLock()
+	m := a.mesh
+	a.mu.RUnlock()
+	if m == nil {
+		return BandwidthResult{}, errors.New("portal yo'q")
+	}
+	r, err := m.MeasureBandwidth(peerID)
+	if err != nil {
+		return BandwidthResult{}, err
+	}
+	return BandwidthResult{
+		PeerID:     r.PeerID,
+		Mbps:       r.Mbps,
+		BytesSent:  r.BytesSent,
+		DurationMs: r.DurationMs,
+	}, nil
 }
 
 // Peers returns a snapshot of currently tracked peers.
@@ -1129,6 +1165,7 @@ func peerToView(p *mesh.Peer) PeerView {
 		svc = append(svc, ServiceView{Name: s.Name, Protocol: s.Protocol, Port: s.Port})
 	}
 	localTyp, remoteTyp := p.SelectedPair()
+	localAddr, remoteAddr := p.SelectedPairAddrs()
 	transport := ""
 	if localTyp != "" || remoteTyp != "" {
 		if localTyp == "relay" || remoteTyp == "relay" {
@@ -1150,5 +1187,7 @@ func peerToView(p *mesh.Peer) PeerView {
 		Transport:       transport,
 		TransportLocal:  localTyp,
 		TransportRemote: remoteTyp,
+		PathLocalAddr:   localAddr,
+		PathRemoteAddr:  remoteAddr,
 	}
 }

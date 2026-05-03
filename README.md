@@ -125,6 +125,37 @@ TURN per [NAT-VA-TURN.md](NAT-VA-TURN.md).
 
 ---
 
+## 🎮 O'yin serverlari va dev URL'lar / Game servers and dev URLs
+
+Portal har bir peer'ga **ulashilgan port'larga to'g'ridan-to'g'ri
+ulanish** beradi — router sozlamasi yoki port-forwarding kerak emas.
+Mesh ichida 16 tagacha qurilma. Mana tipik foydalanish:
+
+| Stsenariy / Scenario | Host port | Mehmonlar nima qiladi / Guests |
+| --- | :---: | --- |
+| **CS2** dedicated server | `27015` (TCP+UDP) | "Servislar → Boshqa peerlardagi servislar" → `Ulash` → CS2 ichida `connect 127.0.0.1:27015` |
+| **Minecraft** Java | `25565` (TCP) | Same — `Ulash` → MC client'da Direct Connect: `127.0.0.1:25565` |
+| **Dev URL** (Vite, Django) | `5173` / `8000` | `Ulash` → brauzerda `http://127.0.0.1:5173` |
+| **SSH** | `22` (TCP) | `ssh -p 22 user@127.0.0.1` |
+
+**Bir kishi ochsa, hammasi o'ynay oladimi?** — Ha. Host portni "Och"
+deb ulashsa, mesh'dagi har bir peer aynan o'sha servisga ulanadi.
+CS2 misolida: bir kishi `srcds_run -game cs -port 27015` ishga tushiradi,
+"Servislar"da `27015`'ni ochadi, qolganlar "Ulash"ni bosib o'z CS2
+client'ida `connect 127.0.0.1:27015` qiladi.
+
+**Hozirgi cheklov**: GUI'dagi "Och" tugmasi v0.4.0'da **TCP-only**
+(Minecraft 25565, SSH 22, Vite 5173 va boshqa TCP servislar darhol
+ishlaydi). UDP'ga (CS2 27015, ko'p multiplayer o'yinlar) `proxy`
+qatlamida ish bor — `DialUDP` API mavjud, lekin GUI orqali hali
+ulanmagan; v0.5.0 reja'sida.
+
+Latency: PeerTable'dagi **Tezligi** tugmasi 3 sekundlik bandwidth
+probe yuradi va peer'gacha haqiqiy Mbps'ni ko'rsatadi. ⚡P2P
+(LAN/srflx) odatda <30 ms RTT; ☁️TURN +30–80 ms qo'shadi.
+
+---
+
 ## 🛰 Trafik qayerdan oqadi / Where the traffic flows
 
 Handshake bitgandan keyin Portal client'i ICE algoritmi tanlagan

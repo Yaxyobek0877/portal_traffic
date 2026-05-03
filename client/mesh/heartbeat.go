@@ -87,6 +87,12 @@ func (m *Manager) routeMessage(p *Peer, msg peer.Message) {
 	p.bytesRecv.Add(int64(len(msg.Raw)))
 	switch msg.Channel {
 	case peer.ChanControl:
+		// Binary frames on control with the bw magic header are
+		// bandwidth-probe payload — count and drop, never dispatch.
+		if !msg.Text && len(msg.Raw) >= 2 && msg.Raw[0] == bwMagic0 && msg.Raw[1] == bwMagic1 {
+			m.handleBandwidthChunk(p.ID, msg.Raw)
+			return
+		}
 		m.handleControl(p, msg)
 	case peer.ChanChat:
 		m.handleChat(p, msg)
@@ -113,6 +119,11 @@ func (m *Manager) handleControl(p *Peer, msg peer.Message) {
 		return
 	}
 	t, _ := msg.JSON["type"].(string)
+	switch t {
+	case "bw_start", "bw_done", "bw_ack":
+		m.handleBandwidthControl(p, t, msg.JSON)
+		return
+	}
 	switch t {
 	case protocol.TypePing:
 		echo, _ := msg.JSON["ts"].(float64)
@@ -201,4 +212,15 @@ func (p *Peer) SelectedPair() (local, remote string) {
 		return "", ""
 	}
 	return p.conn.SelectedPair()
+}
+
+// SelectedPairAddrs returns "ip:port" for each end of the selected
+// path (e.g. "192.168.1.53:54538" ↔ "192.168.1.42:60012"). Useful
+// for showing "are we on the same Wi-Fi or coming through the
+// internet?" in the UI.
+func (p *Peer) SelectedPairAddrs() (local, remote string) {
+	if p.conn == nil {
+		return "", ""
+	}
+	return p.conn.SelectedPairAddrs()
 }

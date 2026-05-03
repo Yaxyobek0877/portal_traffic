@@ -146,9 +146,16 @@ type Connection struct {
 	// selected ICE candidate pair types ("host" | "srflx" | "prflx" |
 	// "relay"). Empty until ICE picks a pair. local=="relay" or
 	// remote=="relay" means traffic is going through TURN.
-	selMu        sync.Mutex
-	selLocalTyp  string
-	selRemoteTyp string
+	//
+	// We also keep the candidate addresses ("192.168.1.53:54538") so the
+	// UI can answer "are we on the same Wi-Fi or going over the
+	// internet?" — host pairs both being 192.168.x.x is a clear LAN tell,
+	// srflx pairs are real internet traversal.
+	selMu         sync.Mutex
+	selLocalTyp   string
+	selRemoteTyp  string
+	selLocalAddr  string
+	selRemoteAddr string
 
 	// outgoing local ICE candidates: surfaced to the caller via the
 	// LocalICE channel so they can be relayed through signaling.
@@ -206,13 +213,19 @@ func New(cfg Config) (*Connection, error) {
 					c.selMu.Lock()
 					if pair.Local != nil {
 						c.selLocalTyp = pair.Local.Typ.String()
+						c.selLocalAddr = fmt.Sprintf("%s:%d", pair.Local.Address, pair.Local.Port)
 					}
 					if pair.Remote != nil {
 						c.selRemoteTyp = pair.Remote.Typ.String()
+						c.selRemoteAddr = fmt.Sprintf("%s:%d", pair.Remote.Address, pair.Remote.Port)
 					}
 					local, remote := c.selLocalTyp, c.selRemoteTyp
+					localAddr, remoteAddr := c.selLocalAddr, c.selRemoteAddr
 					c.selMu.Unlock()
-					c.logger.Info("ice selected pair", "local", local, "remote", remote)
+					c.logger.Info("ice selected pair",
+						"local", local, "local_addr", localAddr,
+						"remote", remote, "remote_addr", remoteAddr,
+					)
 					select {
 					case <-c.closed:
 					case c.transportCh <- struct{}{}:
@@ -495,6 +508,20 @@ func (c *Connection) SendBinary(channel string, data []byte) error {
 	return dc.Send(data)
 }
 
+// BufferedAmount returns the SCTP outbound buffer for the named
+// channel — bytes pion has accepted from us but hasn't yet pushed
+// onto the wire. Used by the bandwidth probe to apply backpressure;
+// returns 0 if the channel doesn't exist.
+func (c *Connection) BufferedAmount(name string) uint64 {
+	c.mu.Lock()
+	dc, ok := c.channels[name]
+	c.mu.Unlock()
+	if !ok {
+		return 0
+	}
+	return dc.BufferedAmount()
+}
+
 // ChannelOpen reports whether the named channel is open for sending.
 func (c *Connection) ChannelOpen(name string) bool {
 	c.mu.Lock()
@@ -548,6 +575,15 @@ func (c *Connection) SelectedPair() (local, remote string) {
 	c.selMu.Lock()
 	defer c.selMu.Unlock()
 	return c.selLocalTyp, c.selRemoteTyp
+}
+
+// SelectedPairAddrs returns the actual host:port of each side of the
+// selected ICE pair (e.g. "192.168.1.53:54538"). Empty strings until
+// ICE has nominated a pair.
+func (c *Connection) SelectedPairAddrs() (local, remote string) {
+	c.selMu.Lock()
+	defer c.selMu.Unlock()
+	return c.selLocalAddr, c.selRemoteAddr
 }
 
 // TransportChanges fires whenever the ICE selected-pair changes —
