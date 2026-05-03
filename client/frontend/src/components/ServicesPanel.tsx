@@ -246,10 +246,10 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
   );
 }
 
-// DialedPill is shown after a successful Dial — the local listener
-// address the user can paste into a browser, ssh, or any third-party
-// app to reach the remote service. Includes a one-click copy because
-// most users will want to immediately use the address.
+// DialedPill is shown after a successful Dial. The address shown is a
+// LOCAL listener on this machine; connecting to it gets forwarded
+// through the mesh to the peer's exposed port. We label it "lokal" so
+// users don't mistake it for the remote endpoint.
 function DialedPill({ addr }: { addr: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -262,9 +262,10 @@ function DialedPill({ addr }: { addr: string }) {
   return (
     <button
       onClick={copy}
-      className="group flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 transition-colors"
-      title="Nusxa olish"
+      className="group flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 transition-colors shrink-0"
+      title={`Lokal alias — shu manzilga ulansangiz, mesh orqali peer servisiga yo'naltiriladi. Nusxa olish: ${addr}`}
     >
+      <span className="text-[10px] text-emerald-300/60 uppercase tracking-wider">lokal</span>
       <span className="font-mono text-emerald-300 text-[11px]">{addr}</span>
       {copied ? (
         <Check className="w-3 h-3 text-emerald-300" strokeWidth={2.5} />

@@ -892,14 +892,24 @@ func (a *App) UnexposeService(port int) error {
 }
 
 // DialService opens a local TCP listener that pumps connections to
-// peerID's exposed remotePort. localPort 0 means OS-pick. Returns the
-// resolved local addr (e.g. "127.0.0.1:51234") so the UI can show it.
+// peerID's exposed remotePort. localPort 0 means "match remotePort if
+// free, otherwise let the OS pick" — this way the local alias mirrors
+// the remote address (127.0.0.1:5000 for a remote :5000) which is what
+// users expect when they exposed e.g. a Minecraft server on :25565.
+// Returns the resolved local addr ("127.0.0.1:5000") so the UI shows it.
 func (a *App) DialService(peerID string, remotePort, localPort int) (string, error) {
 	a.mu.RLock()
 	f := a.fwd
 	a.mu.RUnlock()
 	if f == nil {
 		return "", errors.New("portal yo'q")
+	}
+	if localPort == 0 {
+		ln, err := f.DialPreferringPort(a.ctx, peerID, remotePort)
+		if err != nil {
+			return "", err
+		}
+		return ln.Addr().String(), nil
 	}
 	addr := fmt.Sprintf("127.0.0.1:%d", localPort)
 	ln, err := f.Dial(a.ctx, peerID, remotePort, addr)

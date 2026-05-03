@@ -233,6 +233,21 @@ func (f *Forwarder) isExposed(port int) bool {
 // remote peer's exposed port.
 // ----------------------------------------------------------------------------
 
+// DialPreferringPort first tries to bind 127.0.0.1:<remotePort>; on any
+// listen failure (most commonly the port is already in use locally) it
+// falls back to OS-picked. Use this when the user hasn't asked for a
+// specific local port — most people expect the local alias to mirror
+// the remote port (127.0.0.1:5000 ↔ peer:5000) and will only see a
+// random :47362 when 5000 is genuinely taken on their side.
+func (f *Forwarder) DialPreferringPort(ctx context.Context, remotePeerID string, remotePort int) (net.Listener, error) {
+	if remotePort > 0 {
+		if ln, err := f.Dial(ctx, remotePeerID, remotePort, fmt.Sprintf("127.0.0.1:%d", remotePort)); err == nil {
+			return ln, nil
+		}
+	}
+	return f.Dial(ctx, remotePeerID, remotePort, "127.0.0.1:0")
+}
+
 // Dial opens a local TCP listener on `localAddr` (e.g. "127.0.0.1:0"
 // for an OS-chosen port). Every accepted connection on that listener
 // is multiplexed over the proxy channel as a fresh stream targeting

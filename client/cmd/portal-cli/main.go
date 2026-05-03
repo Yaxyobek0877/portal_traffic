@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -163,10 +164,17 @@ func applyDial(ctx context.Context, fwd *proxy.Forwarder, spec string) error {
 		return err
 	}
 	localPort := parts[3]
-	if !strings.Contains(localPort, ":") {
-		localPort = "127.0.0.1:" + localPort
+	var ln net.Listener
+	if localPort == "0" || localPort == "" {
+		// Match the GUI behaviour: prefer 127.0.0.1:<remotePort>, fall
+		// back to OS-pick if it's busy.
+		ln, err = fwd.DialPreferringPort(ctx, parts[1], remotePort)
+	} else {
+		if !strings.Contains(localPort, ":") {
+			localPort = "127.0.0.1:" + localPort
+		}
+		ln, err = fwd.Dial(ctx, parts[1], remotePort, localPort)
 	}
-	ln, err := fwd.Dial(ctx, parts[1], remotePort, localPort)
 	if err != nil {
 		return err
 	}
