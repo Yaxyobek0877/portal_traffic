@@ -49,6 +49,9 @@ client/.wails/
 # wailsjs/go is regenerated from app.go on every `wails build` — runtime/ is static
 client/frontend/wailsjs/go/
 
+# Claude Code per-developer config (plugins, etc.) — like .vscode/, not project-wide.
+.claude/
+
 # --- Android / Gradle (mobile/) ------------------------------------------
 # Keep the source tree of the mobile project in git, but never the
 # build/cache/IDE state that regenerates on every build.

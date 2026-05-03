@@ -225,6 +225,14 @@ type Manager struct {
 	bwIn  map[string]*bwInbound
 	bwOut map[string]bwOutboundAckCh
 
+	// serverICE is the STUN/TURN list the signaling server pushed in
+	// PortalCreated / PortalJoined — typically short-lived TURN
+	// credentials minted server-side. Lets a freshly-installed peer
+	// behind symmetric NAT connect without anyone touching Settings.
+	// Refreshed on every portal-create / portal-join so creds are
+	// always within their TTL. Guarded by mu.
+	serverICE []webrtc.ICEServer
+
 	closeOnce sync.Once
 	closed    chan struct{}
 	wg        sync.WaitGroup
@@ -533,10 +541,12 @@ func capDelay(d time.Duration) time.Duration {
 func (m *Manager) handleSignalingEvent(ev signaling.Event) {
 	switch {
 	case ev.Created != nil:
+		m.applyServerICE(ev.Created.ICEServers)
 		m.onPortalReady(ev.Created.PortalID, ev.Created.Code, ev.Created.PeerID,
 			ev.Created.VirtualIP, ev.Created.PeerID, true, nil)
 
 	case ev.Joined != nil:
+		m.applyServerICE(ev.Joined.ICEServers)
 		// Owner of the existing peer list is whichever peer says is_owner.
 		var ownerID string
 		for _, p := range ev.Joined.Peers {
@@ -645,7 +655,7 @@ func (m *Manager) onPeerJoinedWithRoster(peerID, nick, vip string, weAreJoiner b
 		LocalPeerID:  m.myPeerID,
 		RemotePeerID: peerID,
 		Role:         role,
-		ICEServers:   m.cfg.ICEServers,
+		ICEServers:   m.iceServersForPeer(),
 		Logger:       m.logger,
 	})
 	if err != nil {
@@ -1060,6 +1070,54 @@ func (m *Manager) MyPeerID() string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.myPeerID
+}
+
+// applyServerICE replaces the cached server-issued ICE list with what
+// just arrived in PortalCreated / PortalJoined. Empty list = server
+// didn't include any (e.g. older signaling server) — we leave whatever
+// we had, since it might still be in TTL.
+func (m *Manager) applyServerICE(servers []protocol.ICEServer) {
+	if len(servers) == 0 {
+		return
+	}
+	out := make([]webrtc.ICEServer, 0, len(servers))
+	for _, s := range servers {
+		if len(s.URLs) == 0 {
+			continue
+		}
+		out = append(out, webrtc.ICEServer{
+			URLs:       s.URLs,
+			Username:   s.Username,
+			Credential: s.Credential,
+		})
+	}
+	m.mu.Lock()
+	m.serverICE = out
+	m.mu.Unlock()
+	m.logger.Info("server ICE applied", "count", len(out))
+}
+
+// iceServersForPeer is the merged list each new peer.Connection
+// receives. Order matters for ICE: user-configured first (highest
+// priority — they paid for it), then server-issued (works out of
+// the box for everyone), then defaults (STUN-only fallback).
+//
+// pion deduplicates by URL when building the agent, so duplicates
+// across the three sources are harmless.
+func (m *Manager) iceServersForPeer() []webrtc.ICEServer {
+	m.mu.RLock()
+	server := m.serverICE
+	m.mu.RUnlock()
+
+	cfg := m.cfg.ICEServers
+	if cfg == nil {
+		cfg = DefaultICEServers
+	}
+
+	out := make([]webrtc.ICEServer, 0, len(cfg)+len(server))
+	out = append(out, cfg...)
+	out = append(out, server...)
+	return out
 }
 
 // ----------------------------------------------------------------------------

@@ -189,25 +189,49 @@ type NickSetVisibility struct {
 // Server → Client messages
 // ----------------------------------------------------------------------------
 
+// ICEServer is one entry in the STUN/TURN configuration the client
+// uses to build its WebRTC connection. Mirrors webrtc.ICEServer so
+// servers can hand a fully-formed list to clients (e.g. short-lived
+// Cloudflare TURN credentials freshly minted per session).
+//
+// All fields except URLs are optional — STUN-only entries leave
+// Username/Credential empty.
+type ICEServer struct {
+	URLs       []string `json:"urls"`
+	Username   string   `json:"username,omitempty"`
+	Credential string   `json:"credential,omitempty"`
+}
+
 // PortalCreated confirms a successful portal.create.
+//
+// ICEServers, when non-empty, is the signaling server's recommended
+// STUN/TURN configuration for this session. Clients that don't have
+// a user-configured TURN should prefer this list — that's how a
+// freshly-installed peer behind symmetric NAT manages to connect
+// without anyone touching Settings.
 type PortalCreated struct {
-	Type      string `json:"type"`
-	PortalID  string `json:"portal_id"`
-	Code      string `json:"code"`
-	PeerID    string `json:"peer_id"`
-	VirtualIP string `json:"virtual_ip"`
-	Capacity  int    `json:"capacity"`
+	Type       string      `json:"type"`
+	PortalID   string      `json:"portal_id"`
+	Code       string      `json:"code"`
+	PeerID     string      `json:"peer_id"`
+	VirtualIP  string      `json:"virtual_ip"`
+	Capacity   int         `json:"capacity"`
+	ICEServers []ICEServer `json:"ice_servers,omitempty"`
 }
 
 // PortalJoined confirms a successful portal.join (or accepted join-by-nick)
 // and provides the existing peer roster so the joiner can initiate WebRTC
 // handshakes with each one.
+//
+// ICEServers carries the same server-recommended STUN/TURN list as
+// PortalCreated — see that type's doc.
 type PortalJoined struct {
-	Type      string     `json:"type"`
-	PortalID  string     `json:"portal_id"`
-	PeerID    string     `json:"peer_id"`
-	VirtualIP string     `json:"virtual_ip"`
-	Peers     []PeerInfo `json:"peers"`
+	Type       string      `json:"type"`
+	PortalID   string      `json:"portal_id"`
+	PeerID     string      `json:"peer_id"`
+	VirtualIP  string      `json:"virtual_ip"`
+	Peers      []PeerInfo  `json:"peers"`
+	ICEServers []ICEServer `json:"ice_servers,omitempty"`
 }
 
 // PortalPeerJoined notifies existing members that a new peer has joined.
