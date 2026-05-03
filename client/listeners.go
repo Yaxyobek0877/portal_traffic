@@ -10,6 +10,56 @@ import (
 	"strings"
 )
 
+// macosSystemProcesses are macOS daemons that hold standard ports the
+// user almost never wants to expose to a portal mesh — ControlCenter
+// owns :5000/:7000 for AirPlay Receiver, sharingd handles iCloud/AirDrop,
+// rapportd is Continuity, etc. We hide these from the "detected ports"
+// list so a one-click expose doesn't accidentally share macOS internals.
+var macosSystemProcesses = map[string]bool{
+	"ControlCenter":     true, // AirPlay receiver — :5000/:7000
+	"mDNSResponder":     true, // Bonjour — :5353
+	"rapportd":          true, // Continuity / Handoff
+	"sharingd":          true, // AirDrop / file sharing
+	"identityservicesd": true, // iMessage / FaceTime
+	"AppleAccountSer":   true, // iCloud (truncated by macOS to 15 chars in some tools)
+	"AppleAccountServer": true,
+	"remoted":           true, // remote-management daemon
+	"airportd":          true, // Wi-Fi management
+	"nehelper":          true, // Network Extension framework
+	"launchd":           true, // PID 1
+	"cloudd":            true, // CloudKit daemon
+	"distnoted":         true,
+	"trustd":            true, // certificate trust
+	"corespeechd":       true, // Siri
+	"avconferenced":     true, // FaceTime audio/video
+	"WiFiAgent":         true,
+	"replicatord":       true,
+	"mdworker":          true, // Spotlight
+	"launchservicesd":   true,
+	"locationd":         true,
+	"netbiosd":          true,
+	"adprivacyd":        true,
+	"akd":               true, // AppleID daemon
+	"bluetoothd":        true,
+	"coreaudiod":        true,
+	"airplayhelperd":    true,
+	"appstoreagent":     true,
+}
+
+func isSystemProcess(cmd string) bool {
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	if macosSystemProcesses[cmd] {
+		return true
+	}
+	// Anything starting with "com.apple." is an Apple LaunchAgent/Daemon.
+	if strings.HasPrefix(cmd, "com.apple.") {
+		return true
+	}
+	return false
+}
+
 // localListenersCommand returns an os/exec command and a parser
 // function appropriate for the current platform. Returns (nil, nil)
 // if the platform isn't supported.
@@ -54,6 +104,9 @@ func parseLsofF(out string) []LocalListener {
 			// addr looks like: *:8000  127.0.0.1:6379  [::1]:5432
 			port := portFromAddr(addr)
 			if port == 0 {
+				continue
+			}
+			if isSystemProcess(cmd) {
 				continue
 			}
 			rows = append(rows, LocalListener{

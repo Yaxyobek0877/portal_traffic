@@ -222,7 +222,7 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                         <span className="truncate flex-1 min-w-0">{s.name}</span>
                         <span className="font-mono text-zinc-500 shrink-0">{s.protocol}:{s.port}</span>
                         {local ? (
-                          <DialedPill addr={local} />
+                          <DialedPill addr={local} expectedPort={s.port} />
                         ) : (
                           <button
                             disabled={dialing?.peerId === p.peerId && dialing?.port === s.port}
@@ -250,8 +250,16 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
 // LOCAL listener on this machine; connecting to it gets forwarded
 // through the mesh to the peer's exposed port. We label it "lokal" so
 // users don't mistake it for the remote endpoint.
-function DialedPill({ addr }: { addr: string }) {
+//
+// `expectedPort` is the remote port. We try to bind a matching local
+// port (so 127.0.0.1:5000 mirrors peer:5000); when that fails because
+// the user already has something on the same port locally, the proxy
+// falls back to OS-pick — we surface that mismatch with an amber tone
+// so the user knows the random number isn't a bug.
+function DialedPill({ addr, expectedPort }: { addr: string; expectedPort: number }) {
   const [copied, setCopied] = useState(false);
+  const localPort = parseInt(addr.split(":").pop() || "0", 10);
+  const portMatches = localPort === expectedPort;
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(addr);
@@ -259,18 +267,28 @@ function DialedPill({ addr }: { addr: string }) {
       setTimeout(() => setCopied(false), 1400);
     } catch {}
   };
+  const tint = portMatches
+    ? "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300"
+    : "bg-amber-500/15 hover:bg-amber-500/25 text-amber-300";
+  const labelTint = portMatches ? "text-emerald-300/60" : "text-amber-300/70";
+  const iconTint = portMatches ? "text-emerald-300/60 group-hover:text-emerald-300" : "text-amber-300/70 group-hover:text-amber-300";
+  const title = portMatches
+    ? `Lokal alias — shu manzilga ulansangiz, mesh orqali peer servisiga yo'naltiriladi. Nusxa olish: ${addr}`
+    : `Lokal alias. Sizda :${expectedPort} band edi — Portal :${localPort} ni tanladi. Mesh orqali peer servisiga yo'naltiriladi. Nusxa olish: ${addr}`;
   return (
     <button
       onClick={copy}
-      className="group flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 transition-colors shrink-0"
-      title={`Lokal alias — shu manzilga ulansangiz, mesh orqali peer servisiga yo'naltiriladi. Nusxa olish: ${addr}`}
+      className={`group flex items-center gap-1.5 px-2 py-1 rounded transition-colors shrink-0 ${tint}`}
+      title={title}
     >
-      <span className="text-[10px] text-emerald-300/60 uppercase tracking-wider">lokal</span>
-      <span className="font-mono text-emerald-300 text-[11px]">{addr}</span>
+      <span className={`text-[10px] uppercase tracking-wider ${labelTint}`}>
+        {portMatches ? "lokal" : "lokal*"}
+      </span>
+      <span className="font-mono text-[11px]">{addr}</span>
       {copied ? (
-        <Check className="w-3 h-3 text-emerald-300" strokeWidth={2.5} />
+        <Check className="w-3 h-3" strokeWidth={2.5} />
       ) : (
-        <Copy className="w-3 h-3 text-emerald-300/60 group-hover:text-emerald-300" strokeWidth={2} />
+        <Copy className={`w-3 h-3 ${iconTint}`} strokeWidth={2} />
       )}
     </button>
   );
