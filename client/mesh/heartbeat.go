@@ -192,3 +192,13 @@ func (p *Peer) BytesSent() int64 { return p.bytesSent.Load() }
 // BytesRecv returns the cumulative encrypted bytes we've received
 // from this peer.
 func (p *Peer) BytesRecv() int64 { return p.bytesRecv.Load() }
+
+// SelectedPair returns the ICE candidate types of the active path.
+// Empty before ICE nominates. Either side being "relay" means the
+// path runs through TURN.
+func (p *Peer) SelectedPair() (local, remote string) {
+	if p.conn == nil {
+		return "", ""
+	}
+	return p.conn.SelectedPair()
+}

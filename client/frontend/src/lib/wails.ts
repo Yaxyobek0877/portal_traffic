@@ -48,6 +48,38 @@ type Bridge = {
   GetCloudflareTurn: () => Promise<CloudflareTurnConfig>;
   SetCloudflareTurn: (c: CloudflareTurnConfig) => Promise<void>;
   TestCloudflareTurn: () => Promise<TurnTestResult>;
+
+  // Updater + crash reporting (added v0.4.0)
+  AppVersion: () => Promise<string>;
+  CheckForUpdate: (refresh: boolean) => Promise<UpdateResult>;
+  OpenReleasePage: (url: string) => Promise<void>;
+  CrashReports: () => Promise<CrashReport[]>;
+  OpenCrashFolder: () => Promise<void>;
+  ClearCrashReports: () => Promise<void>;
+};
+
+export type UpdateResult = {
+  available: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  releaseUrl: string;
+  releaseNotes: string;
+  publishedAt: string;
+  assetForOs: string;
+  checkedAt: string;
+  error?: string;
+};
+
+export type CrashReport = {
+  id: string;
+  capturedAt: string;
+  portalVersion: string;
+  goVersion: string;
+  os: string;
+  arch: string;
+  panicMessage: string;
+  stack: string;
+  goroutineCount: number;
 };
 
 declare global {
@@ -135,6 +167,21 @@ const stub: Bridge = {
     gatherMs: 0,
     urls: [],
   }),
+  AppVersion: async () => "0.4.0-preview",
+  CheckForUpdate: async () => ({
+    available: false,
+    currentVersion: "0.4.0-preview",
+    latestVersion: "",
+    releaseUrl: "",
+    releaseNotes: "",
+    publishedAt: "",
+    assetForOs: "",
+    checkedAt: new Date().toISOString(),
+  }),
+  OpenReleasePage: async () => {},
+  CrashReports: async () => [],
+  OpenCrashFolder: async () => {},
+  ClearCrashReports: async () => {},
 };
 
 export const app: Bridge =

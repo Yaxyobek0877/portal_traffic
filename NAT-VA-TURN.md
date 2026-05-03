@@ -72,7 +72,7 @@ Establishment)** ishlatadi. Har peer 3 xil "kandidat" yig'adi:
 | --- | --- | --- |
 | `host` | Lokal IP (192.168.x.x) | Bir LAN ichida |
 | `srflx` | Tashqi IP STUN orqali | Cone yoki Restricted NAT |
-| `relay` | TURN server orqali | Doim, lekin sekin va pulli |
+| `relay` | TURN server orqali | Doim ishlaydi (Cloudflare TURN bepul; o'z `coturn`'ingiz ham mumkin); P2P'dan biroz sekinroq |
 
 **Loglarda ko'rishingiz mumkin:**
 

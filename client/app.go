@@ -22,12 +22,14 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"portal_traffic_client/crashreport"
 	"portal_traffic_client/mesh"
 	"portal_traffic_client/nat"
 	"portal_traffic_client/proxy"
 	"portal_traffic_client/signaling"
 	"portal_traffic_client/storage"
 	"portal_traffic_client/transfer"
+	"portal_traffic_client/updater"
 )
 
 // PortalView is the JSON projection of the local portal context for
@@ -52,6 +54,13 @@ type PeerView struct {
 	BytesSent int64          `json:"bytesSent"`
 	BytesRecv int64          `json:"bytesRecv"`
 	Services  []ServiceView  `json:"services"`
+
+	// Transport tells the user whether traffic on this peer is going
+	// directly (host/srflx — peer-to-peer) or via a TURN relay. Empty
+	// strings until ICE has nominated a pair.
+	Transport       string `json:"transport"`        // "direct" | "relay" | "" (unknown)
+	TransportLocal  string `json:"transportLocal"`   // raw ICE type — "host" | "srflx" | "prflx" | "relay"
+	TransportRemote string `json:"transportRemote"`  // raw ICE type from the other side
 }
 
 // ServiceView is a peer's announced service.
@@ -118,6 +127,16 @@ type App struct {
 	// cfTurnCache caches Cloudflare TURN credentials between
 	// CreatePortal/JoinPortal calls. See cloudflareturn.go.
 	cfTurnCache cloudflareTurnCache
+
+	// crashCatcher writes Go panics to ~/.portal/crashes/. Set by main()
+	// before Startup runs.
+	crashCatcher *crashreport.Catcher
+
+	// updateCache stores the most recent CheckForUpdate result so the UI
+	// can render it without forcing a network call on every render.
+	updateMu       sync.Mutex
+	updateCache    updater.Result
+	updateCacheTTL time.Time
 }
 
 // NewApp constructs the app singleton; main.go binds it.
@@ -665,6 +684,93 @@ func splitTurnURLsForTest(s string) []string {
 	return out
 }
 
+// AppVersion returns the running Portal version (the const declared in
+// main.go). Surfaced in Settings → About.
+func (a *App) AppVersion() string { return Version }
+
+// CheckForUpdate polls GitHub Releases for a newer version and returns
+// what it found. Result.Available is true only when a strictly newer
+// version is published. Errors (offline, rate-limit) come back via
+// Result.Error so the UI can render them without try/catch.
+//
+// 24-hour in-memory cache: repeated calls within that window return
+// the previous result without a network hit. Pass refresh=true to
+// force a fresh check.
+func (a *App) CheckForUpdate(refresh bool) updater.Result {
+	a.updateMu.Lock()
+	if !refresh && time.Now().Before(a.updateCacheTTL) && a.updateCache.CheckedAt.After(time.Time{}) {
+		out := a.updateCache
+		a.updateMu.Unlock()
+		return out
+	}
+	a.updateMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	res := updater.CheckForUpdate(ctx, updater.Config{CurrentVersion: Version})
+
+	a.updateMu.Lock()
+	a.updateCache = res
+	a.updateCacheTTL = time.Now().Add(24 * time.Hour)
+	a.updateMu.Unlock()
+
+	a.logger.Info("update check",
+		"current", res.CurrentVersion,
+		"latest", res.LatestVersion,
+		"available", res.Available,
+		"err", res.Error,
+	)
+	return res
+}
+
+// OpenReleasePage opens the user's browser at the latest release page
+// (or the repo's releases overview as a fallback). Returns nothing —
+// the OS handles it.
+func (a *App) OpenReleasePage(url string) {
+	if url == "" {
+		url = "https://github.com/Yaxyobek0877/portal_traffic/releases/latest"
+	}
+	runtime.BrowserOpenURL(a.ctx, url)
+}
+
+// CrashReports lists all locally-captured crash reports, newest first.
+// Reports live in ~/.portal/crashes/ and contain only non-PII data
+// (panic message, stack with $HOME redacted, OS, version).
+func (a *App) CrashReports() []crashreport.Report {
+	if a.crashCatcher == nil {
+		return []crashreport.Report{}
+	}
+	reports, err := a.crashCatcher.List()
+	if err != nil {
+		a.logger.Warn("crashreport list failed", "err", err)
+		return []crashreport.Report{}
+	}
+	if reports == nil {
+		return []crashreport.Report{}
+	}
+	return reports
+}
+
+// OpenCrashFolder opens the OS file manager at the crashes directory.
+func (a *App) OpenCrashFolder() error {
+	if a.crashCatcher == nil {
+		return errors.New("crash catcher unavailable")
+	}
+	dir := a.crashCatcher.Dir()
+	_ = os.MkdirAll(dir, 0o700)
+	runtime.BrowserOpenURL(a.ctx, "file://"+dir)
+	return nil
+}
+
+// ClearCrashReports deletes all crash reports. UI is responsible for
+// the confirmation prompt.
+func (a *App) ClearCrashReports() error {
+	if a.crashCatcher == nil {
+		return nil
+	}
+	return a.crashCatcher.Clear()
+}
+
 // LogLines returns the last `n` lines of the in-memory log ring.
 // Used by Settings → Diagnostika to surface what the app has been
 // doing without having to dig into the on-disk file.
@@ -953,6 +1059,9 @@ func (a *App) relayEvent(ev mesh.MeshEvent) {
 	case mesh.EventPeerRTT:
 		runtime.EventsEmit(a.ctx, "peer:rtt", peerToView(ev.Peer))
 
+	case mesh.EventPeerTransport:
+		runtime.EventsEmit(a.ctx, "peer:transport", peerToView(ev.Peer))
+
 	case mesh.EventPeerLeft:
 		runtime.EventsEmit(a.ctx, "peer:left", peerToView(ev.Peer))
 
@@ -1009,15 +1118,27 @@ func peerToView(p *mesh.Peer) PeerView {
 	for _, s := range services {
 		svc = append(svc, ServiceView{Name: s.Name, Protocol: s.Protocol, Port: s.Port})
 	}
+	localTyp, remoteTyp := p.SelectedPair()
+	transport := ""
+	if localTyp != "" || remoteTyp != "" {
+		if localTyp == "relay" || remoteTyp == "relay" {
+			transport = "relay"
+		} else {
+			transport = "direct"
+		}
+	}
 	return PeerView{
-		PeerID:    p.ID,
-		Nickname:  p.Nickname,
-		VirtualIP: p.VirtualIP,
-		IsOwner:   p.IsOwner,
-		State:     state,
-		RTTMs:     float64(rtt.Microseconds()) / 1000.0,
-		BytesSent: p.BytesSent(),
-		BytesRecv: p.BytesRecv(),
-		Services:  svc,
+		PeerID:          p.ID,
+		Nickname:        p.Nickname,
+		VirtualIP:       p.VirtualIP,
+		IsOwner:         p.IsOwner,
+		State:           state,
+		RTTMs:           float64(rtt.Microseconds()) / 1000.0,
+		BytesSent:       p.BytesSent(),
+		BytesRecv:       p.BytesRecv(),
+		Services:        svc,
+		Transport:       transport,
+		TransportLocal:  localTyp,
+		TransportRemote: remoteTyp,
 	}
 }

@@ -145,10 +145,12 @@ WebRTC ning ICE i kandidatlarni uch manbadan to'playdi:
    aksariyat CGNAT uchun zarur.
 
 Portal sukut bo'yicha bir nechta STUN serverlari bilan keladi (Google,
-Cloudflare). TURN uchun esa kichkina VPS da o'zingiz `coturn` ni ishga
-tushirishni tavsiya qilamiz. Desktop dastur TURN orqali o'tgan peer lar
-uchun "relayed" indikatorni ko'rsatadi va status bar lokal NAT turi
-yashirib qo'yishi mumkin bo'lsa, qisqa ogohlantirish chiqaradi.
+Cloudflare). TURN ixtiyoriy: Settings → Network bo'limidan **Cloudflare
+TURN** (bepul tarif) yoki o'zingizning `coturn` URL'ingizni ulashingiz
+mumkin. v0.4.0 dan boshlab desktop dastur har peer ustida ⚡ **P2P**
+(host/srflx — to'g'ridan-to'g'ri) yoki ☁️ **TURN** (relay orqali) belgisini
+ko'rsatadi, shunda foydalanuvchi trafik qaysi yo'ldan oqayotganini
+darhol ko'radi.
 
 NAT turi aniqlash dastur ishga tushganda STUN orqali bo'ladi; natija
 tarmoq o'zgarmaguncha sozlamalarda kesh qilinadi.

@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Xavfsizlik zaifligi / Security vulnerability
+    url: https://github.com/Yaxyobek0877/portal_traffic/security/advisories/new
+    about: |
+      Xavfsizlik bilan bog'liq xatoliklarni ommaviy issue ochmang —
+      "Report a vulnerability" tugmasini bosing.
+      Don't open public issues for security bugs — use the "Report a vulnerability" button.
+  - name: Umumiy muhokama / General discussion
+    url: https://github.com/Yaxyobek0877/portal_traffic/discussions
+    about: |
+      Foydalanish, fikr-mulohaza, savollar uchun Discussions yaxshiroq joy.
+      Discussions is a better place for usage, feedback, and open questions.

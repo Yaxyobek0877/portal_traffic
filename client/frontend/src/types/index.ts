@@ -25,6 +25,11 @@ export type PeerView = {
   bytesSent: number;
   bytesRecv: number;
   services: ServiceView[];
+  // Empty before ICE nominates a path; "direct" = host/srflx P2P,
+  // "relay" = via TURN.
+  transport: "" | "direct" | "relay";
+  transportLocal: string;
+  transportRemote: string;
 };
 
 export type ChatMessage = {

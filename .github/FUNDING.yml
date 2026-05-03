@@ -1,0 +1,12 @@
+# Portal sponsorship sources. GitHub renders a "Sponsor" button on
+# the repo when this file is present. All fields are optional —
+# uncomment and fill in those you actually want to use.
+#
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+# github: [Yaxyobek0877]              # GitHub Sponsors username
+# patreon: portal_app                 # Patreon
+# open_collective: portal             # Open Collective
+# ko_fi: portal_app                   # Ko-fi
+# buy_me_a_coffee: portal_app         # Buy Me A Coffee
+custom: ['https://portal.1pro.uz']    # Custom URL (Patreon-equivalent)

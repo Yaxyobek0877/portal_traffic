@@ -1,0 +1,30 @@
+name: Question / Savol
+description: Foydalanish bo'yicha savol / Usage question
+title: "[Q]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issue tracker savollar uchun ham ochiq, lekin avval quyidagilarga qarang:
+        Issue tracker is open for questions, but please check first:
+
+        - [README.md](../blob/main/README.md)
+        - [INSTALL.md](../blob/main/INSTALL.md)
+        - [NAT-VA-TURN.md](../blob/main/NAT-VA-TURN.md) — ulanish muammolari uchun / for connectivity issues
+        - [Discussions](../discussions)
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Savolingiz / Your question
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Kontekst / Context
+      description: Nima qilmoqchisiz, qaerda to'xtab qoldingiz? / What are you trying to do, and where did you get stuck?
+    validations:
+      required: false

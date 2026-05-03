@@ -143,11 +143,19 @@ type Connection struct {
 	// landed, so we buffer them here.
 	pendingRemoteICE []webrtc.ICECandidateInit
 
+	// selected ICE candidate pair types ("host" | "srflx" | "prflx" |
+	// "relay"). Empty until ICE picks a pair. local=="relay" or
+	// remote=="relay" means traffic is going through TURN.
+	selMu        sync.Mutex
+	selLocalTyp  string
+	selRemoteTyp string
+
 	// outgoing local ICE candidates: surfaced to the caller via the
 	// LocalICE channel so they can be relayed through signaling.
-	localICE chan webrtc.ICECandidateInit
-	messages chan Message
-	stateCh  chan State
+	localICE    chan webrtc.ICECandidateInit
+	messages    chan Message
+	stateCh     chan State
+	transportCh chan struct{} // pings on each selected-pair change
 
 	closeOnce sync.Once
 	closed    chan struct{}
@@ -172,15 +180,47 @@ func New(cfg Config) (*Connection, error) {
 	}
 
 	c := &Connection{
-		cfg:      cfg,
-		logger:   logger,
-		pc:       pc,
-		channels: make(map[string]*webrtc.DataChannel, len(channelDefs)),
-		state:    StateConnecting,
-		localICE: make(chan webrtc.ICECandidateInit, 32),
-		messages: make(chan Message, 64),
-		stateCh:  make(chan State, 4),
-		closed:   make(chan struct{}),
+		cfg:         cfg,
+		logger:      logger,
+		pc:          pc,
+		channels:    make(map[string]*webrtc.DataChannel, len(channelDefs)),
+		state:       StateConnecting,
+		localICE:    make(chan webrtc.ICECandidateInit, 32),
+		messages:    make(chan Message, 64),
+		stateCh:     make(chan State, 4),
+		transportCh: make(chan struct{}, 4),
+		closed:      make(chan struct{}),
+	}
+
+	// Surface which ICE candidate pair pion ends up using. The pair
+	// types tell the user whether traffic is direct (host/srflx) or
+	// relayed via TURN. SCTP/DTLS/ICE transport chain is built in
+	// NewPeerConnection so accessing it here is safe.
+	if sctp := pc.SCTP(); sctp != nil {
+		if dtls := sctp.Transport(); dtls != nil {
+			if ice := dtls.ICETransport(); ice != nil {
+				ice.OnSelectedCandidatePairChange(func(pair *webrtc.ICECandidatePair) {
+					if pair == nil {
+						return
+					}
+					c.selMu.Lock()
+					if pair.Local != nil {
+						c.selLocalTyp = pair.Local.Typ.String()
+					}
+					if pair.Remote != nil {
+						c.selRemoteTyp = pair.Remote.Typ.String()
+					}
+					local, remote := c.selLocalTyp, c.selRemoteTyp
+					c.selMu.Unlock()
+					c.logger.Info("ice selected pair", "local", local, "remote", remote)
+					select {
+					case <-c.closed:
+					case c.transportCh <- struct{}{}:
+					default:
+					}
+				})
+			}
+		}
 	}
 
 	pc.OnICECandidate(func(cand *webrtc.ICECandidate) {
@@ -500,6 +540,20 @@ func (c *Connection) State() State {
 	defer c.mu.Unlock()
 	return c.state
 }
+
+// SelectedPair returns the ICE candidate types pion picked for the
+// active path. Empty strings until ICE has nominated a pair. Either
+// side being "relay" means traffic is going through a TURN server.
+func (c *Connection) SelectedPair() (local, remote string) {
+	c.selMu.Lock()
+	defer c.selMu.Unlock()
+	return c.selLocalTyp, c.selRemoteTyp
+}
+
+// TransportChanges fires whenever the ICE selected-pair changes —
+// initially when ICE first nominates a pair, and again on any ICE
+// restart that reroutes (e.g. TURN kicks in mid-session).
+func (c *Connection) TransportChanges() <-chan struct{} { return c.transportCh }
 
 // RemotePeerID returns who this connection is talking to.
 func (c *Connection) RemotePeerID() string { return c.cfg.RemotePeerID }

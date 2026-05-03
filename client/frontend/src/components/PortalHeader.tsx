@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import type { PortalView } from "../types";
 import { usePortalStore } from "../stores/portalStore";
+import { useT } from "../i18n";
 
 type Props = {
   portal: PortalView;
@@ -14,6 +15,7 @@ type Props = {
 const HIDDEN_PLACEHOLDER = "••••••";
 
 export function PortalHeader({ portal, onLeave }: Props) {
+  const { t } = useT();
   const setScreen = usePortalStore((s) => s.setScreen);
   const [copiedField, setCopiedField] = useState<"id" | "code" | "both" | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
@@ -29,9 +31,18 @@ export function PortalHeader({ portal, onLeave }: Props) {
     } catch {}
   };
 
+  // Deeplink: phones with the Portal scheme handler installed can
+  // jump straight into the join flow. Phones without it still get
+  // human-readable text.
+  const deeplink = portal.code
+    ? `portal://join/${portal.portalId}?code=${portal.code}`
+    : `portal://join/${portal.portalId}`;
   const inviteText = portal.code
-    ? `Portal\nID:   ${portal.portalId}\nCode: ${portal.code}`
-    : `Portal\nID:   ${portal.portalId}`;
+    ? `Portal\nID:   ${portal.portalId}\nCode: ${portal.code}\n\n${deeplink}`
+    : `Portal\nID:   ${portal.portalId}\n\n${deeplink}`;
+  // The QR carries the deeplink (so a phone camera offers "Open
+  // Portal"); legacy clients fall back to scraping ID/code from text.
+  const qrValue = deeplink;
 
   return (
     <div className="draggable titlebar-pad px-5 h-[96px] flex items-center justify-between border-b border-white/5 bg-black/10 backdrop-blur-md">
@@ -57,16 +68,16 @@ export function PortalHeader({ portal, onLeave }: Props) {
         )}
         <button
           onClick={() => copy(inviteText, "both")}
-          title="ID + KOD ni birga nusxa olish"
+          title={t("header.copy_both_tooltip")}
           className="no-drag h-9 px-3 panel rounded-btn flex items-center gap-1.5 text-xs hover:bg-white/[0.07]"
         >
           {copiedField === "both" ? (
             <>
-              <Check className="w-3.5 h-3.5 text-emerald-400" /> Nusxalandi
+              <Check className="w-3.5 h-3.5 text-emerald-400" /> {t("header.copied")}
             </>
           ) : (
             <>
-              <Copy className="w-3.5 h-3.5" /> Taklif
+              <Copy className="w-3.5 h-3.5" /> {t("header.copy_tooltip")}
             </>
           )}
         </button>
@@ -83,7 +94,7 @@ export function PortalHeader({ portal, onLeave }: Props) {
       <div className="no-drag flex items-center gap-1">
         <button
           onClick={() => setScreen("settings")}
-          title="Sozlamalar"
+          title={t("common.tooltip.settings")}
           className="h-9 w-9 rounded-btn flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.05]"
         >
           <SettingsIcon className="w-4 h-4" strokeWidth={2} />
@@ -92,7 +103,7 @@ export function PortalHeader({ portal, onLeave }: Props) {
           onClick={onLeave}
           className="h-9 px-3 rounded-btn text-xs flex items-center gap-1.5 text-rose-300 hover:bg-rose-500/10"
         >
-          <LogOut className="w-3.5 h-3.5" /> Chiqish
+          <LogOut className="w-3.5 h-3.5" /> {t("header.leave")}
         </button>
       </div>
 
@@ -123,7 +134,7 @@ export function PortalHeader({ portal, onLeave }: Props) {
                 >
                   <div className="bg-white p-3 rounded-lg">
                     <QRCodeSVG
-                      value={inviteText}
+                      value={qrValue}
                       size={200}
                       bgColor="#ffffff"
                       fgColor="#0a0e1a"
@@ -138,16 +149,15 @@ export function PortalHeader({ portal, onLeave }: Props) {
                     <div className="font-mono text-xl tracking-wider gradient-text font-semibold break-all">
                       {portal.portalId} · {portal.code}
                     </div>
-                    <div className="text-xs text-zinc-500 mt-3 leading-relaxed">
-                      QR ni do'stingizning kamerasiga tutsangiz,<br />
-                      portalga to'g'ridan-to'g'ri kiradi.
+                    <div className="text-xs text-zinc-500 mt-3 leading-relaxed whitespace-pre-line">
+                      {t("header.qr.help")}
                     </div>
                   </div>
                   <button
                     onClick={() => setQrOpen(false)}
                     className="text-xs text-zinc-400 hover:text-white mt-1 px-4 py-1.5 rounded-md hover:bg-white/[0.05]"
                   >
-                    yopish
+                    {t("header.qr.close")}
                   </button>
                 </motion.div>
               </div>
@@ -177,6 +187,7 @@ function Stat({
   revealed: boolean;
   onToggleVisibility?: () => void;
 }) {
+  const { t } = useT();
   const copied = copiedField === field;
   const display = revealed ? value : HIDDEN_PLACEHOLDER;
   return (
@@ -185,7 +196,7 @@ function Stat({
       <div className="flex items-center gap-1.5">
         <button
           onClick={onCopy}
-          title={revealed ? "Nusxa olish" : "Avval ko'rsatish kerak"}
+          title={revealed ? t("header.copy_tooltip") : t("header.reveal_first")}
           disabled={!revealed && onToggleVisibility !== undefined}
           className="font-mono text-lg gradient-text font-semibold tracking-wide flex items-center gap-1.5 disabled:cursor-not-allowed"
         >
@@ -203,7 +214,7 @@ function Stat({
         {onToggleVisibility && (
           <button
             onClick={onToggleVisibility}
-            title={revealed ? "Yashirish" : "Ko'rsatish"}
+            title={revealed ? t("header.hide") : t("header.show")}
             className="p-1 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.05]"
           >
             {revealed ? (

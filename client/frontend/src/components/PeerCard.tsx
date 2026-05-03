@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Crown, Wifi, WifiOff } from "lucide-react";
+import { Crown, Wifi, WifiOff, Zap, Cloud } from "lucide-react";
 import type { PeerView } from "../types";
 import { avatarColor, avatarInitial } from "../lib/avatar";
 import { rttLabel, shortId } from "../lib/format";
@@ -70,7 +70,33 @@ export function PeerCard({ peer, highlighted, onClick }: Props) {
           )}
         </div>
         <div className="text-[11px] text-zinc-500 font-mono">{rttLabel(peer.rttMs)}</div>
+        {peer.state === "connected" && peer.transport && (
+          <TransportBadge transport={peer.transport} />
+        )}
       </div>
     </motion.button>
+  );
+}
+
+function TransportBadge({ transport }: { transport: "direct" | "relay" }) {
+  if (transport === "direct") {
+    return (
+      <div
+        title="To'g'ridan-to'g'ri P2P (host/srflx) — trafik hech qanday server orqali o'tmayapti"
+        className="flex items-center gap-1 text-[10px] font-medium text-emerald-300/90 bg-emerald-400/10 border border-emerald-400/20 rounded px-1.5 py-0.5"
+      >
+        <Zap className="w-3 h-3" strokeWidth={2.5} />
+        <span>P2P</span>
+      </div>
+    );
+  }
+  return (
+    <div
+      title="TURN serveri orqali relay qilinmoqda — trafik shifrlangan, lekin TURN serveridan o'tadi"
+      className="flex items-center gap-1 text-[10px] font-medium text-amber-300/90 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5"
+    >
+      <Cloud className="w-3 h-3" strokeWidth={2.5} />
+      <span>TURN</span>
+    </div>
   );
 }

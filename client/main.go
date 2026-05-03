@@ -19,7 +19,14 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+
+	"portal_traffic_client/crashreport"
 )
+
+// Version is the canonical product version. Bump for each release;
+// embedded into Wails app metadata, the Settings → About tab, and
+// the User-Agent string sent to the GitHub Releases API.
+const Version = "0.4.0"
 
 // keep slog import alive even if main.go shrinks
 var _ = slog.LevelInfo
@@ -30,6 +37,11 @@ var assets embed.FS
 func main() {
 	logger := initLogger()
 	app := NewApp(logger)
+	app.crashCatcher = crashreport.New("", Version)
+	// Capture any panic on the main goroutine into a structured local
+	// report before re-panicking to let the runtime print + exit. Other
+	// goroutines arrange their own recover blocks.
+	defer crashreport.InstallGlobal(app.crashCatcher)
 
 	err := wails.Run(&options.App{
 		Title:             "Portal",

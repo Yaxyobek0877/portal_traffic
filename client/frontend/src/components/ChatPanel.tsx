@@ -6,6 +6,7 @@ import { app } from "../lib/wails";
 import { avatarColor, avatarInitial } from "../lib/avatar";
 import { timeOfDay } from "../lib/format";
 import { TransferRow } from "./TransferRow";
+import { useT } from "../i18n";
 
 type Props = {
   messages: ChatMessage[];
@@ -15,6 +16,7 @@ type Props = {
 };
 
 export function ChatPanel({ messages, myPeerId, peers, transfers }: Props) {
+  const { t } = useT();
   const [draft, setDraft] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -77,7 +79,7 @@ export function ChatPanel({ messages, myPeerId, peers, transfers }: Props) {
       {dragOver && (
         <div className="absolute inset-0 bg-violet-500/10 backdrop-blur-sm z-20 flex items-center justify-center pointer-events-none">
           <div className="text-sm text-violet-200 font-medium">
-            Tashlang — meshda yuborish boshlanadi
+            {t("chat.drop_to_send")}
           </div>
         </div>
       )}
@@ -85,8 +87,9 @@ export function ChatPanel({ messages, myPeerId, peers, transfers }: Props) {
       <div ref={scrollerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && transfers.length === 0 && (
           <div className="text-center text-sm text-zinc-500 py-12">
-            Hozircha xabarlar yo'q.<br />
-            Birinchi bo'lib salom yozing yoki faylni shu yerga tashlang.
+            {t("chat.empty")}
+            <br />
+            {t("chat.empty_hint")}
           </div>
         )}
         <AnimatePresence initial={false}>
@@ -103,7 +106,7 @@ export function ChatPanel({ messages, myPeerId, peers, transfers }: Props) {
         <button
           onClick={sendFile}
           disabled={peers.length === 0}
-          title="Fayl yuborish"
+          title={t("chat.send_file")}
           className="h-10 w-10 rounded-btn flex items-center justify-center text-zinc-300 hover:bg-white/[0.05] disabled:opacity-40"
         >
           <Paperclip className="w-4 h-4" strokeWidth={2} />
@@ -118,7 +121,7 @@ export function ChatPanel({ messages, myPeerId, peers, transfers }: Props) {
             }
           }}
           rows={1}
-          placeholder="Xabar yozing..."
+          placeholder={t("chat.placeholder")}
           className="input-base flex-1 resize-none min-h-[40px] max-h-[120px]"
         />
         <button

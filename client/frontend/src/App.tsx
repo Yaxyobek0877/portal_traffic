@@ -1,9 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Welcome } from "./views/Welcome";
 import { PortalView } from "./views/Portal";
 import { Settings } from "./views/Settings";
 import { usePortalStore } from "./stores/portalStore";
 import { app, subscribe } from "./lib/wails";
+import type { UpdateResult } from "./lib/wails";
+import { useT } from "./i18n";
 import type {
   ChatMessage,
   NATResult,
@@ -13,6 +15,7 @@ import type {
 } from "./types";
 
 export default function App() {
+  const { t } = useT();
   const screen = usePortalStore((s) => s.screen);
   const setScreen = usePortalStore((s) => s.setScreen);
   const setPortal = usePortalStore((s) => s.setPortal);
@@ -28,12 +31,35 @@ export default function App() {
   // don't linger on screen.
   useEffect(() => {
     if (!banner) return;
-    const t = setTimeout(() => setBanner(""), 7000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setBanner(""), 7000);
+    return () => clearTimeout(timer);
   }, [banner, setBanner]);
   const setNat = usePortalStore((s) => s.setNat);
   const upsertTransfer = usePortalStore((s) => s.upsertTransfer);
   const setSaveDir = usePortalStore((s) => s.setSaveDir);
+
+  // Update banner state — null until the first check completes; even
+  // if a newer version is available, a dismissed banner stays hidden
+  // for the rest of this session.
+  const [update, setUpdate] = useState<UpdateResult | null>(null);
+  const [updateDismissed, setUpdateDismissed] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem("portal:update-dismissed") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  // Check for an update on startup. The cache means this is essentially
+  // free after the first call (24h TTL on the backend side). We don't
+  // block the UI — `then` fires asynchronously.
+  useEffect(() => {
+    app.CheckForUpdate(false)
+      .then((res) => {
+        if (res?.available) setUpdate(res);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // One-shot bootstrap calls.
@@ -55,10 +81,11 @@ export default function App() {
       subscribe<PeerView>("peer:ready", (p) => upsertPeer({ ...p, state: "connected" }))
     );
     offs.push(subscribe<PeerView>("peer:rtt", (p) => upsertPeer(p)));
+    offs.push(subscribe<PeerView>("peer:transport", (p) => upsertPeer(p)));
     offs.push(subscribe<PeerView>("peer:left", (p) => removePeer(p.peerId)));
     offs.push(
       subscribe("portal:closed", () => {
-        setBanner("Portal yopildi.");
+        setBanner(t("banner.portal_closed"));
         setPortal(null);
         clearPeers();
         clearMessages();
@@ -71,17 +98,13 @@ export default function App() {
     offs.push(subscribe<NATResult>("nat:result", (r) => setNat(r)));
     offs.push(subscribe<TransferProgress>("transfer:progress", (t) => upsertTransfer(t)));
     offs.push(
-      subscribe("reconnecting", () =>
-        setBanner("Signal serveri uzildi — qayta ulanmoqda...")
-      )
+      subscribe("reconnecting", () => setBanner(t("banner.signaling_disconnected")))
     );
     offs.push(
-      subscribe("reconnected", () => setBanner("Qayta ulandi ✓"))
+      subscribe("reconnected", () => setBanner(t("banner.signaling_reconnected")))
     );
     offs.push(
-      subscribe("reconnect_give_up", () =>
-        setBanner("Qayta ulanish muvaffaqiyatsiz. Qaytadan portal yarating.")
-      )
+      subscribe("reconnect_give_up", () => setBanner(t("banner.reconnect_failed")))
     );
 
     return () => offs.forEach((off) => off());
@@ -97,7 +120,15 @@ export default function App() {
     setNat,
     upsertTransfer,
     setSaveDir,
+    t,
   ]);
+
+  const dismissUpdate = () => {
+    setUpdateDismissed(true);
+    try {
+      sessionStorage.setItem("portal:update-dismissed", "1");
+    } catch {}
+  };
 
   return (
     <div className="h-full w-full overflow-hidden">
@@ -107,6 +138,27 @@ export default function App() {
           <button
             onClick={() => setBanner("")}
             className="ml-3 text-rose-300/70 hover:text-rose-200"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      {update?.available && !updateDismissed && (
+        <div className="absolute top-3 right-3 z-40 max-w-[280px] bg-violet-500/15 border border-violet-500/30 text-violet-100 text-xs px-3 py-2 rounded-md backdrop-blur-md shadow-lg flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="opacity-80">{t("update.available")}</div>
+            <div className="font-mono font-semibold truncate">v{update.latestVersion}</div>
+          </div>
+          <button
+            onClick={() => app.OpenReleasePage(update.releaseUrl)}
+            className="px-2 py-1 rounded-md bg-violet-500/30 hover:bg-violet-500/50 text-violet-50 text-[11px] font-semibold whitespace-nowrap"
+          >
+            {t("update.download")}
+          </button>
+          <button
+            onClick={dismissUpdate}
+            className="text-violet-300/70 hover:text-violet-100"
+            title={t("update.dismiss")}
           >
             ×
           </button>

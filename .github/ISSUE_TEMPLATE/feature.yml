@@ -1,0 +1,49 @@
+name: Feature request
+description: Yangi imkoniyat taklifi / Suggest a new feature
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qanday muammoni hal qiladi? / What problem does this solve?
+      description: |
+        "X qila olmayapman" yoki "Y qiyin" deb boshlang. Faqat "Z funksiyasi qo'shing"
+        emas — sabab muhim. / Start with "I can't do X" or "Y is hard." Reasoning matters
+        more than the specific feature ask.
+      placeholder: "Masalan: 'Do'stim ulansa avtomatik xabar olmoqchiman, hozir ekranni doim kuzatishga to'g'ri kelyapti'"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Taklifingiz / Your proposal
+      description: Qanday ishlashini tasavvur qilasiz? / How do you imagine it working?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Boshqa variantlar / Alternatives considered
+      description: Boshqa yo'llarni o'ylab ko'rdingizmi? / Did you consider other approaches?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Bu qaysi joyga tegishli? / Which area?
+      multiple: true
+      options:
+        - Desktop UI (welcome / portal / settings)
+        - Mesh / signaling / WebRTC
+        - File transfer / proxy
+        - Mobile (experimental)
+        - Web landing (portal.1pro.uz)
+        - Documentation
+        - Build / CI / release
+        - Aniq emas / Not sure
+    validations:
+      required: true

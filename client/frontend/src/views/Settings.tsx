@@ -14,7 +14,9 @@ import {
   Zap,
 } from "lucide-react";
 import { app } from "../lib/wails";
+import type { UpdateResult, CrashReport } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
+import { useT } from "../i18n";
 import type {
   HistoryEntry,
   TurnConfig,
@@ -23,6 +25,7 @@ import type {
 } from "../types";
 
 export function Settings() {
+  const { t, lang, setLang } = useT();
   const setScreen = usePortalStore((s) => s.setScreen);
   const signalingUrl = usePortalStore((s) => s.signalingUrl);
   const setSignalingUrl = usePortalStore((s) => s.setSignalingUrl);
@@ -53,9 +56,38 @@ export function Settings() {
   const [cfTest, setCfTest] = useState<TurnTestResult | null>(null);
   const [cfTesting, setCfTesting] = useState(false);
 
+  const [version, setVersion] = useState("");
+  const [update, setUpdate] = useState<UpdateResult | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [crashes, setCrashes] = useState<CrashReport[]>([]);
+
   useEffect(() => {
     app.GetCloudflareTurn().then(setCf);
+    app.AppVersion().then(setVersion);
+    app.CheckForUpdate(false).then(setUpdate).catch(() => {});
+    app.CrashReports().then(setCrashes).catch(() => {});
   }, []);
+
+  const recheckUpdate = async () => {
+    setUpdateChecking(true);
+    try {
+      const r = await app.CheckForUpdate(true);
+      setUpdate(r);
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
+
+  const refreshCrashes = async () => {
+    try {
+      setCrashes(await app.CrashReports());
+    } catch {}
+  };
+
+  const clearCrashes = async () => {
+    await app.ClearCrashReports();
+    setCrashes([]);
+  };
 
   const saveCf = async () => {
     setCfError("");
@@ -190,14 +222,42 @@ export function Settings() {
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <h2 className="text-base font-semibold">Sozlamalar</h2>
-        <button
-          onClick={refresh}
-          className="no-drag ml-auto p-2 rounded-md hover:bg-white/5 text-zinc-400"
-          title="Yangilash"
-        >
-          <RefreshCcw className="w-4 h-4" />
-        </button>
+        <h2 className="text-base font-semibold">{t("settings.title")}</h2>
+
+        <div className="no-drag ml-auto flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+            {t("settings.language")}
+          </span>
+          <div className="flex rounded-md border border-white/10 overflow-hidden">
+            <button
+              onClick={() => setLang("uz")}
+              className={`px-2 py-1 text-xs ${
+                lang === "uz"
+                  ? "bg-violet-500/20 text-violet-200"
+                  : "text-zinc-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              UZ
+            </button>
+            <button
+              onClick={() => setLang("en")}
+              className={`px-2 py-1 text-xs border-l border-white/10 ${
+                lang === "en"
+                  ? "bg-violet-500/20 text-violet-200"
+                  : "text-zinc-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              EN
+            </button>
+          </div>
+          <button
+            onClick={refresh}
+            className="p-2 rounded-md hover:bg-white/5 text-zinc-400"
+            title={t("settings.title")}
+          >
+            <RefreshCcw className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-3xl mx-auto w-full">
@@ -489,6 +549,142 @@ export function Settings() {
               >
                 Ochish
               </button>
+            </div>
+          </Field>
+        </Section>
+
+        {/* About / Updates */}
+        <Section icon={<Info className="w-4 h-4" />} title={lang === "en" ? "About" : "Haqida"}>
+          <Field label={lang === "en" ? "Portal version" : "Portal versiyasi"}>
+            <div className="flex items-center gap-3">
+              <code className="font-mono text-base panel rounded-input px-3 py-2">
+                v{version || "—"}
+              </code>
+              <button
+                onClick={recheckUpdate}
+                disabled={updateChecking}
+                className="panel rounded-btn px-3 py-2 text-xs flex items-center gap-1.5 hover:bg-white/[0.07] disabled:opacity-50"
+              >
+                <RefreshCcw className={`w-3.5 h-3.5 ${updateChecking ? "animate-spin" : ""}`} />
+                {lang === "en"
+                  ? updateChecking
+                    ? "Checking..."
+                    : "Check now"
+                  : updateChecking
+                  ? "Tekshirilmoqda..."
+                  : "Hozir tekshirish"}
+              </button>
+            </div>
+            {update && (
+              <div className="mt-3 text-xs">
+                {update.error ? (
+                  <div className="text-rose-400">{update.error}</div>
+                ) : update.available ? (
+                  <div className="panel rounded-input p-3 border-violet-500/30 bg-violet-500/5 space-y-2">
+                    <div>
+                      <span className="text-violet-200">
+                        {lang === "en" ? "New version available:" : "Yangi versiya mavjud:"}
+                      </span>{" "}
+                      <span className="font-mono font-semibold">v{update.latestVersion}</span>
+                    </div>
+                    {update.releaseNotes && (
+                      <pre className="text-[11px] text-zinc-400 whitespace-pre-wrap font-mono leading-relaxed max-h-32 overflow-y-auto">
+                        {update.releaseNotes}
+                      </pre>
+                    )}
+                    <button
+                      onClick={() => app.OpenReleasePage(update.releaseUrl)}
+                      className="btn-primary rounded-btn px-3 py-1.5 text-xs font-semibold"
+                    >
+                      {lang === "en" ? "Open download page" : "Yuklab olish sahifasini ochish"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-emerald-400">
+                    {lang === "en" ? "✓ You're on the latest version" : "✓ Eng so'nggi versiyada"}
+                  </div>
+                )}
+              </div>
+            )}
+          </Field>
+
+          <Field label={lang === "en" ? "Crash reports" : "Halokat hisobotlari"}>
+            <p className="text-xs text-zinc-500 -mt-1 mb-2">
+              {lang === "en"
+                ? "Reports are stored locally only. They contain stack traces with home directory redacted, no portal IDs, peer IDs, IPs, or message content."
+                : "Hisobotlar faqat lokal saqlanadi. Ularda stack trace bor (uy papkasi yashirilgan), portal ID, peer ID, IP yoki xabar tarkibi yo'q."}
+            </p>
+            {crashes.length === 0 ? (
+              <div className="text-sm text-zinc-500 panel rounded-input px-3 py-2">
+                {lang === "en" ? "No crash reports." : "Halokat hisobotlari yo'q."}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {crashes.slice(0, 5).map((c) => (
+                  <div
+                    key={c.id}
+                    className="panel rounded-input px-3 py-2 text-xs flex items-center gap-3"
+                  >
+                    <span className="font-mono text-rose-300 shrink-0">{c.id}</span>
+                    <span className="flex-1 truncate text-zinc-400">{c.panicMessage}</span>
+                    <span className="text-zinc-600 shrink-0">
+                      {c.os}/{c.arch}
+                    </span>
+                  </div>
+                ))}
+                {crashes.length > 5 && (
+                  <div className="text-xs text-zinc-500">
+                    {lang === "en"
+                      ? `+ ${crashes.length - 5} more`
+                      : `+ yana ${crashes.length - 5} ta`}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex gap-2 mt-2 flex-wrap">
+              <button
+                onClick={() => app.OpenCrashFolder()}
+                className="panel rounded-btn px-3 py-1.5 text-xs flex items-center gap-1.5 hover:bg-white/[0.07]"
+              >
+                <Folder className="w-3.5 h-3.5" />
+                {lang === "en" ? "Open folder" : "Papkani ochish"}
+              </button>
+              <button
+                onClick={refreshCrashes}
+                className="panel rounded-btn px-3 py-1.5 text-xs flex items-center gap-1.5 hover:bg-white/[0.07]"
+              >
+                <RefreshCcw className="w-3.5 h-3.5" />
+                {lang === "en" ? "Refresh" : "Yangilash"}
+              </button>
+              {crashes.length > 0 && (
+                <button
+                  onClick={clearCrashes}
+                  className="panel rounded-btn px-3 py-1.5 text-xs flex items-center gap-1.5 hover:bg-white/[0.07] text-rose-300"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {lang === "en" ? "Clear all" : "Hammasini o'chirish"}
+                </button>
+              )}
+            </div>
+          </Field>
+
+          <Field label={lang === "en" ? "Documentation" : "Hujjatlar"}>
+            <div className="flex gap-2 flex-wrap text-xs">
+              {[
+                ["GitHub", "https://github.com/Yaxyobek0877/portal_traffic"],
+                ["PCP-1 Spec", "https://github.com/Yaxyobek0877/portal_traffic/blob/main/client/crypt/pcp/SPEC.md"],
+                ["Privacy", "https://github.com/Yaxyobek0877/portal_traffic/blob/main/PRIVACY.md"],
+                ["Terms", "https://github.com/Yaxyobek0877/portal_traffic/blob/main/TERMS.md"],
+                ["License (MIT)", "https://github.com/Yaxyobek0877/portal_traffic/blob/main/LICENSE"],
+              ].map(([label, url]) => (
+                <button
+                  key={url}
+                  onClick={() => app.OpenReleasePage(url)}
+                  className="panel rounded-input px-3 py-1.5 hover:bg-white/[0.07]"
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </Field>
         </Section>

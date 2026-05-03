@@ -4,10 +4,13 @@ import { Sparkles, LogIn, Settings, History as HistoryIcon, AlertTriangle } from
 import { Logo } from "../components/Logo";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
+import { useT } from "../i18n";
+import { parseInvite } from "../lib/deeplink";
 
 type Mode = "idle" | "create" | "join";
 
 export function Welcome() {
+  const { t } = useT();
   const nickname = usePortalStore((s) => s.nickname);
   const setNickname = usePortalStore((s) => s.setNickname);
   const setPortal = usePortalStore((s) => s.setPortal);
@@ -26,7 +29,7 @@ export function Welcome() {
 
   // generation counter so we can ignore a late-arriving result from a
   // connect attempt the user already cancelled. Without this, clicking
-  // "Orqaga" while the request is in flight just lets the eventual
+  // "back" while the request is in flight just lets the eventual
   // success drag the user back to the portal view.
   const genRef = useRef(0);
 
@@ -41,14 +44,26 @@ export function Welcome() {
     setCode(c);
   };
 
+  // When the user pastes a portal:// URL or formatted invite text into
+  // either of the join inputs, split it across both fields. Avoids the
+  // "type the digits one at a time" friction.
+  const handleInvitePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const raw = e.clipboardData.getData("text");
+    const parsed = parseInvite(raw);
+    if (parsed && (parsed.code || /portal:\/\//i.test(raw))) {
+      e.preventDefault();
+      setPortalId(parsed.portalId.replace(/[^0-9]/g, "").slice(0, 6));
+      if (parsed.code) {
+        setCode(parsed.code.replace(/[^0-9]/g, "").slice(0, 6));
+      }
+    }
+  };
+
   const cancel = async () => {
     genRef.current++;
     setBusy(false);
     setMode("idle");
     setError("");
-    // Tear down whatever half-formed mesh the backend is currently
-    // assembling. Without this, a stuck join can hold sockets open
-    // until the next connect attempt collides.
     try {
       await app.Leave();
     } catch {}
@@ -57,11 +72,11 @@ export function Welcome() {
   const submit = async () => {
     setError("");
     if (!nickname.trim()) {
-      setError("Avval taxallus yozing");
+      setError(t("welcome.error.empty_nickname"));
       return;
     }
     if (mode === "join" && (!portalId.trim() || !code.trim())) {
-      setError("ID va kod ikkalasi kerak");
+      setError(t("welcome.error.empty_id_or_code"));
       return;
     }
     const myGen = ++genRef.current;
@@ -72,8 +87,6 @@ export function Welcome() {
           ? await app.CreatePortal(nickname.trim(), false)
           : await app.JoinPortal(nickname.trim(), portalId.trim(), code.trim());
       if (myGen !== genRef.current) {
-        // The user cancelled while we were waiting. Drop the result
-        // silently — they're back on the welcome screen already.
         return;
       }
       setPortal(p);
@@ -86,12 +99,22 @@ export function Welcome() {
     }
   };
 
+  // Translate known server-side errors to user-friendly localized
+  // strings; fall through to the raw message otherwise.
+  const localizedError = (raw: string): string => {
+    if (/no such portal/i.test(raw)) return t("welcome.error.no_such_portal");
+    if (/code does not match|portal_code_wrong/i.test(raw)) return t("welcome.error.wrong_code");
+    if (/portal_full/i.test(raw)) return t("welcome.error.full");
+    if (/portal_locked/i.test(raw)) return t("welcome.error.locked");
+    return raw;
+  };
+
   return (
     <div className="h-full flex flex-col">
       <div className="draggable titlebar-pad flex justify-end items-center px-3" style={{ height: 68 }}>
         <button
           className="no-drag p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-white/5"
-          title="Sozlamalar"
+          title={t("common.tooltip.settings")}
           onClick={() => setScreen("settings")}
         >
           <Settings className="w-4 h-4" strokeWidth={2} />
@@ -119,19 +142,19 @@ export function Welcome() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="text-sm text-zinc-400 mt-2"
+            className="text-sm text-zinc-400 mt-2 whitespace-pre-line"
           >
-            To'g'ridan-to'g'ri ulanish.<br /> Orada hech qanday server yo'q.
+            {t("welcome.tagline")}
           </motion.p>
 
           <div className="mt-8 space-y-3 text-left">
             <div>
               <label className="text-xs uppercase tracking-widest text-zinc-500 ml-1">
-                Taxallus
+                {t("welcome.nickname.label")}
               </label>
               <input
                 type="text"
-                placeholder="alice"
+                placeholder={t("welcome.nickname.placeholder")}
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 className="input-base w-full mt-1.5"
@@ -148,26 +171,28 @@ export function Welcome() {
               >
                 <div>
                   <label className="text-xs uppercase tracking-widest text-zinc-500 ml-1">
-                    Portal ID
+                    {t("welcome.portalId.label")}
                   </label>
                   <input
                     type="text"
-                    placeholder="123456"
+                    placeholder={t("welcome.portalId.placeholder")}
                     value={portalId}
                     onChange={(e) => setPortalId(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                    onPaste={handleInvitePaste}
                     className="input-base w-full mt-1.5 font-mono text-center text-lg tracking-widest"
                     maxLength={6}
                   />
                 </div>
                 <div>
                   <label className="text-xs uppercase tracking-widest text-zinc-500 ml-1">
-                    Kod
+                    {t("welcome.code.label")}
                   </label>
                   <input
                     type="text"
-                    placeholder="654321"
+                    placeholder={t("welcome.code.placeholder")}
                     value={code}
                     onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                    onPaste={handleInvitePaste}
                     className="input-base w-full mt-1.5 font-mono text-center text-lg tracking-widest"
                     maxLength={6}
                   />
@@ -177,17 +202,7 @@ export function Welcome() {
 
             {error && (
               <div className="rounded-input border border-rose-500/30 bg-rose-500/5 p-3 text-xs space-y-2">
-                <div className="text-rose-300">
-                  {/no such portal/i.test(error)
-                    ? "Bu portal allaqachon yopilgan. Egasi chiqib ketgan bo'lsa, ID + KOD avtomatik bekor qilinadi."
-                    : /code does not match|portal_code_wrong/i.test(error)
-                    ? "Kod noto'g'ri. Qaytadan tekshiring yoki egasidan so'rang."
-                    : /portal_full/i.test(error)
-                    ? "Portal to'lib qolgan (16 ta peer max)."
-                    : /portal_locked/i.test(error)
-                    ? "Egasi portalni qulflagan. Ochilishini kuting."
-                    : error}
-                </div>
+                <div className="text-rose-300">{localizedError(error)}</div>
                 {/no such portal/i.test(error) && (
                   <div className="flex gap-2">
                     <button
@@ -199,7 +214,7 @@ export function Welcome() {
                       }}
                       className="text-xs text-emerald-300 hover:text-emerald-200 underline"
                     >
-                      Yangi portal yaratish →
+                      {t("welcome.create_new_link")}
                     </button>
                   </div>
                 )}
@@ -213,14 +228,14 @@ export function Welcome() {
                   className="btn-primary rounded-btn h-12 font-semibold flex items-center justify-center gap-2"
                 >
                   <Sparkles className="w-4 h-4" />
-                  Portal yaratish
+                  {t("welcome.create")}
                 </button>
                 <button
                   onClick={() => setMode("join")}
                   className="panel rounded-btn h-12 font-semibold flex items-center justify-center gap-2 hover:bg-white/[0.07]"
                 >
                   <LogIn className="w-4 h-4" />
-                  Qo'shilish
+                  {t("welcome.join")}
                 </button>
               </div>
             ) : (
@@ -229,14 +244,18 @@ export function Welcome() {
                   onClick={busy ? cancel : () => setMode("idle")}
                   className="panel rounded-btn h-11 text-sm hover:bg-white/[0.07]"
                 >
-                  {busy ? "Bekor qilish" : "Orqaga"}
+                  {busy ? t("welcome.cancel") : t("welcome.back")}
                 </button>
                 <button
                   onClick={submit}
                   disabled={busy}
                   className="btn-primary rounded-btn h-11 text-sm font-semibold disabled:opacity-50"
                 >
-                  {busy ? "Ulanmoqda..." : mode === "create" ? "Yaratish" : "Qo'shilish"}
+                  {busy
+                    ? t("common.connecting")
+                    : mode === "create"
+                    ? t("welcome.creating")
+                    : t("welcome.joining")}
                 </button>
               </div>
             )}
@@ -246,7 +265,7 @@ export function Welcome() {
             <div className="mt-8 text-left">
               <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-zinc-500 mb-2">
                 <HistoryIcon className="w-3 h-3" />
-                Yaqindagilar
+                {t("welcome.recent")}
               </div>
               <div className="space-y-1.5">
                 {history.slice(0, 4).map((h) => (
@@ -262,7 +281,7 @@ export function Welcome() {
                     </div>
                     {h.isOwner && (
                       <span className="text-[10px] uppercase tracking-wider text-amber-400">
-                        owner
+                        {t("common.owner")}
                       </span>
                     )}
                   </button>
@@ -275,9 +294,7 @@ export function Welcome() {
             <div className="mt-6 panel rounded-input p-3 text-left flex gap-2 items-start border-amber-500/20 bg-amber-500/5">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" strokeWidth={2} />
               <div className="text-[11px] text-amber-200/90 leading-relaxed">
-                <strong>Simmetrik NAT aniqlandi.</strong> To'g'ridan-to'g'ri ulanish
-                ishlamasligi mumkin. Bepul TURN serveri orqali avtomatik o'tib ulanadi —
-                hech narsa qilish kerak emas. Ulanish sekinroq bo'lishi mumkin.
+                {t("welcome.symmetric_nat_warning")}
               </div>
             </div>
           )}

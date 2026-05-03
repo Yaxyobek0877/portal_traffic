@@ -1,0 +1,83 @@
+name: Bug report
+description: Portal'da xato topdingizmi? / Found a bug in Portal?
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Vaqt ajratganingiz uchun rahmat! / Thanks for taking the time to file a bug.
+
+        **Iltimos avval mavjud issue'larda qidiring** — xato allaqachon xabar qilingan bo'lishi mumkin.
+        **Please search existing issues first** — your bug may already be reported.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Nima sodir bo'ldi? / What happened?
+      description: Aniq qiling. Kutgan natija nima edi va aslida nima sodir bo'ldi? / Be specific. What did you expect to happen, and what actually happened?
+      placeholder: "Masalan: 'Portalga qo'shilmoqchi bo'ldim, lekin 30 sekunddan keyin Failed deb ko'rsatdi'"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Qanday takrorlash mumkin? / How to reproduce
+      description: Qadam-baqadam. / Step by step.
+      placeholder: |
+        1. Portal oching
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Portal versiyasi / Portal version
+      description: Settings → Diagnostika'da ko'rishingiz mumkin / Visible in Settings → Diagnostics
+      placeholder: "0.4.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operatsion tizim / OS
+      options:
+        - macOS (Apple Silicon — M1/M2/M3/M4)
+        - macOS (Intel)
+        - Windows 10
+        - Windows 11
+        - Linux (Ubuntu/Debian)
+        - Linux (Arch/Fedora/boshqa)
+        - Boshqa / Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: nat-type
+    attributes:
+      label: NAT turi / NAT type (Settings → Diagnostika)
+      description: Agar bilsangiz / If you know it
+      options:
+        - Bilmayman / Don't know
+        - Open / Full Cone
+        - Restricted
+        - Symmetric
+        - CGNAT
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Loglar / Logs
+      description: |
+        Settings → Diagnostika → "Oxirgi 200 qatorni nusxa olish".
+        Settings → Diagnostics → "Copy last 200 lines".
+        Sezgir ma'lumotlarni olib tashlang (IP, taxalluslar). / Redact sensitive info (IPs, nicknames).
+      render: shell
+    validations:
+      required: false

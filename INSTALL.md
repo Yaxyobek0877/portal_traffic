@@ -1,9 +1,14 @@
-# O'rnatish — Manbadan build
+# O'rnatish
 
-Hozirgi paytda Portal hali rasmiy installer'larga ega emas
-(2-bosqichdagi rasmiy chiqishdan keyin Releases sahifasiga `.dmg`,
-`.exe`, `.AppImage` qo'yiladi). Hozir ishga tushirish uchun manbadan
-build qilish kerak.
+Eng oson yo'l — [Releases sahifasidan](https://github.com/Yaxyobek0877/portal_traffic/releases)
+o'z OS'ingizga tayyor binarni yuklab oling (macOS, Windows, Linux).
+Bu sahifa **manbadan build** qilishni hohlovchi developer'lar uchun.
+
+> ⚠️ v0.4.0 binarlari imzolanmagan. macOS'da right-click → Open;
+> Windows'da SmartScreen → "Run anyway" kerak bo'ladi. Code signing
+> [keyingi reliz'da](docs/CODE_SIGNING.md).
+
+## Manbadan build qilish
 
 Tanlang:
 

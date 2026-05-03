@@ -147,6 +147,7 @@ const (
 	EventReconnecting   // signaling dropped; we'll retry
 	EventReconnected    // signaling came back and (joiner) re-joined OK
 	EventReconnectGiveUp // exceeded retry budget OR portal gone
+	EventPeerTransport  // ICE selected-pair changed (direct vs relay)
 )
 
 func (t MeshEventType) String() string {
@@ -155,6 +156,7 @@ func (t MeshEventType) String() string {
 		"peer_rtt", "peer_left", "portal_closed", "error",
 		"chat", "service_announce",
 		"reconnecting", "reconnected", "reconnect_give_up",
+		"peer_transport",
 	}[t]
 }
 
@@ -679,6 +681,12 @@ func (m *Manager) onPeerJoinedWithRoster(peerID, nick, vip string, weAreJoiner b
 		defer m.wg.Done()
 		m.watchState(p)
 	}()
+	// Transport (selected ICE pair) watcher.
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		m.watchTransport(p)
+	}()
 }
 
 func (m *Manager) kickOffOffer(p *Peer) {
@@ -795,6 +803,19 @@ func (m *Manager) handlePeerMessages(p *Peer) {
 			return
 		case msg := <-p.conn.Messages():
 			m.routeMessage(p, msg)
+		}
+	}
+}
+
+func (m *Manager) watchTransport(p *Peer) {
+	for {
+		select {
+		case <-m.closed:
+			return
+		case <-p.conn.Done():
+			return
+		case <-p.conn.TransportChanges():
+			m.emit(MeshEvent{Type: EventPeerTransport, Peer: p})
 		}
 	}
 }
