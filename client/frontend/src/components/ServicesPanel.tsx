@@ -88,28 +88,30 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
         <p className="text-xs text-zinc-500 mb-3">
           Lokal portni mesh ga oching — boshqa peerlar to'g'ridan-to'g'ri ulana oladi.
         </p>
-        <div className="flex gap-2 items-stretch">
+        <div className="flex flex-wrap gap-2 items-stretch">
           <input
             type="text"
-            placeholder="Nom (masalan minecraft)"
+            placeholder="Nom (minecraft)"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="input-base flex-1 text-sm"
+            className="input-base text-sm flex-1 min-w-[140px]"
           />
-          <input
-            type="number"
-            placeholder="Port"
-            value={port}
-            onChange={(e) => setPort(e.target.value === "" ? "" : Number(e.target.value))}
-            className="input-base w-28 text-sm font-mono"
-          />
-          <button
-            onClick={submitExpose}
-            className="btn-primary rounded-btn px-3 flex items-center gap-1 text-sm"
-          >
-            <Plus className="w-4 h-4" strokeWidth={2} />
-            Och
-          </button>
+          <div className="flex gap-2 items-stretch">
+            <input
+              type="number"
+              placeholder="Port"
+              value={port}
+              onChange={(e) => setPort(e.target.value === "" ? "" : Number(e.target.value))}
+              className="input-base w-24 text-sm font-mono"
+            />
+            <button
+              onClick={submitExpose}
+              className="btn-primary rounded-btn px-3 flex items-center gap-1 text-sm shrink-0"
+            >
+              <Plus className="w-4 h-4" strokeWidth={2} />
+              Och
+            </button>
+          </div>
         </div>
         {error && <div className="text-xs text-rose-400 mt-2">{error}</div>}
 
@@ -123,16 +125,14 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="panel rounded-input px-3 py-2 flex items-center justify-between text-sm"
+                  className="panel rounded-input px-3 py-2 flex items-center gap-2 text-sm"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Globe className="w-3.5 h-3.5 text-emerald-400" strokeWidth={2} />
-                    <span className="font-medium truncate">{s.name}</span>
-                    <span className="font-mono text-xs text-zinc-500">{s.protocol}:{s.port}</span>
-                  </div>
+                  <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
+                  <span className="font-medium truncate flex-1 min-w-0">{s.name}</span>
+                  <span className="font-mono text-xs text-zinc-500 shrink-0">{s.protocol}:{s.port}</span>
                   <button
                     onClick={() => removeExposed(s.port)}
-                    className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-rose-400"
+                    className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-rose-400 shrink-0"
                     title="Olib tashlash"
                   >
                     <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
@@ -170,21 +170,19 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
               return (
                 <div
                   key={d.port}
-                  className="panel rounded-input px-3 py-2 flex items-center justify-between text-sm"
+                  className="panel rounded-input px-3 py-2 flex items-center gap-2 text-sm"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
-                    <span className="truncate">{d.process || "?"}</span>
-                    <span className="font-mono text-xs text-zinc-500">tcp:{d.port}</span>
-                  </div>
+                  <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
+                  <span className="truncate flex-1 min-w-0">{d.process || "?"}</span>
+                  <span className="font-mono text-xs text-zinc-500 shrink-0">tcp:{d.port}</span>
                   {exposed ? (
-                    <span className="text-[11px] text-emerald-400 font-medium">ochilgan ✓</span>
+                    <span className="text-[11px] text-emerald-400 font-medium shrink-0">ochilgan ✓</span>
                   ) : (
                     <button
                       onClick={() => exposeDetected(d)}
-                      className="px-2 py-1 rounded text-[11px] font-medium bg-violet-500/15 text-violet-300 hover:bg-violet-500/25"
+                      className="px-2 py-1 rounded text-[11px] font-medium bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 shrink-0 whitespace-nowrap"
                     >
-                      Bir click bilan och
+                      Och
                     </button>
                   )}
                 </div>
@@ -193,22 +191,23 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
           </div>
         </div>
 
-        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-          <Link2 className="w-4 h-4 text-cyan-400" strokeWidth={2} />
-          Boshqa peerlardagi servislar
-        </h3>
-        {peers.every((p) => p.services.length === 0) && (
-          <div className="text-xs text-zinc-500 text-center py-8">
-            Hozircha hech kim servis e'lon qilmagan.
-          </div>
-        )}
-        <div className="space-y-3">
+        <div>
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Link2 className="w-4 h-4 text-cyan-400" strokeWidth={2} />
+            Boshqa peerlardagi servislar
+          </h3>
+          {peers.every((p) => p.services.length === 0) && (
+            <div className="text-xs text-zinc-500 text-center py-6 panel rounded-input">
+              Hozircha hech kim servis e'lon qilmagan.
+            </div>
+          )}
+          <div className="space-y-3">
           {peers.map((p) =>
             p.services.length === 0 ? null : (
               <div key={p.peerId} className="panel rounded-card p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm font-medium truncate">{p.nickname || shortId(p.peerId)}</span>
-                  <span className="text-xs text-zinc-500 font-mono">{p.virtualIp}</span>
+                <div className="flex items-center gap-2 mb-2 min-w-0">
+                  <span className="text-sm font-medium truncate min-w-0">{p.nickname || shortId(p.peerId)}</span>
+                  <span className="text-xs text-zinc-500 font-mono shrink-0">{p.virtualIp}</span>
                 </div>
                 <div className="space-y-1.5">
                   {p.services.map((s) => {
@@ -217,20 +216,18 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                     return (
                       <div
                         key={s.port}
-                        className="flex items-center justify-between gap-2 text-xs bg-black/20 rounded p-2"
+                        className="flex items-center gap-2 text-xs bg-black/20 rounded p-2"
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Globe className="w-3 h-3 text-cyan-400 shrink-0" strokeWidth={2} />
-                          <span className="truncate">{s.name}</span>
-                          <span className="font-mono text-zinc-500">{s.protocol}:{s.port}</span>
-                        </div>
+                        <Globe className="w-3 h-3 text-cyan-400 shrink-0" strokeWidth={2} />
+                        <span className="truncate flex-1 min-w-0">{s.name}</span>
+                        <span className="font-mono text-zinc-500 shrink-0">{s.protocol}:{s.port}</span>
                         {local ? (
                           <DialedPill addr={local} />
                         ) : (
                           <button
                             disabled={dialing?.peerId === p.peerId && dialing?.port === s.port}
                             onClick={() => dialPeerService(p, s)}
-                            className="px-2 py-1 rounded bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 text-[11px] font-medium disabled:opacity-50"
+                            className="px-2 py-1 rounded bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 text-[11px] font-medium disabled:opacity-50 shrink-0"
                           >
                             Ulash
                           </button>
@@ -242,6 +239,7 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
               </div>
             )
           )}
+          </div>
         </div>
       </div>
     </div>

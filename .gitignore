@@ -46,6 +46,8 @@ client/frontend/vite.config.js
 client/frontend/node_modules/
 client/build/
 client/.wails/
+# wailsjs/go is regenerated from app.go on every `wails build` — runtime/ is static
+client/frontend/wailsjs/go/
 
 # --- Android / Gradle (mobile/) ------------------------------------------
 # Keep the source tree of the mobile project in git, but never the

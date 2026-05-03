@@ -3,7 +3,7 @@ import { MessageCircle, Server } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { PortalHeader } from "../components/PortalHeader";
 import { PeerCard } from "../components/PeerCard";
-import { MeshDiagram } from "../components/MeshDiagram";
+import { PeerTable } from "../components/PeerTable";
 import { ChatPanel } from "../components/ChatPanel";
 import { ServicesPanel } from "../components/ServicesPanel";
 import { StatusBar } from "../components/StatusBar";
@@ -108,9 +108,9 @@ export function PortalView() {
           </div>
         </aside>
 
-        {/* Centre: mesh diagram */}
-        <main className="flex flex-col min-h-0 items-center justify-center p-4">
-          <MeshDiagram
+        {/* Centre: peer table */}
+        <main className="flex flex-col min-h-0 overflow-y-auto p-6">
+          <PeerTable
             selfNickname={nickname}
             selfVip={portal.ownVip}
             peers={sortedPeers}
