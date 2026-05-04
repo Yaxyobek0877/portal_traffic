@@ -225,13 +225,21 @@ func ScanWithProgress(ctx context.Context, cb func(Progress)) []Discovery {
 	return sortResults(results)
 }
 
-// allLANPrefixes returns every "X.Y.Z" /24 prefix the host has a
-// non-loopback IPv4 interface in. Multi-interface laptops (Wi-Fi +
-// ethernet, or Wi-Fi + corporate VPN) used to silently miss devices
-// on whichever interface didn't win the "primary" lottery; now both
-// get scanned. Caps to /24 wide nets — refuses /8 / /16 masks so a
-// misconfigured "10.0.0.0/8 on this iface" doesn't fan out to 16M
-// connect attempts.
+// allLANPrefixes returns every "X.Y.Z" /24 prefix derived from the
+// host's non-loopback IPv4 interfaces. Multi-interface laptops (Wi-Fi
+// + ethernet + corporate VPN + container bridges) all get scanned.
+//
+// Always uses the host IP's /24, regardless of the interface mask:
+//   - /24 (192.168.1.5/24)  → "192.168.1"
+//   - /16 (10.5.6.7/16)     → "10.5.6" (the host's neighbourhood)
+//   - /8  (10.5.6.7/8)      → "10.5.6" too — scanning all 16M of
+//     a /8 would take hours and find nothing useful, but the host's
+//     own /24 is exactly where its peers live.
+//
+// Skips public IPs entirely (refuses to port-scan the internet) —
+// only RFC1918 / CGNAT ranges are eligible. A laptop on a server
+// with a directly-attached public IPv4 won't accidentally scan
+// other people's servers.
 func allLANPrefixes() ([]string, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
@@ -259,11 +267,10 @@ func allLANPrefixes() ([]string, error) {
 			if ip4.IsLoopback() || ip4.IsLinkLocalUnicast() {
 				continue
 			}
-			// Skip nets wider than /22 — we only do /24 sweeps. A
-			// /22 (1024 addrs) would already mean ~30K probes, /16
-			// is 16M.
-			ones, _ := ipnet.Mask.Size()
-			if ones < 22 {
+			if !isPrivateIPv4(ip4) {
+				// Public IP on the interface (e.g. running on a VPS).
+				// Skip — port-scanning the wider internet is rude
+				// and would just produce false positives anyway.
 				continue
 			}
 			prefix := fmt.Sprintf("%d.%d.%d", ip4[0], ip4[1], ip4[2])
@@ -275,9 +282,29 @@ func allLANPrefixes() ([]string, error) {
 		}
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("lanscan: no IPv4 interface found")
+		return nil, fmt.Errorf("lanscan: no private IPv4 interface found")
 	}
 	return out, nil
+}
+
+// isPrivateIPv4 covers the standard RFC1918 ranges plus CGNAT
+// (100.64.0.0/10). Anything else is treated as public and skipped
+// by the scanner.
+func isPrivateIPv4(ip4 net.IP) bool {
+	if ip4 = ip4.To4(); ip4 == nil {
+		return false
+	}
+	switch {
+	case ip4[0] == 10:
+		return true
+	case ip4[0] == 192 && ip4[1] == 168:
+		return true
+	case ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31:
+		return true
+	case ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127:
+		return true
+	}
+	return false
 }
 
 // resolveHostnames does a parallel reverse DNS lookup with a tight
