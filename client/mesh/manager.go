@@ -641,7 +641,9 @@ func (m *Manager) onPeerJoined(peerID, nick, vip string) {
 func (m *Manager) onPeerJoinedWithRoster(peerID, nick, vip string, weAreJoiner bool) {
 	m.logger.Info("onPeerJoinedWithRoster begin",
 		"peer_id", peerID, "nick", nick, "vip", vip, "we_are_joiner", weAreJoiner)
+	m.logger.Info("onPeerJoinedWithRoster: about to take m.mu.Lock()", "peer_id", peerID)
 	m.mu.Lock()
+	m.logger.Info("onPeerJoinedWithRoster: m.mu.Lock() acquired", "peer_id", peerID)
 	if _, exists := m.peers[peerID]; exists {
 		m.mu.Unlock()
 		m.logger.Info("onPeerJoinedWithRoster: peer already exists, skipping",
