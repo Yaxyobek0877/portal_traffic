@@ -639,15 +639,9 @@ func (m *Manager) onPeerJoined(peerID, nick, vip string) {
 // joiner discovering existing peers, we initiate; when we're an
 // existing peer learning about a newcomer, we wait.
 func (m *Manager) onPeerJoinedWithRoster(peerID, nick, vip string, weAreJoiner bool) {
-	m.logger.Info("onPeerJoinedWithRoster begin",
-		"peer_id", peerID, "nick", nick, "vip", vip, "we_are_joiner", weAreJoiner)
-	m.logger.Info("onPeerJoinedWithRoster: about to take m.mu.Lock()", "peer_id", peerID)
 	m.mu.Lock()
-	m.logger.Info("onPeerJoinedWithRoster: m.mu.Lock() acquired", "peer_id", peerID)
 	if _, exists := m.peers[peerID]; exists {
 		m.mu.Unlock()
-		m.logger.Info("onPeerJoinedWithRoster: peer already exists, skipping",
-			"peer_id", peerID)
 		return
 	}
 	// Glare-free rule: the joiner is the offerer for every existing peer.
@@ -657,9 +651,9 @@ func (m *Manager) onPeerJoinedWithRoster(peerID, nick, vip string, weAreJoiner b
 	if weAreJoiner {
 		role = peer.RoleOfferer
 	}
-	iceCfg := m.iceServersForPeer()
-	m.logger.Info("onPeerJoinedWithRoster creating peer.Connection",
-		"peer_id", peerID, "role", role, "ice_servers_count", len(iceCfg))
+	// We're holding m.mu — must use the *Locked variant. Calling
+	// iceServersForPeer() here used to deadlock on its inner RLock.
+	iceCfg := m.iceServersForPeerLocked()
 	conn, err := peer.New(peer.Config{
 		LocalPeerID:  m.myPeerID,
 		RemotePeerID: peerID,
@@ -669,13 +663,9 @@ func (m *Manager) onPeerJoinedWithRoster(peerID, nick, vip string, weAreJoiner b
 	})
 	if err != nil {
 		m.mu.Unlock()
-		m.logger.Error("onPeerJoinedWithRoster: peer.New failed",
-			"peer_id", peerID, "err", err)
 		m.emit(MeshEvent{Type: EventError, Err: fmt.Errorf("create peer %s: %w", peerID, err)})
 		return
 	}
-	m.logger.Info("onPeerJoinedWithRoster: peer.Connection created OK",
-		"peer_id", peerID)
 	p := &Peer{
 		ID: peerID, Nickname: nick, VirtualIP: vip,
 		conn:        conn,
@@ -1117,16 +1107,27 @@ func (m *Manager) applyServerICE(servers []protocol.ICEServer) {
 //
 // pion deduplicates by URL when building the agent, so duplicates
 // across the three sources are harmless.
+//
+// Takes m.mu.RLock internally — DO NOT call from a code path that
+// already holds m.mu (write or read). Use iceServersForPeerLocked
+// when the caller already holds the lock.
 func (m *Manager) iceServersForPeer() []webrtc.ICEServer {
 	m.mu.RLock()
-	server := m.serverICE
-	m.mu.RUnlock()
+	defer m.mu.RUnlock()
+	return m.iceServersForPeerLocked()
+}
 
+// iceServersForPeerLocked is the lock-free body of iceServersForPeer.
+// Caller must already hold m.mu (read or write). Splitting the helper
+// in two avoids the recursive-RLock-while-holding-Lock deadlock that
+// onPeerJoinedWithRoster used to hit — Go's sync.RWMutex doesn't
+// allow nested locking.
+func (m *Manager) iceServersForPeerLocked() []webrtc.ICEServer {
+	server := m.serverICE
 	cfg := m.cfg.ICEServers
 	if cfg == nil {
 		cfg = DefaultICEServers
 	}
-
 	out := make([]webrtc.ICEServer, 0, len(cfg)+len(server))
 	out = append(out, cfg...)
 	out = append(out, server...)
