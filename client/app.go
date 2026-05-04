@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -985,12 +986,19 @@ func (a *App) LocalServices() []ServiceView {
 	return out
 }
 
-// ExposeService registers a local port and announces it to peers.
-// protocol is "tcp" or "udp"; "" defaults to "tcp" so older callers
-// keep working. UDP is required for game traffic — CS2 / Valorant
-// run their tickrate on UDP, exposing them as TCP-only would silently
-// fail at dial time.
-func (a *App) ExposeService(name string, protocol string, port int) error {
+// ExposeService registers a port and announces it to peers.
+//   - protocol: "tcp" or "udp"; "" defaults to "tcp"
+//   - port:     the mesh-side port other peers will dial
+//   - target:   "host:port" the proxy connects to when peers open the
+//               stream. "" → 127.0.0.1:<port> (the local service).
+//               Use a non-loopback target to forward through the
+//               mesh to a LAN device, e.g. "192.168.1.100:554" for
+//               an RTSP camera or NVR.
+//
+// UDP is required for game traffic — CS2 / Valorant run their
+// tickrate on UDP, exposing them as TCP-only would silently fail at
+// dial time.
+func (a *App) ExposeService(name string, protocol string, port int, target string) error {
 	a.mu.RLock()
 	m := a.mesh
 	f := a.fwd
@@ -1004,10 +1012,22 @@ func (a *App) ExposeService(name string, protocol string, port int) error {
 	if protocol != "tcp" && protocol != "udp" {
 		return fmt.Errorf("protocol noma'lum: %q (tcp yoki udp)", protocol)
 	}
+	target = strings.TrimSpace(target)
+	if target != "" {
+		// Validate "host:port" shape; reject anything else so a typo
+		// doesn't silently route to a bizarre destination.
+		if _, _, err := net.SplitHostPort(target); err != nil {
+			return fmt.Errorf("target noma'lum (host:port kerak): %w", err)
+		}
+	}
 	if name == "" {
 		name = fmt.Sprintf("%s:%d", protocol, port)
 	}
-	f.Expose(port)
+	f.ExposeTarget(port, target)
+	a.logger.Info("expose service",
+		"name", name, "protocol", protocol, "port", port,
+		"target", target,
+	)
 	return m.AnnounceService(name, protocol, port)
 }
 

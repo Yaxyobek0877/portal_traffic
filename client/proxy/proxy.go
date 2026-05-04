@@ -94,8 +94,13 @@ type Forwarder struct {
 	udpDialStreams map[streamKey]*udpDialStream
 	udpListeners   []*localListener
 
-	// expose registry: ports we offered to the mesh.
-	exposed map[int]struct{}
+	// expose registry: ports we offered to the mesh, mapped to the
+	// host:port the proxy should connect to when a peer dials. Default
+	// is "127.0.0.1:<port>" — the local service. Setting a non-loopback
+	// host lets you forward through the mesh to e.g. an IP camera at
+	// 192.168.1.100:554, an NVR on the LAN, or any reachable target on
+	// the host's network.
+	exposed map[int]string
 
 	closed chan struct{}
 }
@@ -157,7 +162,7 @@ func New(m Mesh, logger *slog.Logger) *Forwarder {
 		dialStreams:    make(map[streamKey]*dialStream),
 		udpDialStreams: make(map[streamKey]*udpDialStream),
 		listeners:      make(map[string]*localListener),
-		exposed:        make(map[int]struct{}),
+		exposed:        make(map[int]string),
 		closed:         make(chan struct{}),
 	}
 }
@@ -200,17 +205,33 @@ func (f *Forwarder) Close() error {
 // Expose — the host side
 // ----------------------------------------------------------------------------
 
-// Expose marks a local TCP port as available to the mesh. The actual
-// service must already be listening on localhost:<port>; this just
-// registers the port so peers' OPEN(tcp:port) requests get routed
-// to a fresh net.Dial("tcp", "localhost:port").
+// Expose marks a port as available to the mesh, defaulting the
+// upstream target to 127.0.0.1:<port>. Use ExposeTarget to forward
+// to a different host:port (e.g. an IP camera on the LAN).
 //
 // Idempotent. The mesh-level announcement (control channel) is the
 // caller's job (mesh.Manager.AnnounceService); this is the local
 // bookkeeping.
 func (f *Forwarder) Expose(port int) {
+	f.ExposeTarget(port, "")
+}
+
+// ExposeTarget marks port as available to the mesh and points the
+// upstream connection at `target` (e.g. "192.168.1.100:554" for a
+// LAN-attached RTSP camera). target == "" means localhost:port —
+// the same as plain Expose.
+//
+// The host part can be any address the host machine can reach: a
+// loopback service, a LAN device, or a routed VPN endpoint. The
+// port part can differ from the mesh-side port — handy for
+// "expose camera as :8554 to friends but it actually lives on
+// 192.168.1.100:554".
+func (f *Forwarder) ExposeTarget(port int, target string) {
+	if target == "" {
+		target = fmt.Sprintf("127.0.0.1:%d", port)
+	}
 	f.mu.Lock()
-	f.exposed[port] = struct{}{}
+	f.exposed[port] = target
 	f.mu.Unlock()
 }
 
@@ -221,11 +242,13 @@ func (f *Forwarder) Unexpose(port int) {
 	f.mu.Unlock()
 }
 
-func (f *Forwarder) isExposed(port int) bool {
+// exposeTargetFor returns ("host:port", true) if port is exposed,
+// ("", false) otherwise. Replaces the older isExposed boolean.
+func (f *Forwarder) exposeTargetFor(port int) (string, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	_, ok := f.exposed[port]
-	return ok
+	target, ok := f.exposed[port]
+	return target, ok
 }
 
 // ----------------------------------------------------------------------------
@@ -583,12 +606,17 @@ func (f *Forwarder) onOpenTCP(peerID string, id uint32, portStr string) {
 		_ = f.send(peerID, frameOpenErr, id, []byte("bad port"))
 		return
 	}
-	if !f.isExposed(port) {
+	target, ok := f.exposeTargetFor(port)
+	if !ok {
 		_ = f.send(peerID, frameOpenErr, id, []byte("port not exposed"))
 		return
 	}
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 5*time.Second)
+	f.logger.Info("proxy: tcp open from peer",
+		"peer", peerID, "stream", id, "port", port, "target", target)
+	conn, err := net.DialTimeout("tcp", target, 5*time.Second)
 	if err != nil {
+		f.logger.Warn("proxy: tcp dial target failed",
+			"target", target, "err", err)
 		_ = f.send(peerID, frameOpenErr, id, []byte(err.Error()))
 		return
 	}
@@ -630,12 +658,17 @@ func (f *Forwarder) onOpenUDP(peerID string, id uint32, portStr string) {
 		_ = f.send(peerID, frameOpenErr, id, []byte("bad port"))
 		return
 	}
-	if !f.isExposed(port) {
+	target, ok := f.exposeTargetFor(port)
+	if !ok {
 		_ = f.send(peerID, frameOpenErr, id, []byte("port not exposed"))
 		return
 	}
-	conn, err := net.DialTimeout("udp", fmt.Sprintf("127.0.0.1:%d", port), 3*time.Second)
+	f.logger.Info("proxy: udp open from peer",
+		"peer", peerID, "stream", id, "port", port, "target", target)
+	conn, err := net.DialTimeout("udp", target, 3*time.Second)
 	if err != nil {
+		f.logger.Warn("proxy: udp dial target failed",
+			"target", target, "err", err)
 		_ = f.send(peerID, frameOpenErr, id, []byte(err.Error()))
 		return
 	}

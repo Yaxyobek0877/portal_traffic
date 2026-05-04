@@ -15,6 +15,8 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
   const [name, setName] = useState("");
   const [port, setPort] = useState<number | "">("");
   const [proto, setProto] = useState<"tcp" | "udp">("tcp");
+  const [target, setTarget] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState("");
   const [dialing, setDialing] = useState<{ peerId: string; port: number; protocol: string } | null>(null);
   const [dialedAddrs, setDialedAddrs] = useState<Record<string, string>>({});
@@ -37,7 +39,9 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
 
   const exposeDetected = async (l: LocalListener) => {
     try {
-      await app.ExposeService(l.process || `${l.protocol}:${l.port}`, l.protocol, l.port);
+      // Detected listeners are by definition local; target stays empty
+      // → defaults to 127.0.0.1:port on the Go side.
+      await app.ExposeService(l.process || `${l.protocol}:${l.port}`, l.protocol, l.port, "");
       await refreshLocalServices();
     } catch (e: any) {
       setError(e?.message || String(e));
@@ -50,10 +54,16 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
       setError("Port 1–65535 oralig'ida bo'lishi kerak");
       return;
     }
+    const trimmedTarget = target.trim();
+    if (trimmedTarget && !/^[\w.\-]+:\d{1,5}$/.test(trimmedTarget)) {
+      setError("Target host:port shaklida bo'lishi kerak (masalan 192.168.1.100:554)");
+      return;
+    }
     try {
-      await app.ExposeService(name || `${proto}:${port}`, proto, port);
+      await app.ExposeService(name || `${proto}:${port}`, proto, port, trimmedTarget);
       setName("");
       setPort("");
+      setTarget("");
       await refreshLocalServices();
     } catch (e: any) {
       setError(e?.message || String(e));
@@ -132,6 +142,31 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
             </button>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="mt-2 text-[11px] text-zinc-400 hover:text-zinc-200"
+        >
+          {showAdvanced ? "− LAN target" : "+ LAN qurilma (NVR / kamera / printer)"}
+        </button>
+        {showAdvanced && (
+          <div className="mt-2">
+            <input
+              type="text"
+              placeholder="192.168.1.100:554  (bo'sh = localhost)"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              className="input-base text-sm w-full font-mono"
+            />
+            <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
+              Tarmoqdagi boshqa qurilmaga forward qilish. Misol: RTSP kamera{" "}
+              <code className="font-mono text-zinc-400">192.168.1.100:554</code>,
+              NVR <code className="font-mono text-zinc-400">192.168.1.50:8000</code>,
+              printer <code className="font-mono text-zinc-400">192.168.1.7:631</code>.
+              Bo'sh qoldirilsa, lokalda turibdi deb qabul qilinadi.
+            </p>
+          </div>
+        )}
         {error && <div className="text-xs text-rose-400 mt-2">{error}</div>}
 
         <AnimatePresence>
