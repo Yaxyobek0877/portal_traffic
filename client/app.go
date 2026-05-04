@@ -23,6 +23,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"portal_traffic_client/crashreport"
+	"portal_traffic_client/logsink"
 	"portal_traffic_client/mesh"
 	"portal_traffic_client/nat"
 	"portal_traffic_client/proxy"
@@ -142,6 +143,11 @@ type App struct {
 	updateMu       sync.Mutex
 	updateCache    updater.Result
 	updateCacheTTL time.Time
+
+	// logSink is the background goroutine that ships log lines to the
+	// signaling host's /logs/upload endpoint. nil if upload is disabled
+	// or its config didn't resolve. See client/logsink.
+	logSink *logsink.Sink
 }
 
 // NewApp constructs the app singleton; main.go binds it.
@@ -167,6 +173,8 @@ func (a *App) Startup(ctx context.Context) {
 		a.nick = store.GetOr(storage.KeyNickname, "")
 	}
 
+	a.startLogSink()
+
 	// Run NAT detection in the background; UI subscribes to "nat:result".
 	go func() {
 		dctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -183,17 +191,74 @@ func (a *App) Startup(ctx context.Context) {
 	}()
 }
 
+// startLogSink wires up the background log uploader if it's enabled
+// (default-on, opt-out via KeyLogUpload="0"). Resolves the upload URL
+// from the configured signaling URL by default, can be overridden via
+// KeyLogUploadURL.
+func (a *App) startLogSink() {
+	enabled := "1"
+	uploadURL := ""
+	signalingURL := ""
+	if a.store != nil {
+		enabled = a.store.GetOr(storage.KeyLogUpload, "1")
+		uploadURL = a.store.GetOr(storage.KeyLogUploadURL, "")
+		signalingURL = a.store.GetOr(storage.KeySignalingURL, "")
+	}
+	if enabled == "0" {
+		a.logger.Info("logsink: disabled by setting")
+		return
+	}
+	if uploadURL == "" {
+		uploadURL = logsink.DeriveUploadURL(signalingURL)
+	}
+	if uploadURL == "" {
+		uploadURL = logsink.DeriveUploadURL(signaling.DefaultURL)
+	}
+	if uploadURL == "" {
+		a.logger.Info("logsink: no upload URL resolvable, skipping")
+		return
+	}
+
+	clientID, err := logsink.LoadOrMintClientID()
+	if err != nil {
+		a.logger.Warn("logsink: client id mint failed", "err", err)
+		return
+	}
+
+	a.mu.Lock()
+	if a.logSink != nil {
+		// Already running (Startup called twice somehow).
+		a.mu.Unlock()
+		return
+	}
+	a.logSink = logsink.Start(logsink.Config{
+		LogFile:   LogFile,
+		UploadURL: uploadURL,
+		ClientID:  clientID,
+		Version:   Version,
+		Logger:    a.logger,
+	})
+	a.mu.Unlock()
+}
+
 // Shutdown cleans up the mesh, proxy, transfer engine, and SQLite.
 func (a *App) Shutdown(ctx context.Context) {
 	a.mu.Lock()
 	m := a.mesh
 	f := a.fwd
 	store := a.store
+	sink := a.logSink
 	a.mesh = nil
 	a.fwd = nil
 	a.xfer = nil
 	a.store = nil
+	a.logSink = nil
 	a.mu.Unlock()
+	if sink != nil {
+		// Triggers one final drain so the very last lines (incl. the
+		// "shutdown" record itself once it lands) get uploaded.
+		sink.Stop()
+	}
 	if f != nil {
 		_ = f.Close()
 	}

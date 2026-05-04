@@ -76,4 +76,9 @@ const (
 	KeyTurnURL        = "turn_url"
 	KeyTurnUsername   = "turn_username"
 	KeyTurnCredential = "turn_credential"
+
+	// Log upload — opt-out diagnostic shipping. See client/logsink/.
+	// Empty = default-on, "0" disables, anything else (e.g. "1") forces on.
+	KeyLogUpload    = "log_upload_enabled"
+	KeyLogUploadURL = "log_upload_url"
 )
