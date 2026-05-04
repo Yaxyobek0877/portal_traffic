@@ -99,6 +99,7 @@ export type TurnConfig = {
 
 export type LocalListener = {
   port: number;
+  protocol: "tcp" | "udp";
   process: string;
   pid: number;
   local: string;

@@ -248,6 +248,19 @@ func (f *Forwarder) DialPreferringPort(ctx context.Context, remotePeerID string,
 	return f.Dial(ctx, remotePeerID, remotePort, "127.0.0.1:0")
 }
 
+// DialUDPPreferringPort is the UDP counterpart of DialPreferringPort.
+// CS2 / Valorant / most multiplayer FPS run their game stream on UDP
+// (e.g. UDP 27015), so the local alias the user expects to type into
+// the game's "Connect to server" field also has to be a UDP listener.
+func (f *Forwarder) DialUDPPreferringPort(ctx context.Context, remotePeerID string, remotePort int) (*net.UDPConn, error) {
+	if remotePort > 0 {
+		if conn, err := f.DialUDP(ctx, remotePeerID, remotePort, fmt.Sprintf("127.0.0.1:%d", remotePort)); err == nil {
+			return conn, nil
+		}
+	}
+	return f.DialUDP(ctx, remotePeerID, remotePort, "127.0.0.1:0")
+}
+
 // Dial opens a local TCP listener on `localAddr` (e.g. "127.0.0.1:0"
 // for an OS-chosen port). Every accepted connection on that listener
 // is multiplexed over the proxy channel as a fresh stream targeting

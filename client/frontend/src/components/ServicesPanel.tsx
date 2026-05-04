@@ -14,8 +14,9 @@ type Props = {
 export function ServicesPanel({ localServices, peers, refreshLocalServices }: Props) {
   const [name, setName] = useState("");
   const [port, setPort] = useState<number | "">("");
+  const [proto, setProto] = useState<"tcp" | "udp">("tcp");
   const [error, setError] = useState("");
-  const [dialing, setDialing] = useState<{ peerId: string; port: number } | null>(null);
+  const [dialing, setDialing] = useState<{ peerId: string; port: number; protocol: string } | null>(null);
   const [dialedAddrs, setDialedAddrs] = useState<Record<string, string>>({});
   const [detected, setDetected] = useState<LocalListener[]>([]);
   const [scanning, setScanning] = useState(false);
@@ -36,7 +37,7 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
 
   const exposeDetected = async (l: LocalListener) => {
     try {
-      await app.ExposeService(l.process || `tcp:${l.port}`, l.port);
+      await app.ExposeService(l.process || `${l.protocol}:${l.port}`, l.protocol, l.port);
       await refreshLocalServices();
     } catch (e: any) {
       setError(e?.message || String(e));
@@ -50,7 +51,7 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
       return;
     }
     try {
-      await app.ExposeService(name || `tcp:${port}`, port);
+      await app.ExposeService(name || `${proto}:${port}`, proto, port);
       setName("");
       setPort("");
       await refreshLocalServices();
@@ -67,10 +68,10 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
   };
 
   const dialPeerService = async (peer: PeerView, svc: ServiceView) => {
-    setDialing({ peerId: peer.peerId, port: svc.port });
+    setDialing({ peerId: peer.peerId, port: svc.port, protocol: svc.protocol });
     try {
-      const addr = await app.DialService(peer.peerId, svc.port, 0);
-      setDialedAddrs((s) => ({ ...s, [`${peer.peerId}:${svc.port}`]: addr }));
+      const addr = await app.DialService(peer.peerId, svc.protocol as "tcp" | "udp", svc.port, 0);
+      setDialedAddrs((s) => ({ ...s, [`${peer.peerId}:${svc.protocol}:${svc.port}`]: addr }));
     } catch (e: any) {
       setError(e?.message || String(e));
     } finally {
@@ -91,12 +92,30 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
         <div className="flex flex-wrap gap-2 items-stretch">
           <input
             type="text"
-            placeholder="Nom (minecraft)"
+            placeholder="Nom (minecraft / cs2)"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="input-base text-sm flex-1 min-w-[140px]"
           />
           <div className="flex gap-2 items-stretch">
+            <div className="flex rounded overflow-hidden border border-white/10 text-[11px] font-mono shrink-0">
+              <button
+                type="button"
+                onClick={() => setProto("tcp")}
+                className={`px-2 ${proto === "tcp" ? "bg-violet-500/30 text-white" : "text-zinc-400 hover:bg-white/[0.04]"}`}
+                title="HTTP, SSH, Minecraft Java — TCP"
+              >
+                TCP
+              </button>
+              <button
+                type="button"
+                onClick={() => setProto("udp")}
+                className={`px-2 ${proto === "udp" ? "bg-violet-500/30 text-white" : "text-zinc-400 hover:bg-white/[0.04]"}`}
+                title="CS2, Valorant, Minecraft Bedrock — UDP"
+              >
+                UDP
+              </button>
+            </div>
             <input
               type="number"
               placeholder="Port"
@@ -120,7 +139,7 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
             <motion.div layout className="mt-3 space-y-1.5">
               {localServices.map((s) => (
                 <motion.div
-                  key={s.port}
+                  key={`${s.protocol}:${s.port}`}
                   layout
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
@@ -129,7 +148,12 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                 >
                   <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
                   <span className="font-medium truncate flex-1 min-w-0">{s.name}</span>
-                  <span className="font-mono text-xs text-zinc-500 shrink-0">{s.protocol}:{s.port}</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
+                    s.protocol === "udp" ? "bg-cyan-400/10 text-cyan-300" : "bg-violet-400/10 text-violet-300"
+                  }`}>
+                    {s.protocol.toUpperCase()}
+                  </span>
+                  <span className="font-mono text-xs text-zinc-500 shrink-0">:{s.port}</span>
                   <button
                     onClick={() => removeExposed(s.port)}
                     className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-rose-400 shrink-0"
@@ -166,15 +190,22 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
           )}
           <div className="space-y-1.5">
             {detected.map((d) => {
-              const exposed = localServices.some((s) => s.port === d.port);
+              const exposed = localServices.some(
+                (s) => s.port === d.port && s.protocol === d.protocol,
+              );
               return (
                 <div
-                  key={d.port}
+                  key={`${d.protocol}:${d.port}`}
                   className="panel rounded-input px-3 py-2 flex items-center gap-2 text-sm"
                 >
                   <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
                   <span className="truncate flex-1 min-w-0">{d.process || "?"}</span>
-                  <span className="font-mono text-xs text-zinc-500 shrink-0">tcp:{d.port}</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
+                    d.protocol === "udp" ? "bg-cyan-400/10 text-cyan-300" : "bg-violet-400/10 text-violet-300"
+                  }`}>
+                    {d.protocol.toUpperCase()}
+                  </span>
+                  <span className="font-mono text-xs text-zinc-500 shrink-0">:{d.port}</span>
                   {exposed ? (
                     <span className="text-[11px] text-emerald-400 font-medium shrink-0">ochilgan ✓</span>
                   ) : (
@@ -211,21 +242,28 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                 </div>
                 <div className="space-y-1.5">
                   {p.services.map((s) => {
-                    const key = `${p.peerId}:${s.port}`;
+                    const key = `${p.peerId}:${s.protocol}:${s.port}`;
                     const local = dialedAddrs[key];
+                    const isDialing = dialing?.peerId === p.peerId &&
+                      dialing?.port === s.port && dialing?.protocol === s.protocol;
                     return (
                       <div
-                        key={s.port}
+                        key={`${s.protocol}:${s.port}`}
                         className="flex items-center gap-2 text-xs bg-black/20 rounded p-2"
                       >
                         <Globe className="w-3 h-3 text-cyan-400 shrink-0" strokeWidth={2} />
                         <span className="truncate flex-1 min-w-0">{s.name}</span>
-                        <span className="font-mono text-zinc-500 shrink-0">{s.protocol}:{s.port}</span>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
+                          s.protocol === "udp" ? "bg-cyan-400/10 text-cyan-300" : "bg-violet-400/10 text-violet-300"
+                        }`}>
+                          {s.protocol.toUpperCase()}
+                        </span>
+                        <span className="font-mono text-zinc-500 shrink-0">:{s.port}</span>
                         {local ? (
                           <DialedPill addr={local} expectedPort={s.port} />
                         ) : (
                           <button
-                            disabled={dialing?.peerId === p.peerId && dialing?.port === s.port}
+                            disabled={isDialing}
                             onClick={() => dialPeerService(p, s)}
                             className="px-2 py-1 rounded bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 text-[11px] font-medium disabled:opacity-50 shrink-0"
                           >

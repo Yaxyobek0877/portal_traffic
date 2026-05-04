@@ -60,22 +60,43 @@ func isSystemProcess(cmd string) bool {
 	return false
 }
 
-// localListenersCommand returns an os/exec command and a parser
-// function appropriate for the current platform. Returns (nil, nil)
-// if the platform isn't supported.
-func localListenersCommand() (*exec.Cmd, func(string) []LocalListener) {
+// localListenerCommands returns the platform-specific commands to
+// enumerate TCP and UDP listeners separately, each tagged with the
+// protocol the parser should set on emitted LocalListener rows. We
+// enumerate the two protocols separately because game servers (CS2,
+// Valorant, Minecraft Bedrock) bind UDP and a TCP-only sweep silently
+// misses them — that was the bug behind "Portal can't see my CS2
+// server".
+//
+// Returns nil when the platform isn't supported (Windows for now).
+type listenerProbe struct {
+	cmd      *exec.Cmd
+	protocol string
+	parser   func(out string, protocol string) []LocalListener
+}
+
+func localListenerProbes() []listenerProbe {
 	switch runtime.GOOS {
 	case "darwin":
 		// `lsof -F pcn` emits one record per line with fields prefixed:
 		//   p<pid> c<command> n<host:port>
-		// Output is parseable without quoting tricks.
-		return exec.Command("lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pcn"), parseLsofF
+		// Output is parseable without quoting tricks. We run two passes:
+		// one for TCP listeners, one for UDP. UDP doesn't have a
+		// listening "state" the way TCP does (no -sTCP:LISTEN
+		// equivalent) so for UDP we just enumerate every UDP socket and
+		// rely on the upper-layer filter to drop noise.
+		return []listenerProbe{
+			{cmd: exec.Command("lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pcn"), protocol: "tcp", parser: parseLsofF},
+			{cmd: exec.Command("lsof", "-nP", "-iUDP", "-F", "pcn"), protocol: "udp", parser: parseLsofF},
+		}
 	case "linux":
-		// `ss -H -lntp` ("no header, listening, numeric, tcp, processes")
-		// State Recv-Q Send-Q Local Address:Port  Peer Address:Port  Process
-		return exec.Command("ss", "-H", "-lntp"), parseSS
+		// `ss -H -lntp` for TCP listeners; `ss -H -lnup` for UDP.
+		return []listenerProbe{
+			{cmd: exec.Command("ss", "-H", "-lntp"), protocol: "tcp", parser: parseSS},
+			{cmd: exec.Command("ss", "-H", "-lnup"), protocol: "udp", parser: parseSS},
+		}
 	default:
-		return nil, nil
+		return nil
 	}
 }
 
@@ -83,7 +104,7 @@ func localListenersCommand() (*exec.Cmd, func(string) []LocalListener) {
 // lines starting with field-marker bytes; entries are grouped by
 // process (`p`) followed by command (`c`) followed by one or more
 // `n<host:port>` lines.
-func parseLsofF(out string) []LocalListener {
+func parseLsofF(out string, protocol string) []LocalListener {
 	var rows []LocalListener
 	var pid int
 	var cmd string
@@ -102,6 +123,7 @@ func parseLsofF(out string) []LocalListener {
 		case 'n':
 			addr := line[1:]
 			// addr looks like: *:8000  127.0.0.1:6379  [::1]:5432
+			// UDP lsof can also emit "*:*" for unbound — skip those.
 			port := portFromAddr(addr)
 			if port == 0 {
 				continue
@@ -110,18 +132,19 @@ func parseLsofF(out string) []LocalListener {
 				continue
 			}
 			rows = append(rows, LocalListener{
-				Port:    port,
-				Process: cmd,
-				PID:     pid,
-				Local:   addr,
+				Port:     port,
+				Protocol: protocol,
+				Process:  cmd,
+				PID:      pid,
+				Local:    addr,
 			})
 		}
 	}
 	return rows
 }
 
-// parseSS parses `ss -H -lntp` output.
-func parseSS(out string) []LocalListener {
+// parseSS parses `ss -H -lntp` / `ss -H -lnup` output.
+func parseSS(out string, protocol string) []LocalListener {
 	var rows []LocalListener
 	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(line)
@@ -153,10 +176,11 @@ func parseSS(out string) []LocalListener {
 			pid, _ = strconv.Atoi(rest[:j])
 		}
 		rows = append(rows, LocalListener{
-			Port:    port,
-			Process: cmd,
-			PID:     pid,
-			Local:   local,
+			Port:     port,
+			Protocol: protocol,
+			Process:  cmd,
+			PID:      pid,
+			Local:    local,
 		})
 	}
 	return rows

@@ -100,12 +100,16 @@ type TurnConfig struct {
 	Credential string `json:"credential"`
 }
 
-// LocalListener describes a TCP port the OS reports as listening.
+// LocalListener describes a port the OS reports as listening, with
+// its protocol (TCP or UDP). UDP entries matter for game traffic —
+// CS2 / Valorant / most multiplayer FPS run their game stream on UDP,
+// so a TCP-only detector would silently miss them.
 type LocalListener struct {
-	Port    int    `json:"port"`
-	Process string `json:"process"`
-	PID     int    `json:"pid"`
-	Local   string `json:"local"`
+	Port     int    `json:"port"`
+	Protocol string `json:"protocol"` // "tcp" | "udp"
+	Process  string `json:"process"`
+	PID      int    `json:"pid"`
+	Local    string `json:"local"`
 }
 
 // App is the Wails-bound singleton.
@@ -902,27 +906,32 @@ func (a *App) ClearLogs() {
 	ClearLogTail()
 }
 
-// LocalListeners enumerates TCP ports the OS reports as listening.
-// Used by the Services panel to offer one-click "expose" for the
-// services already running on the user's machine.
+// LocalListeners enumerates TCP and UDP ports the OS reports as
+// listening. Used by the Services panel to offer one-click "expose"
+// for services already running on the user's machine — including UDP
+// game servers (CS2 27015, Minecraft Bedrock 19132) which a TCP-only
+// sweep silently misses.
 //
-// Implementation: shell out to `lsof -nP -iTCP -sTCP:LISTEN -F pcPLn`
-// (macOS) or fall back to `ss -lntp` (Linux). Both produce parseable
-// output. Errors are returned as an empty list so the UI stays
-// usable on platforms where neither is available (Windows, sandboxed
-// environments).
+// Implementation: shell out per protocol — `lsof -iTCP -sTCP:LISTEN`
+// + `lsof -iUDP` (macOS), or `ss -lntp` + `ss -lnup` (Linux). Errors
+// are absorbed so the UI stays usable on platforms where neither is
+// available (Windows, sandboxed environments).
 func (a *App) LocalListeners() []LocalListener {
 	out := []LocalListener{}
-	cmd, parser := localListenersCommand()
-	if cmd == nil {
+	probes := localListenerProbes()
+	if len(probes) == 0 {
 		return out
 	}
-	stdout, err := cmd.Output()
-	if err != nil {
-		a.logger.Debug("local listeners enumerate failed", "err", err)
-		return out
+	var all []LocalListener
+	for _, p := range probes {
+		stdout, err := p.cmd.Output()
+		if err != nil {
+			a.logger.Debug("local listeners enumerate failed",
+				"protocol", p.protocol, "err", err)
+			continue
+		}
+		all = append(all, p.parser(string(stdout), p.protocol)...)
 	}
-	rows := parser(string(stdout))
 	// Filter out the noise: ports < 1024 are mostly system services
 	// (most users won't want to expose mDNS, AirPlay, etc.); also
 	// drop the well-known infra (cloudflared metrics, our own
@@ -933,18 +942,31 @@ func (a *App) LocalListeners() []LocalListener {
 		"identitys": true, "sharingd": true,
 		"Portal": true, "portal-si": true, "portal-cl": true,
 	}
-	seen := map[int]bool{}
-	for _, r := range rows {
+	// Dedup key is (protocol, port) — the same port can legitimately
+	// have a TCP and a UDP listener at once (Steam dedicated servers
+	// are a classic example).
+	type key struct {
+		proto string
+		port  int
+	}
+	seen := map[key]bool{}
+	for _, r := range all {
 		if r.Port < 1024 || systemNoise[r.Process] {
 			continue
 		}
-		if seen[r.Port] {
+		k := key{r.Protocol, r.Port}
+		if seen[k] {
 			continue
 		}
-		seen[r.Port] = true
+		seen[k] = true
 		out = append(out, r)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Port < out[j].Port })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Port != out[j].Port {
+			return out[i].Port < out[j].Port
+		}
+		return out[i].Protocol < out[j].Protocol
+	})
 	return out
 }
 
@@ -963,8 +985,12 @@ func (a *App) LocalServices() []ServiceView {
 	return out
 }
 
-// ExposeService registers a local TCP port and announces it to peers.
-func (a *App) ExposeService(name string, port int) error {
+// ExposeService registers a local port and announces it to peers.
+// protocol is "tcp" or "udp"; "" defaults to "tcp" so older callers
+// keep working. UDP is required for game traffic — CS2 / Valorant
+// run their tickrate on UDP, exposing them as TCP-only would silently
+// fail at dial time.
+func (a *App) ExposeService(name string, protocol string, port int) error {
 	a.mu.RLock()
 	m := a.mesh
 	f := a.fwd
@@ -972,11 +998,17 @@ func (a *App) ExposeService(name string, port int) error {
 	if m == nil || f == nil {
 		return errors.New("portal yo'q")
 	}
+	if protocol == "" {
+		protocol = "tcp"
+	}
+	if protocol != "tcp" && protocol != "udp" {
+		return fmt.Errorf("protocol noma'lum: %q (tcp yoki udp)", protocol)
+	}
 	if name == "" {
-		name = fmt.Sprintf("tcp:%d", port)
+		name = fmt.Sprintf("%s:%d", protocol, port)
 	}
 	f.Expose(port)
-	return m.AnnounceService(name, "tcp", port)
+	return m.AnnounceService(name, protocol, port)
 }
 
 // UnexposeService removes a previously exposed port.
@@ -992,32 +1024,57 @@ func (a *App) UnexposeService(port int) error {
 	return m.UnannounceService(port)
 }
 
-// DialService opens a local TCP listener that pumps connections to
-// peerID's exposed remotePort. localPort 0 means "match remotePort if
-// free, otherwise let the OS pick" — this way the local alias mirrors
-// the remote address (127.0.0.1:5000 for a remote :5000) which is what
-// users expect when they exposed e.g. a Minecraft server on :25565.
-// Returns the resolved local addr ("127.0.0.1:5000") so the UI shows it.
-func (a *App) DialService(peerID string, remotePort, localPort int) (string, error) {
+// DialService opens a local listener (TCP or UDP) that pumps to the
+// peer's exposed remotePort. protocol "" defaults to "tcp" so older
+// callers still work. localPort 0 means "match remotePort if free,
+// otherwise let the OS pick" — the local alias mirrors the remote
+// address (127.0.0.1:27015 for a remote :27015) which is what users
+// expect when typing it into a game's connect dialog.
+//
+// Returns the resolved local addr ("127.0.0.1:27015") so the UI
+// shows it.
+func (a *App) DialService(peerID string, protocol string, remotePort, localPort int) (string, error) {
 	a.mu.RLock()
 	f := a.fwd
 	a.mu.RUnlock()
 	if f == nil {
 		return "", errors.New("portal yo'q")
 	}
-	if localPort == 0 {
-		ln, err := f.DialPreferringPort(a.ctx, peerID, remotePort)
+	if protocol == "" {
+		protocol = "tcp"
+	}
+	switch protocol {
+	case "tcp":
+		if localPort == 0 {
+			ln, err := f.DialPreferringPort(a.ctx, peerID, remotePort)
+			if err != nil {
+				return "", err
+			}
+			return ln.Addr().String(), nil
+		}
+		addr := fmt.Sprintf("127.0.0.1:%d", localPort)
+		ln, err := f.Dial(a.ctx, peerID, remotePort, addr)
 		if err != nil {
 			return "", err
 		}
 		return ln.Addr().String(), nil
+	case "udp":
+		if localPort == 0 {
+			conn, err := f.DialUDPPreferringPort(a.ctx, peerID, remotePort)
+			if err != nil {
+				return "", err
+			}
+			return conn.LocalAddr().String(), nil
+		}
+		addr := fmt.Sprintf("127.0.0.1:%d", localPort)
+		conn, err := f.DialUDP(a.ctx, peerID, remotePort, addr)
+		if err != nil {
+			return "", err
+		}
+		return conn.LocalAddr().String(), nil
+	default:
+		return "", fmt.Errorf("protocol noma'lum: %q (tcp yoki udp)", protocol)
 	}
-	addr := fmt.Sprintf("127.0.0.1:%d", localPort)
-	ln, err := f.Dial(a.ctx, peerID, remotePort, addr)
-	if err != nil {
-		return "", err
-	}
-	return ln.Addr().String(), nil
 }
 
 // ----------------------------------------------------------------------------
