@@ -83,6 +83,10 @@ type ServiceView struct {
 	// always come back "" (we can't probe their LAN from here).
 	Health      string `json:"health,omitempty"`
 	HealthError string `json:"healthError,omitempty"`
+	// Paused is true for services the user has explicitly paused —
+	// the row stays in the UI so they can un-pause, but no peer can
+	// dial it and it isn't announced to the mesh.
+	Paused bool `json:"paused,omitempty"`
 }
 
 // ChatMessage is what the frontend logs in the chat panel.
@@ -1090,11 +1094,17 @@ func (a *App) ProxyActivity() []ActivityEntry {
 // short list of well-known service ports (RTSP cameras, HTTP web
 // UIs, network printers, etc.) so the user can one-click expose LAN
 // devices without typing IP:port by hand. ~5–10 seconds for a typical
-// home network.
+// home network. Emits "lanscan:progress" events while running so the
+// UI can paint a "scanning 192.168.1.123…" line instead of a blank.
 func (a *App) ScanLAN() []lanscan.Discovery {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
-	out := lanscan.Scan(ctx)
+	out := lanscan.ScanWithProgress(ctx, func(p lanscan.Progress) {
+		if a.ctx == nil {
+			return
+		}
+		runtime.EventsEmit(a.ctx, "lanscan:progress", p)
+	})
 	a.logger.Info("lan scan complete", "found", len(out))
 	if out == nil {
 		// JSON-marshal nil slice as [] not null — UI iterates over it.
@@ -1162,6 +1172,7 @@ func (a *App) LocalServices() []ServiceView {
 	a.mu.RLock()
 	m := a.mesh
 	f := a.fwd
+	store := a.store
 	a.mu.RUnlock()
 	if m == nil {
 		return []ServiceView{}
@@ -1178,6 +1189,7 @@ func (a *App) LocalServices() []ServiceView {
 	a.healthMu.Unlock()
 
 	out := []ServiceView{}
+	seen := map[string]bool{}
 	for _, s := range m.LocalServices() {
 		v := ServiceView{Name: s.Name, Protocol: s.Protocol, Port: s.Port}
 		if t, ok := targets[s.Port]; ok {
@@ -1190,6 +1202,30 @@ func (a *App) LocalServices() []ServiceView {
 			v.Health = "unknown"
 		}
 		out = append(out, v)
+		seen[fmt.Sprintf("%s:%d", s.Protocol, s.Port)] = true
+	}
+	// Paused entries — remembered in storage but currently not
+	// announced. Surface them so the user can resume from the UI.
+	if store != nil {
+		saved, _ := store.ListExposedServices()
+		for _, s := range saved {
+			if s.Enabled {
+				continue
+			}
+			key := fmt.Sprintf("%s:%d", s.Protocol, s.Port)
+			if seen[key] {
+				continue
+			}
+			out = append(out, ServiceView{
+				Name:     s.Name,
+				Protocol: s.Protocol,
+				Port:     s.Port,
+				Target:   s.Target,
+				Paused:   true,
+				// Health doesn't make sense for paused entries; UI
+				// renders them as a different state anyway.
+			})
+		}
 	}
 	return out
 }
@@ -1312,6 +1348,65 @@ func (a *App) ExposeService(name string, protocol string, port int, target strin
 		}
 	}
 	return m.AnnounceService(name, protocol, port)
+}
+
+// SetExposeEnabled toggles a service between "actively shared" and
+// "remembered but paused" without losing its LAN-target / name. Pause
+// removes it from the running mesh + storage's enabled flag flips
+// off; resume re-applies the persisted entry to the running mesh.
+//
+// Lets users park their cameras / NVRs without re-typing IPs every
+// time they want to stop sharing for a bit.
+func (a *App) SetExposeEnabled(port int, protocol string, enabled bool) error {
+	a.mu.RLock()
+	m := a.mesh
+	f := a.fwd
+	store := a.store
+	a.mu.RUnlock()
+	if m == nil || f == nil {
+		return errors.New("portal yo'q")
+	}
+	if protocol == "" {
+		protocol = "tcp"
+	}
+	if store == nil {
+		return errors.New("storage mavjud emas — pauza saqlanmaydi")
+	}
+
+	saved, err := store.ListExposedServices()
+	if err != nil {
+		return err
+	}
+	var match *storage.ExposedService
+	for i := range saved {
+		if saved[i].Port == port && saved[i].Protocol == protocol {
+			match = &saved[i]
+			break
+		}
+	}
+	if match == nil {
+		return fmt.Errorf("servis topilmadi: %s:%d", protocol, port)
+	}
+	match.Enabled = enabled
+	if err := store.SaveExposedService(*match); err != nil {
+		return err
+	}
+
+	if !enabled {
+		// Pause: stop sharing now but keep the row.
+		f.Unexpose(port)
+		_ = m.UnannounceService(port)
+		a.logger.Info("expose paused", "port", port, "protocol", protocol)
+		return nil
+	}
+	// Resume: re-apply to the running mesh.
+	f.ExposeTarget(port, match.Target)
+	if err := m.AnnounceService(match.Name, match.Protocol, match.Port); err != nil {
+		return err
+	}
+	a.logger.Info("expose resumed",
+		"port", port, "protocol", protocol, "target", match.Target)
+	return nil
 }
 
 // UnexposeService removes a previously exposed port. Also wipes the

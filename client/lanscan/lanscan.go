@@ -16,6 +16,7 @@ import (
 	"net"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -52,10 +53,27 @@ var defaultPorts = []probedPort{
 	{22, "ssh"},
 }
 
+// Progress reports incremental scan state. Emitted by ScanWithProgress
+// roughly every 5% of the IP queue so the UI can paint a live counter
+// instead of staring at a 12-second blank panel.
+type Progress struct {
+	Done    int    `json:"done"`    // probes completed
+	Total   int    `json:"total"`   // total probes scheduled
+	Hits    int    `json:"hits"`    // discoveries found so far
+	Current string `json:"current"` // last IP being probed (best-effort, may lag)
+}
+
 // Scan walks the host's primary IPv4 /24 and returns reachable
 // (host:port) tuples. ctx caps the total scan time; a 5–10s budget
 // is the sweet spot — past that you're just probing dead IPs.
 func Scan(ctx context.Context) []Discovery {
+	return ScanWithProgress(ctx, nil)
+}
+
+// ScanWithProgress is Scan with a progress callback. cb may be nil.
+// Called from a worker goroutine so it should be cheap and
+// non-blocking — typically just emits a Wails event.
+func ScanWithProgress(ctx context.Context, cb func(Progress)) []Discovery {
 	prefix, err := primaryLANPrefix()
 	if err != nil {
 		return nil
@@ -71,6 +89,12 @@ func Scan(ctx context.Context) []Discovery {
 	var results []Discovery
 	var resMu sync.Mutex
 
+	total := 254 * len(defaultPorts)
+	var done int64
+	var hits int64
+	var lastIP atomic.Value // string
+	lastIP.Store("")
+
 	const workers = 64
 	var wg sync.WaitGroup
 	for i := 0; i < workers; i++ {
@@ -85,11 +109,14 @@ func Scan(ctx context.Context) []Discovery {
 				default:
 				}
 				addr := fmt.Sprintf("%s:%d", t.ip, t.port)
+				lastIP.Store(t.ip)
 				conn, err := d.DialContext(ctx, "tcp", addr)
+				atomic.AddInt64(&done, 1)
 				if err != nil {
 					continue
 				}
 				_ = conn.Close()
+				atomic.AddInt64(&hits, 1)
 				resMu.Lock()
 				results = append(results, Discovery{
 					IP: t.ip, Port: t.port, Protocol: "tcp", Service: t.svc,
@@ -97,6 +124,33 @@ func Scan(ctx context.Context) []Discovery {
 				resMu.Unlock()
 			}
 		}()
+	}
+
+	// Progress emitter — ticks roughly every 200ms so the UI sees
+	// continuous motion without us spamming Wails events.
+	if cb != nil {
+		var tickerCancel context.CancelFunc
+		var tickerCtx context.Context
+		tickerCtx, tickerCancel = context.WithCancel(ctx)
+		go func() {
+			t := time.NewTicker(200 * time.Millisecond)
+			defer t.Stop()
+			for {
+				select {
+				case <-tickerCtx.Done():
+					return
+				case <-t.C:
+					ip, _ := lastIP.Load().(string)
+					cb(Progress{
+						Done:    int(atomic.LoadInt64(&done)),
+						Total:   total,
+						Hits:    int(atomic.LoadInt64(&hits)),
+						Current: ip,
+					})
+				}
+			}
+		}()
+		defer tickerCancel()
 	}
 
 	// Enqueue every (IP, port) combo. The host's own IP is included —

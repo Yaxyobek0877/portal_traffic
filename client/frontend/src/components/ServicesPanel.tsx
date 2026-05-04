@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Server, Link2, Trash2, Globe, Search, Zap, Copy, Check, Radar, Sparkles } from "lucide-react";
+import { Plus, Server, Link2, Trash2, Globe, Search, Zap, Copy, Check, Radar, Sparkles, Pause, Play } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { LocalListener, LANDiscovery, PeerView, ServiceView, RiskAssessment } from "../types";
-import { app } from "../lib/wails";
+import { app, subscribe } from "../lib/wails";
 import { shortId } from "../lib/format";
 
 type Props = {
@@ -40,7 +40,7 @@ const presets: Preset[] = [
 export function ServicesPanel({ localServices, peers, refreshLocalServices }: Props) {
   const [name, setName] = useState("");
   const [port, setPort] = useState<number | "">("");
-  const [proto, setProto] = useState<"tcp" | "udp">("tcp");
+  const [proto, setProto] = useState<"tcp" | "udp" | "both">("tcp");
   const [target, setTarget] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
@@ -64,6 +64,14 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
   const [lanDevices, setLanDevices] = useState<LANDiscovery[]>([]);
   const [lanScanning, setLanScanning] = useState(false);
   const [lanScanned, setLanScanned] = useState(false);
+  const [lanProgress, setLanProgress] = useState<{ done: number; total: number; hits: number; current: string } | null>(null);
+
+  useEffect(() => {
+    return subscribe<{ done: number; total: number; hits: number; current: string }>(
+      "lanscan:progress",
+      (p) => setLanProgress(p),
+    );
+  }, []);
 
   const refreshDetected = async () => {
     setScanning(true);
@@ -115,11 +123,20 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
       setError("Target host:port shaklida bo'lishi kerak (masalan 192.168.1.100:554)");
       return;
     }
-    if (!(await confirmRisk(trimmedTarget, proto, port))) {
+    // "both" expands to two exposes — same name/port/target on TCP
+    // and UDP. Useful for Source / Steam game servers (CS2 27015 needs
+    // both; the TCP side is RCON / query). Risk check runs once
+    // against TCP since the target/port are identical.
+    const protocols: ("tcp" | "udp")[] =
+      proto === "both" ? ["tcp", "udp"] : [proto];
+    if (!(await confirmRisk(trimmedTarget, protocols[0], port))) {
       return;
     }
     try {
-      await app.ExposeService(name || `${proto}:${port}`, proto, port, trimmedTarget);
+      const baseName = name || `${proto === "both" ? "both" : proto}:${port}`;
+      for (const p of protocols) {
+        await app.ExposeService(baseName, p, port, trimmedTarget);
+      }
       setName("");
       setPort("");
       setTarget("");
@@ -136,8 +153,18 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
     } catch {}
   };
 
+  const togglePause = async (s: ServiceView) => {
+    try {
+      await app.SetExposeEnabled(s.port, s.protocol as "tcp" | "udp", !!s.paused);
+      await refreshLocalServices();
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    }
+  };
+
   const scanLAN = async () => {
     setLanScanning(true);
+    setLanProgress(null);
     try {
       const list = await app.ScanLAN();
       setLanDevices(list);
@@ -146,6 +173,7 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
       setError(e?.message || String(e));
     } finally {
       setLanScanning(false);
+      setLanProgress(null);
     }
   };
 
@@ -301,6 +329,14 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
               >
                 UDP
               </button>
+              <button
+                type="button"
+                onClick={() => setProto("both")}
+                className={`px-2 border-l border-white/10 ${proto === "both" ? "bg-violet-500/30 text-white" : "text-zinc-400 hover:bg-white/[0.04]"}`}
+                title="Bir vaqtda TCP+UDP — Steam game serverlari (CS2 27015 game UDP + RCON TCP)"
+              >
+                Ikkalasi
+              </button>
             </div>
             <input
               type="number"
@@ -349,19 +385,22 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
           {localServices.length > 0 && (
             <motion.div layout className="mt-3 space-y-1.5">
               {localServices.map((s) => {
+                const paused = !!s.paused;
                 const health = s.health || "unknown";
-                const healthClass =
-                  health === "ok"
-                    ? "bg-emerald-400 shadow-[0_0_4px_#34d399]"
-                    : health === "down"
-                    ? "bg-rose-400 shadow-[0_0_4px_#fb7185]"
-                    : "bg-zinc-500";
-                const healthLabel =
-                  health === "ok"
-                    ? `Target ${s.target || "localhost"} javob bermoqda`
-                    : health === "down"
-                    ? `Target ulanmadi: ${s.healthError || s.target || "?"}`
-                    : "Holati hali tekshirilmagan";
+                const dotClass = paused
+                  ? "bg-amber-400 shadow-[0_0_4px_#fbbf24]"
+                  : health === "ok"
+                  ? "bg-emerald-400 shadow-[0_0_4px_#34d399]"
+                  : health === "down"
+                  ? "bg-rose-400 shadow-[0_0_4px_#fb7185]"
+                  : "bg-zinc-500";
+                const dotLabel = paused
+                  ? "Pauza qilingan — peer'lar ulanolmaydi"
+                  : health === "ok"
+                  ? `Target ${s.target || "localhost"} javob bermoqda`
+                  : health === "down"
+                  ? `Target ulanmadi: ${s.healthError || s.target || "?"}`
+                  : "Holati hali tekshirilmagan";
                 return (
                   <motion.div
                     key={`${s.protocol}:${s.port}`}
@@ -369,14 +408,16 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="panel rounded-input px-3 py-2 flex items-center gap-2 text-sm"
+                    className={`panel rounded-input px-3 py-2 flex items-center gap-2 text-sm ${
+                      paused ? "opacity-60" : ""
+                    }`}
                     title={s.target ? `→ ${s.target}` : undefined}
                   >
                     <span
-                      title={healthLabel}
-                      className={`w-2 h-2 rounded-full shrink-0 ${healthClass}`}
+                      title={dotLabel}
+                      className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`}
                     />
-                    <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
+                    <Globe className={`w-3.5 h-3.5 shrink-0 ${paused ? "text-amber-400" : "text-emerald-400"}`} strokeWidth={2} />
                     <div className="min-w-0 flex-1 leading-tight">
                       <div className="truncate font-medium">{s.name}</div>
                       {s.target && s.target !== `127.0.0.1:${s.port}` && (
@@ -391,6 +432,17 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                       {s.protocol.toUpperCase()}
                     </span>
                     <span className="font-mono text-xs text-zinc-500 shrink-0">:{s.port}</span>
+                    <button
+                      onClick={() => togglePause(s)}
+                      className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-amber-300 shrink-0"
+                      title={paused ? "Davom ettirish" : "Vaqtincha to'xtatish"}
+                    >
+                      {paused ? (
+                        <Play className="w-3.5 h-3.5" strokeWidth={2} />
+                      ) : (
+                        <Pause className="w-3.5 h-3.5" strokeWidth={2} />
+                      )}
+                    </button>
                     <button
                       onClick={() => removeExposed(s.port)}
                       className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-rose-400 shrink-0"
@@ -488,6 +540,28 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
           {!lanScanned && !lanScanning && (
             <div className="text-xs text-zinc-500 panel rounded-input px-3 py-3 text-center">
               "Skanerlash"ni bosing — RTSP kameralar, NVR, printerlar va boshqa LAN qurilmalari topiladi (~10s).
+            </div>
+          )}
+          {lanScanning && lanProgress && (
+            <div className="panel rounded-input px-3 py-2 mb-2 text-xs">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-zinc-300 truncate">
+                  {lanProgress.current
+                    ? `${lanProgress.current}…`
+                    : "Boshlanmoqda…"}
+                </span>
+                <span className="text-zinc-500 font-mono shrink-0">
+                  {lanProgress.done}/{lanProgress.total} · {lanProgress.hits} topildi
+                </span>
+              </div>
+              <div className="h-1 bg-white/[0.04] rounded overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-violet-500 to-cyan-400 transition-[width] duration-200"
+                  style={{
+                    width: `${Math.min(100, (lanProgress.done / Math.max(1, lanProgress.total)) * 100)}%`,
+                  }}
+                />
+              </div>
             </div>
           )}
           {lanScanned && lanDevices.length === 0 && !lanScanning && (

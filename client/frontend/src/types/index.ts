@@ -16,6 +16,7 @@ export type ServiceView = {
   target?: string;
   health?: "ok" | "down" | "unknown";
   healthError?: string;
+  paused?: boolean;
 };
 
 export type PeerView = {
