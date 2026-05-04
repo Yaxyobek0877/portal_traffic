@@ -639,9 +639,13 @@ func (m *Manager) onPeerJoined(peerID, nick, vip string) {
 // joiner discovering existing peers, we initiate; when we're an
 // existing peer learning about a newcomer, we wait.
 func (m *Manager) onPeerJoinedWithRoster(peerID, nick, vip string, weAreJoiner bool) {
+	m.logger.Info("onPeerJoinedWithRoster begin",
+		"peer_id", peerID, "nick", nick, "vip", vip, "we_are_joiner", weAreJoiner)
 	m.mu.Lock()
 	if _, exists := m.peers[peerID]; exists {
 		m.mu.Unlock()
+		m.logger.Info("onPeerJoinedWithRoster: peer already exists, skipping",
+			"peer_id", peerID)
 		return
 	}
 	// Glare-free rule: the joiner is the offerer for every existing peer.
@@ -651,18 +655,25 @@ func (m *Manager) onPeerJoinedWithRoster(peerID, nick, vip string, weAreJoiner b
 	if weAreJoiner {
 		role = peer.RoleOfferer
 	}
+	iceCfg := m.iceServersForPeer()
+	m.logger.Info("onPeerJoinedWithRoster creating peer.Connection",
+		"peer_id", peerID, "role", role, "ice_servers_count", len(iceCfg))
 	conn, err := peer.New(peer.Config{
 		LocalPeerID:  m.myPeerID,
 		RemotePeerID: peerID,
 		Role:         role,
-		ICEServers:   m.iceServersForPeer(),
+		ICEServers:   iceCfg,
 		Logger:       m.logger,
 	})
 	if err != nil {
 		m.mu.Unlock()
+		m.logger.Error("onPeerJoinedWithRoster: peer.New failed",
+			"peer_id", peerID, "err", err)
 		m.emit(MeshEvent{Type: EventError, Err: fmt.Errorf("create peer %s: %w", peerID, err)})
 		return
 	}
+	m.logger.Info("onPeerJoinedWithRoster: peer.Connection created OK",
+		"peer_id", peerID)
 	p := &Peer{
 		ID: peerID, Nickname: nick, VirtualIP: vip,
 		conn:        conn,
