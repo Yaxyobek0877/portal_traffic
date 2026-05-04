@@ -121,6 +121,7 @@ func (c *Client) Close() error {
 // CreatePortal sends portal.create. Returns the marshaling error only;
 // the server response arrives as a Created event.
 func (c *Client) CreatePortal(nick string, publicNick bool, capacity int) error {
+	c.logger.Info("send portal.create", "nick", nick, "public_nick", publicNick, "capacity", capacity)
 	return c.send(protocol.PortalCreate{
 		Type:       protocol.TypePortalCreate,
 		Nickname:   nick,
@@ -131,6 +132,7 @@ func (c *Client) CreatePortal(nick string, publicNick bool, capacity int) error 
 
 // JoinPortal sends portal.join.
 func (c *Client) JoinPortal(portalID, code, nick string) error {
+	c.logger.Info("send portal.join", "portal_id", portalID, "code_len", len(code), "nick", nick)
 	return c.send(protocol.PortalJoin{
 		Type:     protocol.TypePortalJoin,
 		PortalID: portalID,
@@ -230,7 +232,7 @@ func (c *Client) readPump() {
 			}
 			return
 		}
-		ev, err := decodeEvent(raw)
+		ev, err := c.decodeEvent(raw)
 		if err != nil {
 			c.logger.Warn("signaling decode error", "err", err, "raw", string(raw))
 			continue
@@ -243,8 +245,10 @@ func (c *Client) readPump() {
 }
 
 // decodeEvent inspects the type field and unmarshals into the matching
-// payload struct, returning a populated Event.
-func decodeEvent(raw []byte) (Event, error) {
+// payload struct, returning a populated Event. Method (not free fn)
+// so we can hang INFO-level logs off the client's logger as we go —
+// useful for diagnosing "I joined a portal but I'm the only peer".
+func (c *Client) decodeEvent(raw []byte) (Event, error) {
 	t, err := protocol.TypeOf(raw)
 	if err != nil {
 		return Event{Raw: raw}, err
@@ -256,24 +260,35 @@ func decodeEvent(raw []byte) (Event, error) {
 		if err := json.Unmarshal(raw, v); err != nil {
 			return ev, err
 		}
+		c.logger.Info("recv portal.created",
+			"portal_id", v.PortalID, "peer_id", v.PeerID,
+			"vip", v.VirtualIP, "ice_servers", len(v.ICEServers))
 		ev.Created = v
 	case protocol.TypePortalJoined:
 		v := &protocol.PortalJoined{}
 		if err := json.Unmarshal(raw, v); err != nil {
 			return ev, err
 		}
+		c.logger.Info("recv portal.joined",
+			"portal_id", v.PortalID, "peer_id", v.PeerID,
+			"vip", v.VirtualIP, "peer_count", len(v.Peers),
+			"ice_servers", len(v.ICEServers))
 		ev.Joined = v
 	case protocol.TypePortalPeerJoined:
 		v := &protocol.PortalPeerJoined{}
 		if err := json.Unmarshal(raw, v); err != nil {
 			return ev, err
 		}
+		c.logger.Info("recv portal.peer_joined",
+			"peer_id", v.PeerID, "nick", v.Nickname, "vip", v.VirtualIP)
 		ev.PeerJoined = v
 	case protocol.TypePortalPeerLeft:
 		v := &protocol.PortalPeerLeft{}
 		if err := json.Unmarshal(raw, v); err != nil {
 			return ev, err
 		}
+		c.logger.Info("recv portal.peer_left",
+			"peer_id", v.PeerID, "reason", v.Reason)
 		ev.PeerLeft = v
 	case protocol.TypePortalJoinRequest:
 		v := &protocol.PortalJoinRequest{}
@@ -322,6 +337,8 @@ func decodeEvent(raw []byte) (Event, error) {
 		if err := json.Unmarshal(raw, v); err != nil {
 			return ev, err
 		}
+		c.logger.Warn("recv error from server",
+			"code", v.Code, "msg", v.Message, "request_id", v.RequestID)
 		ev.Error = v
 	default:
 		return ev, fmt.Errorf("signaling: unknown type %q", t)
