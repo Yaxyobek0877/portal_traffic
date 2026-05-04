@@ -1094,7 +1094,16 @@ func (a *App) relayEvent(ev mesh.MeshEvent) {
 	}
 	switch ev.Type {
 	case mesh.EventPortalReady:
-		runtime.EventsEmit(a.ctx, "portal:ready", *ev.Portal)
+		// Pass through portalToView so the JSON we emit matches the
+		// PortalView shape the frontend subscribes with (portalId,
+		// code, ownerId — lowerCamel json tags). Sending *ev.Portal
+		// directly serialised the raw mesh.PortalInfo struct with Go
+		// field names (PortalID, Code, OwnerID), so the subscriber's
+		// setPortal() overwrote the good data Welcome had just put
+		// in the store with object whose fields were all undefined —
+		// the ID/KOD then rendered blank. Race was platform-dependent
+		// (Windows hit it most reliably; macOS sometimes won the race).
+		runtime.EventsEmit(a.ctx, "portal:ready", portalToView(ev.Portal))
 
 	case mesh.EventPeerJoining:
 		runtime.EventsEmit(a.ctx, "peer:joining", peerToView(ev.Peer))
