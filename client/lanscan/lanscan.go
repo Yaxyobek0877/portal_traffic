@@ -36,21 +36,64 @@ type probedPort struct {
 	service string
 }
 
-// Default port list — small enough to scan a /24 in a few seconds
-// (256 × 11 = ~2.8K connects, 64-way parallel ≈ 4–8s on a typical
-// home Wi-Fi). Covers the obvious stuff most users want to share.
+// Default port list — covers the things people actually want to share
+// through Portal. Errs on the side of "include it" because a missed
+// port means the user has to type IP:port by hand, while a false
+// positive just shows up as one extra clickable row they can ignore.
+//
+// Roughly grouped by what each port commonly hosts:
+//   • cameras / NVRs (Hikvision / Dahua / Reolink / generic ONVIF)
+//   • web UIs (HTTP / HTTPS / common admin variants)
+//   • NAS appliances (Synology / QNAP / TrueNAS / OMV)
+//   • home automation (Home Assistant / OpenHAB / ESPHome / Zigbee2MQTT)
+//   • media servers (Plex / Jellyfin / Emby)
+//   • dev tools (Vite / Next / Jupyter / Selenium / debug)
+//   • file / print sharing (SMB / IPP / raw print)
+//   • game servers (Minecraft / CS2 / Rust / Terraria — TCP only here;
+//     UDP-only games are surfaced via the lsof UDP sweep instead)
+//
+// 254 IPs × 30 ports = ~7.6K connects; with 256-way parallelism and
+// a 400ms per-connect timeout this lands in under 10s on a healthy
+// Wi-Fi. Slow networks just take a bit longer.
 var defaultPorts = []probedPort{
-	{554, "rtsp"},     // IP cameras
-	{80, "http"},      // routers, NVRs, NAS web UIs
-	{443, "https"},    // same
+	// Cameras / NVRs
+	{554, "rtsp"},
+	{8554, "rtsp-alt"},
+	{37777, "dahua"},
+	{34567, "dahua-cam"},
+	{8000, "hikvision"},
+	{8001, "hikvision-sdk"},
+	{81, "cam-web"},
+	// Web UIs
+	{80, "http"},
+	{443, "https"},
 	{8080, "http-alt"},
-	{8000, "http-alt"},
+	{8443, "https-alt"},
+	// NAS
+	{5000, "synology"},
+	{5001, "synology-https"},
+	{8200, "qnap"},
+	// Home automation / media servers
 	{8123, "home-assistant"},
-	{5000, "http-alt"}, // Synology DSM, Flask dev servers
+	{1883, "mqtt"},
 	{32400, "plex"},
-	{631, "ipp"},      // network printers
+	{8096, "jellyfin"},
+	// Dev tools
+	{3000, "web-dev"},
+	{5173, "vite"},
+	{4200, "angular"},
+	{8888, "jupyter"},
+	{9000, "web-dev"},
+	// File / print sharing
+	{631, "ipp"},
 	{9100, "rawprint"},
+	{139, "smb"},
+	{445, "smb"},
+	// Remote shell
 	{22, "ssh"},
+	// Common game servers (TCP)
+	{25565, "minecraft"},
+	{7777, "terraria"},
 }
 
 // Progress reports incremental scan state. Emitted by ScanWithProgress
@@ -74,8 +117,8 @@ func Scan(ctx context.Context) []Discovery {
 // Called from a worker goroutine so it should be cheap and
 // non-blocking — typically just emits a Wails event.
 func ScanWithProgress(ctx context.Context, cb func(Progress)) []Discovery {
-	prefix, err := primaryLANPrefix()
-	if err != nil {
+	prefixes, err := allLANPrefixes()
+	if err != nil || len(prefixes) == 0 {
 		return nil
 	}
 
@@ -84,24 +127,24 @@ func ScanWithProgress(ctx context.Context, cb func(Progress)) []Discovery {
 		port int
 		svc  string
 	}
-	queue := make(chan target, 256)
+	queue := make(chan target, 1024)
 
 	var results []Discovery
 	var resMu sync.Mutex
 
-	total := 254 * len(defaultPorts)
+	total := 254 * len(defaultPorts) * len(prefixes)
 	var done int64
 	var hits int64
 	var lastIP atomic.Value // string
 	lastIP.Store("")
 
-	const workers = 64
+	const workers = 256
 	var wg sync.WaitGroup
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			d := net.Dialer{Timeout: 600 * time.Millisecond}
+			d := net.Dialer{Timeout: 400 * time.Millisecond}
 			for t := range queue {
 				select {
 				case <-ctx.Done():
@@ -153,19 +196,21 @@ func ScanWithProgress(ctx context.Context, cb func(Progress)) []Discovery {
 		defer tickerCancel()
 	}
 
-	// Enqueue every (IP, port) combo. The host's own IP is included —
-	// useful when a service is on this Mac itself but bound to the
-	// LAN address rather than 127.0.0.1 (it won't show up under the
-	// "lokalda topilgan" lsof sweep then).
-	for ip := 1; ip <= 254; ip++ {
-		host := fmt.Sprintf("%s.%d", prefix, ip)
-		for _, pp := range defaultPorts {
-			select {
-			case <-ctx.Done():
-				close(queue)
-				wg.Wait()
-				return sortResults(results)
-			case queue <- target{host, pp.port, pp.service}:
+	// Enqueue every (subnet, IP, port) combo. The host's own IP is
+	// included — useful when a service is on this Mac itself but
+	// bound to the LAN address rather than 127.0.0.1 (it won't show
+	// up under the "lokalda topilgan" lsof sweep then).
+	for _, prefix := range prefixes {
+		for ip := 1; ip <= 254; ip++ {
+			host := fmt.Sprintf("%s.%d", prefix, ip)
+			for _, pp := range defaultPorts {
+				select {
+				case <-ctx.Done():
+					close(queue)
+					wg.Wait()
+					return sortResults(results)
+				case queue <- target{host, pp.port, pp.service}:
+				}
 			}
 		}
 	}
@@ -180,15 +225,20 @@ func ScanWithProgress(ctx context.Context, cb func(Progress)) []Discovery {
 	return sortResults(results)
 }
 
-// primaryLANPrefix returns "192.168.1" / "10.0.0" / "172.16.42" — the
-// /24 prefix of the host's primary non-loopback IPv4 interface.
-// Skips link-local (169.254.x) and loopback. Picks the first match
-// because most home setups have one obvious LAN interface.
-func primaryLANPrefix() (string, error) {
+// allLANPrefixes returns every "X.Y.Z" /24 prefix the host has a
+// non-loopback IPv4 interface in. Multi-interface laptops (Wi-Fi +
+// ethernet, or Wi-Fi + corporate VPN) used to silently miss devices
+// on whichever interface didn't win the "primary" lottery; now both
+// get scanned. Caps to /24 wide nets — refuses /8 / /16 masks so a
+// misconfigured "10.0.0.0/8 on this iface" doesn't fan out to 16M
+// connect attempts.
+func allLANPrefixes() ([]string, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+	var out []string
+	seen := map[string]bool{}
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 {
 			continue
@@ -209,17 +259,25 @@ func primaryLANPrefix() (string, error) {
 			if ip4.IsLoopback() || ip4.IsLinkLocalUnicast() {
 				continue
 			}
-			// Only scan if /16 or smaller — refusing to enumerate
-			// 192.0.0.0/8-style mask if some misconfiguration sets
-			// one up.
+			// Skip nets wider than /22 — we only do /24 sweeps. A
+			// /22 (1024 addrs) would already mean ~30K probes, /16
+			// is 16M.
 			ones, _ := ipnet.Mask.Size()
-			if ones < 16 {
+			if ones < 22 {
 				continue
 			}
-			return fmt.Sprintf("%d.%d.%d", ip4[0], ip4[1], ip4[2]), nil
+			prefix := fmt.Sprintf("%d.%d.%d", ip4[0], ip4[1], ip4[2])
+			if seen[prefix] {
+				continue
+			}
+			seen[prefix] = true
+			out = append(out, prefix)
 		}
 	}
-	return "", fmt.Errorf("lanscan: no primary IPv4 interface found")
+	if len(out) == 0 {
+		return nil, fmt.Errorf("lanscan: no IPv4 interface found")
+	}
+	return out, nil
 }
 
 // resolveHostnames does a parallel reverse DNS lookup with a tight

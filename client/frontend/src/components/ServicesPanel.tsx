@@ -112,13 +112,45 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
     );
   };
 
+  // parseSmartName detects when the user typed something like
+  // "192.168.1.100:554" or "kamera 192.168.1.100:554" into the name
+  // field and pulls out the IP, port, and (optional) human label.
+  // Lets people share a LAN device with one input instead of three.
+  const parseSmartName = (
+    raw: string,
+  ): { name: string; ip: string; port: number } | null => {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const match = trimmed.match(/^(?:([\w.\-]+)\s+)?(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/);
+    if (!match) return null;
+    const [, label, ip, portStr] = match;
+    const portNum = Number(portStr);
+    if (portNum < 1 || portNum > 65535) return null;
+    const cleanLabel =
+      label || ip.split(".").pop()! ; // last octet as default label
+    return { name: cleanLabel, ip, port: portNum };
+  };
+
   const submitExpose = async () => {
     setError("");
-    if (typeof port !== "number" || port < 1 || port > 65535) {
+    // Smart-input: user typed "192.168.1.100:554" (optionally with a
+    // leading label) into the name field and didn't bother filling
+    // anything else. Promote that to a full expose with target =
+    // ip:port, port = port, name = label or last octet.
+    const smart = parseSmartName(name);
+    let effectivePort = port;
+    let effectiveTarget = target.trim();
+    let effectiveName = name;
+    if (smart && (typeof port !== "number" || port < 1)) {
+      effectivePort = smart.port;
+      effectiveTarget = `${smart.ip}:${smart.port}`;
+      effectiveName = smart.name;
+    }
+    if (typeof effectivePort !== "number" || effectivePort < 1 || effectivePort > 65535) {
       setError("Port 1–65535 oralig'ida bo'lishi kerak");
       return;
     }
-    const trimmedTarget = target.trim();
+    const trimmedTarget = effectiveTarget;
     if (trimmedTarget && !/^[\w.\-]+:\d{1,5}$/.test(trimmedTarget)) {
       setError("Target host:port shaklida bo'lishi kerak (masalan 192.168.1.100:554)");
       return;
@@ -129,13 +161,14 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
     // against TCP since the target/port are identical.
     const protocols: ("tcp" | "udp")[] =
       proto === "both" ? ["tcp", "udp"] : [proto];
-    if (!(await confirmRisk(trimmedTarget, protocols[0], port))) {
+    if (!(await confirmRisk(trimmedTarget, protocols[0], effectivePort))) {
       return;
     }
     try {
-      const baseName = name || `${proto === "both" ? "both" : proto}:${port}`;
+      const baseName = (smart ? smart.name : effectiveName) ||
+        `${proto === "both" ? "both" : proto}:${effectivePort}`;
       for (const p of protocols) {
-        await app.ExposeService(baseName, p, port, trimmedTarget);
+        await app.ExposeService(baseName, p, effectivePort, trimmedTarget);
       }
       setName("");
       setPort("");
@@ -306,10 +339,11 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
         <div className="flex flex-wrap gap-2 items-stretch">
           <input
             type="text"
-            placeholder="Nom (minecraft / cs2)"
+            placeholder="Nom yoki IP:port (192.168.1.100:554)"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="input-base text-sm flex-1 min-w-[140px]"
+            title="Oddiy nom ('kamera') yozsangiz pastdagi port bilan ekspoz qilinadi. To'g'ridan-to'g'ri 'IP:port' yoki 'nom IP:port' yozsangiz, port va target avtomatik to'ldiriladi."
           />
           <div className="flex gap-2 items-stretch">
             <div className="flex rounded overflow-hidden border border-white/10 text-[11px] font-mono shrink-0">
@@ -569,42 +603,11 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
               Tarmoqda boshqa qurilma topilmadi.
             </div>
           )}
-          <div className="space-y-1.5">
-            {lanDevices.map((d) => {
-              const exposed = localServices.some(
-                (s) => s.port === d.port && s.protocol === d.protocol,
-              );
-              return (
-                <div
-                  key={`${d.ip}:${d.port}`}
-                  className="panel rounded-input px-3 py-2 flex items-center gap-2 text-sm"
-                >
-                  <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" strokeWidth={2} />
-                  <div className="min-w-0 flex-1 leading-tight">
-                    <div className="truncate text-xs font-medium">
-                      {d.hostname || d.service}
-                    </div>
-                    <div className="font-mono text-[10px] text-zinc-500">
-                      {d.ip}:{d.port}
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 bg-cyan-400/10 text-cyan-300 uppercase">
-                    {d.service}
-                  </span>
-                  {exposed ? (
-                    <span className="text-[11px] text-emerald-400 font-medium shrink-0">ochilgan ✓</span>
-                  ) : (
-                    <button
-                      onClick={() => exposeLANDevice(d)}
-                      className="px-2 py-1 rounded text-[11px] font-medium bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 shrink-0 whitespace-nowrap"
-                    >
-                      Och
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <LANResults
+            devices={lanDevices}
+            localServices={localServices}
+            onExposeOne={exposeLANDevice}
+          />
         </div>
 
         <div>
@@ -679,6 +682,126 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
 // the user already has something on the same port locally, the proxy
 // falls back to OS-pick — we surface that mismatch with an amber tone
 // so the user knows the random number isn't a bug.
+// LANResults groups scan hits by IP. With 30+ probed ports per host
+// and several hosts, the flat-list rendering of v0.4.0 turned into a
+// 100+-row scroll on busy networks; the grouped view stays readable.
+// Default-collapsed when there are 4+ hosts so big networks don't
+// force a paint of every row up-front.
+function LANResults({
+  devices,
+  localServices,
+  onExposeOne,
+}: {
+  devices: LANDiscovery[];
+  localServices: ServiceView[];
+  onExposeOne: (d: LANDiscovery) => void;
+}) {
+  const groups = React.useMemo(() => {
+    const m = new Map<string, LANDiscovery[]>();
+    for (const d of devices) {
+      const arr = m.get(d.ip) || [];
+      arr.push(d);
+      m.set(d.ip, arr);
+    }
+    return [...m.entries()].map(([ip, items]) => ({
+      ip,
+      hostname: items.find((x) => x.hostname)?.hostname || "",
+      items,
+    }));
+  }, [devices]);
+
+  const startCollapsed = groups.length >= 4;
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  // First render after groups changes: seed open-state with the
+  // collapse rule. We use a ref-equivalent trick — re-seeding is safe
+  // because only first-time-true is meaningful.
+  useEffect(() => {
+    if (groups.length === 0) return;
+    setOpen((prev) => {
+      const next = { ...prev };
+      for (const g of groups) {
+        if (next[g.ip] === undefined) {
+          next[g.ip] = !startCollapsed;
+        }
+      }
+      return next;
+    });
+  }, [groups, startCollapsed]);
+
+  if (groups.length === 0) return null;
+
+  return (
+    <div className="space-y-1.5">
+      {groups.map((g) => {
+        const isOpen = !!open[g.ip];
+        const exposedCount = g.items.filter((d) =>
+          localServices.some((s) => s.port === d.port && s.protocol === d.protocol),
+        ).length;
+        return (
+          <div key={g.ip} className="panel rounded-input">
+            <button
+              onClick={() => setOpen((p) => ({ ...p, [g.ip]: !p[g.ip] }))}
+              className="w-full px-3 py-2 flex items-center gap-2 text-left text-sm hover:bg-white/[0.03]"
+            >
+              <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" strokeWidth={2} />
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="truncate text-xs font-medium">
+                  {g.hostname || g.ip}
+                </div>
+                {g.hostname && (
+                  <div className="font-mono text-[10px] text-zinc-500">{g.ip}</div>
+                )}
+              </div>
+              <span className="text-[10px] text-zinc-500 shrink-0">
+                {g.items.length} port{g.items.length === 1 ? "" : "lar"}
+                {exposedCount > 0 && (
+                  <span className="text-emerald-400/80 ml-1">· {exposedCount} ochilgan</span>
+                )}
+              </span>
+              <span className="text-zinc-500 shrink-0 text-xs">
+                {isOpen ? "▾" : "▸"}
+              </span>
+            </button>
+            {isOpen && (
+              <div className="border-t border-white/5 px-3 py-2 space-y-1.5">
+                {g.items.map((d) => {
+                  const exposed = localServices.some(
+                    (s) => s.port === d.port && s.protocol === d.protocol,
+                  );
+                  return (
+                    <div
+                      key={`${d.protocol}:${d.port}`}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <span className="font-mono text-zinc-400 shrink-0">
+                        :{d.port}
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 bg-cyan-400/10 text-cyan-300 uppercase">
+                        {d.service}
+                      </span>
+                      <span className="flex-1 min-w-0" />
+                      {exposed ? (
+                        <span className="text-[11px] text-emerald-400 font-medium shrink-0">ochilgan ✓</span>
+                      ) : (
+                        <button
+                          onClick={() => onExposeOne(d)}
+                          className="px-2 py-1 rounded text-[11px] font-medium bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 shrink-0 whitespace-nowrap"
+                        >
+                          Och
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function DialedPill({ addr, expectedPort }: { addr: string; expectedPort: number }) {
   const [copied, setCopied] = useState(false);
   const localPort = parseInt(addr.split(":").pop() || "0", 10);
