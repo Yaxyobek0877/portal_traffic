@@ -64,19 +64,34 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev || \
+          # Ubuntu 24.04 / current 22.04 hosted runners only ship
+          # webkit2gtk-4.1; the older -4.0 package is gone. Try the new
+          # one first, fall through to the legacy one for older fleets.
+          if sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev; then
+            echo "WAILS_LINUX_TAGS=webkit2_41" >> "$GITHUB_ENV"
+          else
             sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+          fi
 
       # Frontend deps.
       - name: Install frontend deps
         working-directory: ./client/frontend
         run: npm ci
 
-      # Build via Wails.
+      # Build via Wails. WAILS_LINUX_TAGS picks webkit2_41 when only the
+      # newer libwebkit2gtk-4.1-dev is on the runner — without it the
+      # cgo binding generator looks for `webkit2gtk-4.0.pc` and fails
+      # ("Package webkit2gtk-4.0 was not found in the pkg-config search
+      # path"). Empty on macOS / Windows so they keep the bare command.
       - name: Wails build
         working-directory: ./client
         shell: bash
-        run: wails build -clean -platform "${{ matrix.wails-platform }}"
+        run: |
+          if [ -n "$WAILS_LINUX_TAGS" ]; then
+            wails build -clean -tags "$WAILS_LINUX_TAGS" -platform "${{ matrix.wails-platform }}"
+          else
+            wails build -clean -platform "${{ matrix.wails-platform }}"
+          fi
 
       # Resolve tag for artifact naming.
       - name: Resolve tag
