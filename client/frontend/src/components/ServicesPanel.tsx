@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Plus, Server, Link2, Trash2, Globe, Search, Zap, Copy, Check, Radar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { LocalListener, LANDiscovery, PeerView, ServiceView } from "../types";
+import type { LocalListener, LANDiscovery, PeerView, ServiceView, RiskAssessment } from "../types";
 import { app } from "../lib/wails";
 import { shortId } from "../lib/format";
 
@@ -51,6 +51,20 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
     }
   };
 
+  const confirmRisk = async (target: string, protocol: "tcp" | "udp", port: number): Promise<boolean> => {
+    let risk: RiskAssessment;
+    try {
+      risk = await app.AssessExposeRisk(target, protocol, port);
+    } catch {
+      return true; // assessment unavailable — don't block
+    }
+    if (risk.level === "safe") return true;
+    const prefix = risk.level === "danger" ? "⚠️ XAVFLI" : "⚡ Diqqat";
+    return window.confirm(
+      `${prefix}: ${risk.reason}\n\n${risk.hint}\n\nHar holda davom etasizmi?`
+    );
+  };
+
   const submitExpose = async () => {
     setError("");
     if (typeof port !== "number" || port < 1 || port > 65535) {
@@ -60,6 +74,9 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
     const trimmedTarget = target.trim();
     if (trimmedTarget && !/^[\w.\-]+:\d{1,5}$/.test(trimmedTarget)) {
       setError("Target host:port shaklida bo'lishi kerak (masalan 192.168.1.100:554)");
+      return;
+    }
+    if (!(await confirmRisk(trimmedTarget, proto, port))) {
       return;
     }
     try {
@@ -99,6 +116,9 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
     const niceName =
       (d.hostname && d.hostname.split(".")[0]) ||
       `${d.service}-${d.ip.split(".").pop()}`;
+    if (!(await confirmRisk(target, "tcp", d.port))) {
+      return;
+    }
     try {
       await app.ExposeService(niceName, "tcp", d.port, target);
       await refreshLocalServices();
@@ -202,32 +222,59 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
         <AnimatePresence>
           {localServices.length > 0 && (
             <motion.div layout className="mt-3 space-y-1.5">
-              {localServices.map((s) => (
-                <motion.div
-                  key={`${s.protocol}:${s.port}`}
-                  layout
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="panel rounded-input px-3 py-2 flex items-center gap-2 text-sm"
-                >
-                  <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
-                  <span className="font-medium truncate flex-1 min-w-0">{s.name}</span>
-                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
-                    s.protocol === "udp" ? "bg-cyan-400/10 text-cyan-300" : "bg-violet-400/10 text-violet-300"
-                  }`}>
-                    {s.protocol.toUpperCase()}
-                  </span>
-                  <span className="font-mono text-xs text-zinc-500 shrink-0">:{s.port}</span>
-                  <button
-                    onClick={() => removeExposed(s.port)}
-                    className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-rose-400 shrink-0"
-                    title="Olib tashlash"
+              {localServices.map((s) => {
+                const health = s.health || "unknown";
+                const healthClass =
+                  health === "ok"
+                    ? "bg-emerald-400 shadow-[0_0_4px_#34d399]"
+                    : health === "down"
+                    ? "bg-rose-400 shadow-[0_0_4px_#fb7185]"
+                    : "bg-zinc-500";
+                const healthLabel =
+                  health === "ok"
+                    ? `Target ${s.target || "localhost"} javob bermoqda`
+                    : health === "down"
+                    ? `Target ulanmadi: ${s.healthError || s.target || "?"}`
+                    : "Holati hali tekshirilmagan";
+                return (
+                  <motion.div
+                    key={`${s.protocol}:${s.port}`}
+                    layout
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="panel rounded-input px-3 py-2 flex items-center gap-2 text-sm"
+                    title={s.target ? `→ ${s.target}` : undefined}
                   >
-                    <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
-                  </button>
-                </motion.div>
-              ))}
+                    <span
+                      title={healthLabel}
+                      className={`w-2 h-2 rounded-full shrink-0 ${healthClass}`}
+                    />
+                    <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2} />
+                    <div className="min-w-0 flex-1 leading-tight">
+                      <div className="truncate font-medium">{s.name}</div>
+                      {s.target && s.target !== `127.0.0.1:${s.port}` && (
+                        <div className="font-mono text-[10px] text-zinc-500 truncate">
+                          → {s.target}
+                        </div>
+                      )}
+                    </div>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
+                      s.protocol === "udp" ? "bg-cyan-400/10 text-cyan-300" : "bg-violet-400/10 text-violet-300"
+                    }`}>
+                      {s.protocol.toUpperCase()}
+                    </span>
+                    <span className="font-mono text-xs text-zinc-500 shrink-0">:{s.port}</span>
+                    <button
+                      onClick={() => removeExposed(s.port)}
+                      className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-rose-400 shrink-0"
+                      title="Olib tashlash"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+                    </button>
+                  </motion.div>
+                );
+              })}
             </motion.div>
           )}
         </AnimatePresence>

@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -76,6 +77,12 @@ type ServiceView struct {
 	Name     string `json:"name"`
 	Protocol string `json:"protocol"`
 	Port     int    `json:"port"`
+	Target   string `json:"target,omitempty"`
+	// Health is "ok" | "down" | "unknown" — populated only for
+	// services exposed by the local user; remote peers' services
+	// always come back "" (we can't probe their LAN from here).
+	Health      string `json:"health,omitempty"`
+	HealthError string `json:"healthError,omitempty"`
 }
 
 // ChatMessage is what the frontend logs in the chat panel.
@@ -154,6 +161,22 @@ type App struct {
 	// signaling host's /logs/upload endpoint. nil if upload is disabled
 	// or its config didn't resolve. See client/logsink.
 	logSink *logsink.Sink
+
+	// exposedHealth caches the latest TCP-probe outcome for every port
+	// we've exposed — keyed by port. Updated by the background health
+	// loop (App.runHealthLoop) every 30s; consumed by LocalServices to
+	// decorate each ServiceView with a green/yellow/red indicator the
+	// UI can render. Lets the user spot "camera offline" before a peer
+	// has to dial and find out the hard way.
+	healthMu     sync.Mutex
+	exposedHealth map[int]serviceHealth
+}
+
+type serviceHealth struct {
+	target    string
+	status    string // "ok" | "down" | "unknown"
+	err       string
+	checkedAt time.Time
 }
 
 // NewApp constructs the app singleton; main.go binds it.
@@ -180,6 +203,7 @@ func (a *App) Startup(ctx context.Context) {
 	}
 
 	a.startLogSink()
+	go a.runHealthLoop()
 
 	// Run NAT detection in the background; UI subscribes to "nat:result".
 	go func() {
@@ -918,6 +942,107 @@ func (a *App) ClearLogs() {
 // + `lsof -iUDP` (macOS), or `ss -lntp` + `ss -lnup` (Linux). Errors
 // are absorbed so the UI stays usable on platforms where neither is
 // available (Windows, sandboxed environments).
+// RiskAssessment classifies a planned (target, port) before exposing
+// so the UI can prompt for confirmation on the dangerous ones.
+type RiskAssessment struct {
+	Level   string `json:"level"`   // "safe" | "warn" | "danger"
+	Reason  string `json:"reason"`  // human-readable Uzbek
+	Hint    string `json:"hint"`    // suggested mitigation
+}
+
+// AssessExposeRisk returns a non-empty Reason whenever the (target,
+// port, protocol) combination smells dangerous — DB ports, router
+// admin web UI, RDP, anything where a stranger landing on the
+// service via a leaked portal code could cause real damage.
+//
+// Heuristic-driven: false positives are fine ("warn" doesn't block,
+// it just nudges); false negatives are the real cost. When in doubt,
+// flag.
+func (a *App) AssessExposeRisk(target string, protocol string, port int) RiskAssessment {
+	target = strings.TrimSpace(target)
+	host := ""
+	if target != "" {
+		if h, _, err := net.SplitHostPort(target); err == nil {
+			host = h
+		}
+	}
+
+	// Effective port the proxy will dial — when target is set, that's
+	// the port part of target; otherwise the mesh-side port (which
+	// also doubles as the localhost target in default mode).
+	effPort := port
+	if target != "" {
+		if _, p, err := net.SplitHostPort(target); err == nil {
+			if n, err := strconv.Atoi(p); err == nil {
+				effPort = n
+			}
+		}
+	}
+
+	// Database / cache / message-queue ports — almost always weakly
+	// authenticated, often plaintext. Don't share with strangers.
+	dbPorts := map[int]string{
+		3306:  "MySQL/MariaDB",
+		5432:  "PostgreSQL",
+		27017: "MongoDB",
+		6379:  "Redis",
+		11211: "Memcached",
+		9200:  "Elasticsearch",
+		5984:  "CouchDB",
+		7474:  "Neo4j",
+		8086:  "InfluxDB",
+		2181:  "ZooKeeper",
+		9092:  "Kafka",
+	}
+	if name, ok := dbPorts[effPort]; ok {
+		return RiskAssessment{
+			Level:  "danger",
+			Reason: name + " (port " + strconv.Itoa(effPort) + ") — ma'lumotlar bazasi sukut bo'yicha himoyasiz",
+			Hint:   "Bu portni mesh'ga ochish — ma'lumot o'g'irlash xatosi. Faqat zarur bo'lsa, kuchli parol va shifrlangan ulanish bilan.",
+		}
+	}
+
+	// Remote-administration ports.
+	adminPorts := map[int]string{
+		3389: "RDP — masofadan ish stoli",
+		5900: "VNC — ekran almashinuvi",
+		22:   "SSH",
+	}
+	if name, ok := adminPorts[effPort]; ok {
+		return RiskAssessment{
+			Level:  "warn",
+			Reason: name + " — masofadan to'liq boshqaruv beradi",
+			Hint:   "Faqat ishonchli kishilarga ochib bering. Strong key/parol shart.",
+		}
+	}
+
+	// Router admin web UI — common gateway IPs.
+	gatewayIPs := map[string]bool{
+		"192.168.0.1": true, "192.168.1.1": true, "192.168.1.254": true,
+		"10.0.0.1": true, "10.0.0.138": true, "10.1.1.1": true,
+		"192.168.100.1": true, "192.168.2.1": true, "172.16.0.1": true,
+	}
+	if host != "" && gatewayIPs[host] && (effPort == 80 || effPort == 443 || effPort == 8080) {
+		return RiskAssessment{
+			Level:  "danger",
+			Reason: "Router admin paneli (" + target + ")",
+			Hint:   "Mehmon zaif parol bilan kirsa, butun tarmog'ingizni boshqaradi. Default parolni o'zgartiring va birinchi bo'lib parolni almashtiring.",
+		}
+	}
+
+	// Plain HTTP web UIs on common admin ports — warn but don't block.
+	adminWebPorts := map[int]bool{8080: true, 8443: true, 8000: true, 8123: true, 5000: true, 9090: true}
+	if adminWebPorts[effPort] && protocol == "tcp" {
+		return RiskAssessment{
+			Level:  "warn",
+			Reason: "Admin web UI sifatida ko'p ishlatiladigan port (" + strconv.Itoa(effPort) + ")",
+			Hint:   "Servis kuchli autentifikatsiyaga egami tekshiring.",
+		}
+	}
+
+	return RiskAssessment{Level: "safe"}
+}
+
 // ScanLAN does a quick TCP probe across the host's local /24 on a
 // short list of well-known service ports (RTSP cameras, HTTP web
 // UIs, network printers, etc.) so the user can one-click expose LAN
@@ -993,15 +1118,99 @@ func (a *App) LocalListeners() []LocalListener {
 func (a *App) LocalServices() []ServiceView {
 	a.mu.RLock()
 	m := a.mesh
+	f := a.fwd
 	a.mu.RUnlock()
 	if m == nil {
 		return []ServiceView{}
 	}
+	var targets map[int]string
+	if f != nil {
+		targets = f.ExposedSnapshot()
+	}
+	a.healthMu.Lock()
+	healthCopy := make(map[int]serviceHealth, len(a.exposedHealth))
+	for k, v := range a.exposedHealth {
+		healthCopy[k] = v
+	}
+	a.healthMu.Unlock()
+
 	out := []ServiceView{}
 	for _, s := range m.LocalServices() {
-		out = append(out, ServiceView{Name: s.Name, Protocol: s.Protocol, Port: s.Port})
+		v := ServiceView{Name: s.Name, Protocol: s.Protocol, Port: s.Port}
+		if t, ok := targets[s.Port]; ok {
+			v.Target = t
+		}
+		if h, ok := healthCopy[s.Port]; ok {
+			v.Health = h.status
+			v.HealthError = h.err
+		} else {
+			v.Health = "unknown"
+		}
+		out = append(out, v)
 	}
 	return out
+}
+
+// runHealthLoop periodically TCP-probes every exposed target and
+// stores the result in exposedHealth so LocalServices can hand
+// the UI an up-to-date "camera reachable / camera offline"
+// indicator. Cheap (one connect per service every 30s) and
+// completely independent of peer activity.
+func (a *App) runHealthLoop() {
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	// Probe immediately on startup so the first user view isn't
+	// stuck on "unknown" for 30 seconds.
+	a.runHealthOnce()
+	for {
+		select {
+		case <-t.C:
+			a.runHealthOnce()
+		}
+	}
+}
+
+func (a *App) runHealthOnce() {
+	a.mu.RLock()
+	f := a.fwd
+	a.mu.RUnlock()
+	if f == nil {
+		return
+	}
+	targets := f.ExposedSnapshot()
+	if len(targets) == 0 {
+		return
+	}
+
+	results := make(map[int]serviceHealth, len(targets))
+	for port, target := range targets {
+		conn, err := net.DialTimeout("tcp", target, 2*time.Second)
+		h := serviceHealth{target: target, checkedAt: time.Now()}
+		if err != nil {
+			h.status = "down"
+			h.err = err.Error()
+		} else {
+			h.status = "ok"
+			_ = conn.Close()
+		}
+		results[port] = h
+	}
+
+	a.healthMu.Lock()
+	if a.exposedHealth == nil {
+		a.exposedHealth = map[int]serviceHealth{}
+	}
+	for k, v := range results {
+		a.exposedHealth[k] = v
+	}
+	// Drop entries for ports no longer exposed so stale "down"
+	// indicators don't stick around after Unexpose.
+	for k := range a.exposedHealth {
+		if _, ok := results[k]; !ok {
+			delete(a.exposedHealth, k)
+		}
+	}
+	a.healthMu.Unlock()
 }
 
 // ExposeService registers a port and announces it to peers.

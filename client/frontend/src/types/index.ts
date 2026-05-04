@@ -13,6 +13,9 @@ export type ServiceView = {
   name: string;
   protocol: string;
   port: number;
+  target?: string;
+  health?: "ok" | "down" | "unknown";
+  healthError?: string;
 };
 
 export type PeerView = {
@@ -111,6 +114,12 @@ export type LANDiscovery = {
   protocol: "tcp";
   service: string; // "rtsp" | "http" | "ipp" | …
   hostname: string;
+};
+
+export type RiskAssessment = {
+  level: "safe" | "warn" | "danger";
+  reason: string;
+  hint: string;
 };
 
 export type TurnTestResult = {

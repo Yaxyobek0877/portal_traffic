@@ -31,7 +31,13 @@ export function PortalView() {
   const [hovered, setHovered] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!portal?.portalId) return;
     refreshLocalServices();
+    // Poll while in a portal so the per-service health indicator
+    // (green/red dot) stays current — Go side re-probes targets
+    // every 30s, we pull the latest snapshot at the same cadence.
+    const t = window.setInterval(refreshLocalServices, 30000);
+    return () => window.clearInterval(t);
   }, [portal?.portalId]);
 
   const refreshLocalServices = async () => {

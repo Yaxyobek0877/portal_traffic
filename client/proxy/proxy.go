@@ -251,6 +251,20 @@ func (f *Forwarder) exposeTargetFor(port int) (string, bool) {
 	return target, ok
 }
 
+// ExposedSnapshot returns a copy of the exposed-port → upstream-target
+// map. Used by the health-check loop to probe each target and surface
+// "camera offline" / "NVR unreachable" indicators in the UI without
+// waiting for a peer to dial and discover the failure.
+func (f *Forwarder) ExposedSnapshot() map[int]string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[int]string, len(f.exposed))
+	for k, v := range f.exposed {
+		out[k] = v
+	}
+	return out
+}
+
 // ----------------------------------------------------------------------------
 // Dial — the client side: open a local TCP listener that pumps to
 // remote peer's exposed port.

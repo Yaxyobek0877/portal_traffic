@@ -17,6 +17,7 @@ import type {
   CloudflareTurnConfig,
   BandwidthResult,
   LANDiscovery,
+  RiskAssessment,
 } from "../types";
 
 type Bridge = {
@@ -43,6 +44,7 @@ type Bridge = {
   SetTurnConfig: (c: TurnConfig) => Promise<void>;
   LocalListeners: () => Promise<LocalListener[]>;
   ScanLAN: () => Promise<LANDiscovery[]>;
+  AssessExposeRisk: (target: string, protocol: "tcp" | "udp", port: number) => Promise<RiskAssessment>;
   LogLines: (n: number) => Promise<string[]>;
   LogFilePath: () => Promise<string>;
   OpenLogFolder: () => Promise<void>;
@@ -150,6 +152,7 @@ const stub: Bridge = {
   SetTurnConfig: async () => {},
   LocalListeners: async () => [],
   ScanLAN: async () => [],
+  AssessExposeRisk: async () => ({ level: "safe" as const, reason: "", hint: "" }),
   LogLines: async () => ["[preview] no logs"],
   LogFilePath: async () => "~/.portal/logs/portal.log",
   OpenLogFolder: async () => {},
