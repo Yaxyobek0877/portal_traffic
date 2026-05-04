@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, LogIn, Settings, History as HistoryIcon, AlertTriangle } from "lucide-react";
+import { Sparkles, LogIn, History as HistoryIcon, AlertTriangle } from "lucide-react";
 import { Logo } from "../components/Logo";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
@@ -10,7 +10,7 @@ import { parseInvite } from "../lib/deeplink";
 type Mode = "idle" | "create" | "join";
 
 export function Welcome() {
-  const { t } = useT();
+  const { t, lang, setLang } = useT();
   const nickname = usePortalStore((s) => s.nickname);
   const setNickname = usePortalStore((s) => s.setNickname);
   const setPortal = usePortalStore((s) => s.setPortal);
@@ -111,14 +111,27 @@ export function Welcome() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="draggable titlebar-pad flex justify-end items-center px-3" style={{ height: 68 }}>
-        <button
-          className="no-drag p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-white/5"
-          title={t("common.tooltip.settings")}
-          onClick={() => setScreen("settings")}
-        >
-          <Settings className="w-4 h-4" strokeWidth={2} />
-        </button>
+      <div className="draggable titlebar-pad flex justify-end items-center px-3 gap-1" style={{ height: 68 }}>
+        {/* Language toggle only — full Settings panel is reachable
+            from the Portal screen, so the login stays uncluttered.
+            A user landing in the wrong language can flip it here
+            without going hunting through Settings. */}
+        <div className="no-drag flex rounded overflow-hidden border border-white/10 text-[11px] font-mono">
+          <button
+            type="button"
+            onClick={() => setLang("uz")}
+            className={`px-2 py-1 ${lang === "uz" ? "bg-violet-500/30 text-white" : "text-zinc-500 hover:bg-white/[0.04]"}`}
+          >
+            UZ
+          </button>
+          <button
+            type="button"
+            onClick={() => setLang("en")}
+            className={`px-2 py-1 ${lang === "en" ? "bg-violet-500/30 text-white" : "text-zinc-500 hover:bg-white/[0.04]"}`}
+          >
+            EN
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 flex items-center justify-center px-6 -mt-6">

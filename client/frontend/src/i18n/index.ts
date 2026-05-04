@@ -19,7 +19,17 @@ const STORAGE_KEY = "portal:lang";
 const dictionaries: Record<Language, Dict> = { uz, en };
 
 // detectInitial picks a sensible default the first time the user runs
-// the app: persisted choice → browser hint → uz (project's home).
+// the app. Order:
+//   1. Whatever the user toggled previously (persisted)
+//   2. Browser/OS lang hint, but only when it's actively English —
+//      most non-en locales (Russian, Turkish, Arabic) are closer to
+//      Uzbek than to English in practice for a Toshkent-built app.
+//   3. Uzbek default.
+//
+// Earlier versions defaulted to English when the OS lang didn't start
+// with "uz", which routinely mislocalized Uzbek users running macOS
+// in English: they'd see "Create" / "Join" instead of "Portal
+// yaratish" / "Qo'shilish" and have to dig into Settings to fix it.
 function detectInitial(): Language {
   if (typeof localStorage !== "undefined") {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -27,11 +37,7 @@ function detectInitial(): Language {
   }
   if (typeof navigator !== "undefined") {
     const lang = (navigator.language || "").toLowerCase();
-    if (lang.startsWith("uz")) return "uz";
     if (lang.startsWith("en")) return "en";
-    // Default to en for non-uz speakers since the project's target is
-    // international gamers and developers.
-    return "en";
   }
   return "uz";
 }

@@ -65,6 +65,9 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
   const [lanScanning, setLanScanning] = useState(false);
   const [lanScanned, setLanScanned] = useState(false);
   const [lanProgress, setLanProgress] = useState<{ done: number; total: number; hits: number; current: string } | null>(null);
+  const [manualIP, setManualIP] = useState("");
+  const [manualPort, setManualPort] = useState<number | "">("");
+  const [showManual, setShowManual] = useState(false);
 
   useEffect(() => {
     return subscribe<{ done: number; total: number; hits: number; current: string }>(
@@ -207,6 +210,31 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
     } finally {
       setLanScanning(false);
       setLanProgress(null);
+    }
+  };
+
+  const submitManualLAN = async () => {
+    setError("");
+    const ip = manualIP.trim();
+    if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) {
+      setError("IP 192.168.1.100 ko'rinishida bo'lishi kerak");
+      return;
+    }
+    if (typeof manualPort !== "number" || manualPort < 1 || manualPort > 65535) {
+      setError("Port 1–65535 oralig'ida bo'lishi kerak");
+      return;
+    }
+    const target = `${ip}:${manualPort}`;
+    if (!(await confirmRisk(target, "tcp", manualPort))) return;
+    try {
+      const niceName = `host-${ip.split(".").pop()}`;
+      await app.ExposeService(niceName, "tcp", manualPort, target);
+      setManualIP("");
+      setManualPort("");
+      setShowManual(false);
+      await refreshLocalServices();
+    } catch (e: any) {
+      setError(e?.message || String(e));
     }
   };
 
@@ -608,6 +636,48 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
             localServices={localServices}
             onExposeOne={exposeLANDevice}
           />
+
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={() => setShowManual((v) => !v)}
+              className="text-[11px] text-zinc-400 hover:text-zinc-200"
+            >
+              {showManual ? "− Qo'lda qo'shish" : "+ Qurilma topilmadimi? Qo'lda IP kiriting"}
+            </button>
+            {showManual && (
+              <div className="mt-2 panel rounded-input p-3 space-y-2">
+                <div className="flex gap-2 items-stretch">
+                  <input
+                    type="text"
+                    placeholder="IP (192.168.1.100)"
+                    value={manualIP}
+                    onChange={(e) => setManualIP(e.target.value)}
+                    className="input-base text-sm flex-1 min-w-[120px] font-mono"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Port"
+                    value={manualPort}
+                    onChange={(e) => setManualPort(e.target.value === "" ? "" : Number(e.target.value))}
+                    className="input-base w-24 text-sm font-mono"
+                  />
+                  <button
+                    onClick={submitManualLAN}
+                    className="btn-primary rounded-btn px-3 flex items-center gap-1 text-sm shrink-0"
+                  >
+                    <Plus className="w-4 h-4" strokeWidth={2} />
+                    Och
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-500 leading-relaxed">
+                  IP'ni biladigan, lekin skan topmagan qurilmani to'g'ridan-to'g'ri ekspoz qiling.
+                  Misol: <code className="font-mono text-zinc-400">192.168.1.50</code> port{" "}
+                  <code className="font-mono text-zinc-400">8000</code> (NVR HTTP UI).
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         <div>
