@@ -112,6 +112,20 @@ func (s *Store) migrate() error {
 		note        TEXT NOT NULL DEFAULT '',
 		last_seen   INTEGER NOT NULL
 	);
+
+	-- Services the user wants exposed automatically every time they
+	-- enter a portal. Re-applied by app.bringUpMesh after the mesh
+	-- comes online — saves users from having to re-Och every camera /
+	-- game server / dev URL on every session.
+	CREATE TABLE IF NOT EXISTS exposed_services (
+		port      INTEGER NOT NULL,
+		protocol  TEXT NOT NULL,
+		name      TEXT NOT NULL,
+		target    TEXT NOT NULL DEFAULT '',
+		enabled   INTEGER NOT NULL DEFAULT 1,
+		updated_at INTEGER NOT NULL,
+		PRIMARY KEY (port, protocol)
+	);
 	`
 	_, err := s.db.Exec(schema)
 	if err != nil {

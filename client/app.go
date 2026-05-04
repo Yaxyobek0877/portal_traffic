@@ -1298,20 +1298,77 @@ func (a *App) ExposeService(name string, protocol string, port int, target strin
 		"name", name, "protocol", protocol, "port", port,
 		"target", target,
 	)
+	// Persist so the user comes back to the same set of shared
+	// services next session. Best-effort — failure shouldn't block
+	// the actual expose.
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store != nil {
+		if err := store.SaveExposedService(storage.ExposedService{
+			Port: port, Protocol: protocol, Name: name, Target: target, Enabled: true,
+		}); err != nil {
+			a.logger.Debug("save exposed service", "err", err)
+		}
+	}
 	return m.AnnounceService(name, protocol, port)
 }
 
-// UnexposeService removes a previously exposed port.
+// UnexposeService removes a previously exposed port. Also wipes the
+// persisted preference for that port so it doesn't auto-restore on
+// the next session — if the user clicks the trash icon they mean it.
 func (a *App) UnexposeService(port int) error {
 	a.mu.RLock()
 	m := a.mesh
 	f := a.fwd
+	store := a.store
 	a.mu.RUnlock()
 	if m == nil || f == nil {
 		return errors.New("portal yo'q")
 	}
 	f.Unexpose(port)
+	if store != nil {
+		// Delete both tcp and udp rows — the front-end models it as
+		// "one entry per port" and we never want a stale persisted
+		// row resurrecting an unwanted share.
+		_ = store.DeleteExposedService(port, "tcp")
+		_ = store.DeleteExposedService(port, "udp")
+	}
 	return m.UnannounceService(port)
+}
+
+// restoreExposedServices reapplies every saved-and-enabled
+// ExposedService row when a new mesh comes online. Cheap (just
+// re-runs the same code path the UI does for "Och") so we can fire
+// it from EventPortalReady and forget.
+func (a *App) restoreExposedServices() {
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return
+	}
+	saved, err := store.ListExposedServices()
+	if err != nil {
+		a.logger.Debug("restore exposed: list", "err", err)
+		return
+	}
+	if len(saved) == 0 {
+		return
+	}
+	for _, svc := range saved {
+		if !svc.Enabled {
+			continue
+		}
+		if err := a.ExposeService(svc.Name, svc.Protocol, svc.Port, svc.Target); err != nil {
+			a.logger.Warn("restore exposed: re-expose failed",
+				"name", svc.Name, "port", svc.Port, "err", err)
+			continue
+		}
+		a.logger.Info("restore exposed: ok",
+			"name", svc.Name, "protocol", svc.Protocol,
+			"port", svc.Port, "target", svc.Target)
+	}
 }
 
 // DialService opens a local listener (TCP or UDP) that pumps to the
@@ -1516,6 +1573,10 @@ func (a *App) relayEvent(ev mesh.MeshEvent) {
 		// the ID/KOD then rendered blank. Race was platform-dependent
 		// (Windows hit it most reliably; macOS sometimes won the race).
 		runtime.EventsEmit(a.ctx, "portal:ready", portalToView(ev.Portal))
+		// Reapply any services the user wants auto-shared every
+		// session. Don't block the event loop on disk I/O — fire and
+		// forget; if it fails the user can still re-Och manually.
+		go a.restoreExposedServices()
 
 	case mesh.EventPeerJoining:
 		runtime.EventsEmit(a.ctx, "peer:joining", peerToView(ev.Peer))
