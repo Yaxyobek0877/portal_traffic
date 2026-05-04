@@ -25,8 +25,13 @@ jobs:
             wails-platform: darwin/arm64
             artifact-glob: "build/bin/Portal.app"
             artifact-name: "Portal-{tag}-darwin-arm64.zip"
+          # Cross-compile darwin/amd64 from the Apple Silicon runner.
+          # macos-13 (Intel) hosted runners had multi-hour queues during
+          # v0.4.1 build, so we trade a CGO cross-compile for build
+          # latency. The CGO bits we hit (sqlite, webrtc) all support
+          # darwin/amd64 from darwin/arm64 via Apple's bundled SDKs.
           - target: darwin-amd64
-            runs-on: macos-13         # Intel runner
+            runs-on: macos-14
             wails-platform: darwin/amd64
             artifact-glob: "build/bin/Portal.app"
             artifact-name: "Portal-{tag}-darwin-amd64.zip"
