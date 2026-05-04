@@ -166,6 +166,54 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
     }
   };
 
+  // exposeAllSafe is the bulk version of exposeLANDevice. It walks the
+  // whole scan result, skips anything already exposed, and silently
+  // drops any target the risk assessor flagged as warn or danger —
+  // routers, DB ports, RDP — so a single click on a public Wi-Fi
+  // can't accidentally hand admin access to a friend group. Reports
+  // a one-line summary at the end.
+  const exposeAllSafe = async () => {
+    setError("");
+    if (lanDevices.length === 0) return;
+    const candidates = lanDevices.filter(
+      (d) => !localServices.some((s) => s.port === d.port && s.protocol === d.protocol),
+    );
+    if (candidates.length === 0) return;
+    if (!window.confirm(
+      `${candidates.length} ta qurilmani avtomatik ochishga harakat qilamiz.\n\n` +
+      `XAVFLI portlar (router admin, DB, RDP) avtomatik o'tkazib yuboriladi — ` +
+      `ularni qo'lda alohida tasdiqlashingiz mumkin.\n\nDavom etamizmi?`
+    )) {
+      return;
+    }
+    let opened = 0;
+    let skipped = 0;
+    for (const d of candidates) {
+      const target = `${d.ip}:${d.port}`;
+      let risk;
+      try {
+        risk = await app.AssessExposeRisk(target, "tcp", d.port);
+      } catch {
+        risk = { level: "safe" as const, reason: "", hint: "" };
+      }
+      if (risk.level !== "safe") {
+        skipped++;
+        continue;
+      }
+      const niceName =
+        (d.hostname && d.hostname.split(".")[0]) ||
+        `${d.service}-${d.ip.split(".").pop()}`;
+      try {
+        await app.ExposeService(niceName, "tcp", d.port, target);
+        opened++;
+      } catch {
+        skipped++;
+      }
+    }
+    await refreshLocalServices();
+    window.alert(`${opened} ta servis ochildi.${skipped > 0 ? ` ${skipped} ta xavfli/xato bo'lgani uchun o'tkazib yuborildi (qo'lda Och bosib alohida ko'rib chiqing).` : ""}`);
+  };
+
   const dialPeerService = async (peer: PeerView, svc: ServiceView) => {
     setDialing({ peerId: peer.peerId, port: svc.port, protocol: svc.protocol });
     try {
@@ -418,13 +466,24 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
               <Radar className="w-4 h-4 text-cyan-400" strokeWidth={2} />
               Tarmoqdagi qurilmalar
             </h3>
-            <button
-              onClick={scanLAN}
-              disabled={lanScanning}
-              className="text-[11px] text-zinc-400 hover:text-white disabled:opacity-50"
-            >
-              {lanScanning ? "Skanerlanmoqda…" : lanScanned ? "Qayta skanerlash" : "Skanerlash"}
-            </button>
+            <div className="flex items-center gap-3">
+              {lanScanned && lanDevices.length > 0 && (
+                <button
+                  onClick={exposeAllSafe}
+                  className="text-[11px] text-violet-300 hover:text-violet-200"
+                  title="Hamma topilgan qurilmalarni avtomatik ochish (xavfli portlar — router admin, DB — o'tkazib yuboriladi)"
+                >
+                  Hammasini och
+                </button>
+              )}
+              <button
+                onClick={scanLAN}
+                disabled={lanScanning}
+                className="text-[11px] text-zinc-400 hover:text-white disabled:opacity-50"
+              >
+                {lanScanning ? "Skanerlanmoqda…" : lanScanned ? "Qayta skanerlash" : "Skanerlash"}
+              </button>
+            </div>
           </div>
           {!lanScanned && !lanScanning && (
             <div className="text-xs text-zinc-500 panel rounded-input px-3 py-3 text-center">
