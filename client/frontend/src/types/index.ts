@@ -122,6 +122,16 @@ export type RiskAssessment = {
   hint: string;
 };
 
+export type ActivityEntry = {
+  time: string; // RFC3339
+  peerId: string;
+  nickname?: string;
+  protocol: "tcp" | "udp";
+  port: number;
+  target: string;
+  result: string; // "ok" | "error: ..."
+};
+
 export type TurnTestResult = {
   ok: boolean;
   message: string;

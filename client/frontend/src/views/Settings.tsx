@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  Activity,
   Copy,
   FileText,
   Folder,
@@ -22,6 +23,7 @@ import type {
   TurnConfig,
   TurnTestResult,
   CloudflareTurnConfig,
+  ActivityEntry,
 } from "../types";
 
 export function Settings() {
@@ -499,6 +501,11 @@ export function Settings() {
           </div>
         </Section>
 
+        {/* Activity log — who dialed which exposed service when */}
+        <Section icon={<Activity className="w-4 h-4" />} title="Faollik (peer ulanishlari)">
+          <ActivityPanel />
+        </Section>
+
         {/* Diagnostics */}
         <Section icon={<Info className="w-4 h-4" />} title="Diagnostika">
           <Field label="NAT turi">
@@ -765,6 +772,87 @@ export function Settings() {
           </motion.div>
         </motion.div>
       )}
+    </div>
+  );
+}
+
+// ActivityPanel renders the recent peer-dial events on services this
+// host exposes. Polls every 5s while mounted so a session that opens
+// while the user is on the Settings screen shows up promptly. Read
+// only — clearing isn't supported (the ring buffer drops oldest).
+function ActivityPanel() {
+  const [entries, setEntries] = useState<ActivityEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const list = await app.ProxyActivity();
+        if (!cancelled) setEntries(list);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    refresh();
+    const t = window.setInterval(refresh, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
+  }, []);
+
+  if (loading) {
+    return <div className="text-xs text-zinc-500">Yuklanmoqda…</div>;
+  }
+  if (entries.length === 0) {
+    return (
+      <div className="text-xs text-zinc-500">
+        Hech kim hali sizning servislaringizga ulanmagan. Mehmon "Ulash"
+        bosganida shu yerda yozuv paydo bo'ladi.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
+      {entries.slice().reverse().map((e, i) => {
+        const ok = e.result === "ok";
+        const tone = ok ? "text-emerald-300/90" : "text-rose-300/90";
+        const dot = ok ? "bg-emerald-400" : "bg-rose-400";
+        const when = (() => {
+          try {
+            return new Date(e.time).toLocaleTimeString();
+          } catch {
+            return e.time;
+          }
+        })();
+        return (
+          <div
+            key={`${e.time}-${i}`}
+            className="panel rounded-input px-3 py-2 flex items-start gap-2 text-xs"
+          >
+            <span className={`w-2 h-2 rounded-full mt-1 shrink-0 ${dot}`} />
+            <div className="min-w-0 flex-1 leading-snug">
+              <div className="flex items-center gap-2">
+                <span className="font-medium truncate">
+                  {e.nickname || e.peerId.slice(0, 8)}
+                </span>
+                <span className="text-zinc-500">→</span>
+                <span className="font-mono text-[10px] uppercase text-zinc-400 shrink-0">
+                  {e.protocol}:{e.port}
+                </span>
+                {e.target && e.target !== `127.0.0.1:${e.port}` && (
+                  <span className="font-mono text-[10px] text-zinc-500 truncate">
+                    → {e.target}
+                  </span>
+                )}
+              </div>
+              <div className={`text-[10px] ${tone}`}>{e.result}</div>
+            </div>
+            <span className="font-mono text-[10px] text-zinc-500 shrink-0">{when}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -1043,6 +1043,49 @@ func (a *App) AssessExposeRisk(target string, protocol string, port int) RiskAss
 	return RiskAssessment{Level: "safe"}
 }
 
+// ActivityEntry mirrors proxy.ActivityEntry for the JSON wire to the
+// frontend.
+type ActivityEntry struct {
+	Time     time.Time `json:"time"`
+	PeerID   string    `json:"peerId"`
+	Nickname string    `json:"nickname,omitempty"`
+	Protocol string    `json:"protocol"`
+	Port     int       `json:"port"`
+	Target   string    `json:"target"`
+	Result   string    `json:"result"`
+}
+
+// ProxyActivity returns recent peer-dial events on services we host.
+// Newest entries last. Used by Settings → Faollik so the user can see
+// "kim qachon kameramga ulandi". Best-effort enrichment of the peer
+// nickname from the current portal roster — entries from peers who've
+// since left come back with nickname empty.
+func (a *App) ProxyActivity() []ActivityEntry {
+	a.mu.RLock()
+	f := a.fwd
+	m := a.mesh
+	a.mu.RUnlock()
+	if f == nil {
+		return []ActivityEntry{}
+	}
+	raw := f.Activity()
+	nicks := map[string]string{}
+	if m != nil {
+		for _, p := range m.Peers() {
+			nicks[p.ID] = p.Nickname
+		}
+	}
+	out := make([]ActivityEntry, 0, len(raw))
+	for _, e := range raw {
+		out = append(out, ActivityEntry{
+			Time: e.Time, PeerID: e.PeerID, Nickname: nicks[e.PeerID],
+			Protocol: e.Protocol, Port: e.Port, Target: e.Target,
+			Result: e.Result,
+		})
+	}
+	return out
+}
+
 // ScanLAN does a quick TCP probe across the host's local /24 on a
 // short list of well-known service ports (RTSP cameras, HTTP web
 // UIs, network printers, etc.) so the user can one-click expose LAN

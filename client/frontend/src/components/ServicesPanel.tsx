@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Server, Link2, Trash2, Globe, Search, Zap, Copy, Check, Radar } from "lucide-react";
+import { Plus, Server, Link2, Trash2, Globe, Search, Zap, Copy, Check, Radar, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { LocalListener, LANDiscovery, PeerView, ServiceView, RiskAssessment } from "../types";
 import { app } from "../lib/wails";
@@ -11,13 +11,52 @@ type Props = {
   refreshLocalServices: () => Promise<void>;
 };
 
+// Common services people forward through Portal — one-click presets
+// for the expose form. Order is roughly "most-asked-for first".
+type Preset = {
+  id: string;
+  label: string;
+  defaultName: string;
+  protocol: "tcp" | "udp";
+  port: number;
+  showAdvanced?: boolean; // open the LAN-target field for hardware devices
+  hint: string;
+};
+
+const presets: Preset[] = [
+  { id: "minecraft-java",    label: "Minecraft Java",        defaultName: "minecraft",   protocol: "tcp", port: 25565, hint: "Vanilla Java edition default" },
+  { id: "minecraft-bedrock", label: "Minecraft Bedrock",     defaultName: "minecraft-be", protocol: "udp", port: 19132, hint: "Pocket / Win10 / Switch / mobile" },
+  { id: "cs2",               label: "CS2 / Source",          defaultName: "cs2",         protocol: "udp", port: 27015, hint: "Counter-Strike 2 / Source dedicated server" },
+  { id: "rust",              label: "Rust",                  defaultName: "rust",        protocol: "udp", port: 28015, hint: "Facepunch's Rust server" },
+  { id: "factorio",          label: "Factorio",              defaultName: "factorio",    protocol: "udp", port: 34197, hint: "" },
+  { id: "terraria",          label: "Terraria",              defaultName: "terraria",    protocol: "tcp", port: 7777,  hint: "" },
+  { id: "rtsp",              label: "RTSP kamera",           defaultName: "kamera",      protocol: "tcp", port: 554,   showAdvanced: true, hint: "Hikvision / Dahua / Reolink — LAN target kiriting" },
+  { id: "http-web",          label: "Web UI (HTTP)",         defaultName: "web",         protocol: "tcp", port: 80,    showAdvanced: true, hint: "NVR, smart home, router admin" },
+  { id: "https-web",         label: "Web UI (HTTPS)",        defaultName: "web",         protocol: "tcp", port: 443,   showAdvanced: true, hint: "" },
+  { id: "ssh",               label: "SSH",                   defaultName: "ssh",         protocol: "tcp", port: 22,    hint: "Masofadan terminal — kuchli kalit shart" },
+  { id: "vite",              label: "Vite dev server",       defaultName: "vite",        protocol: "tcp", port: 5173,  hint: "" },
+];
+
 export function ServicesPanel({ localServices, peers, refreshLocalServices }: Props) {
   const [name, setName] = useState("");
   const [port, setPort] = useState<number | "">("");
   const [proto, setProto] = useState<"tcp" | "udp">("tcp");
   const [target, setTarget] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showPresets, setShowPresets] = useState(false);
   const [error, setError] = useState("");
+
+  const applyPreset = (p: Preset) => {
+    setName(p.defaultName);
+    setPort(p.port);
+    setProto(p.protocol);
+    if (p.showAdvanced) {
+      setShowAdvanced(true);
+    } else {
+      setTarget("");
+    }
+    setShowPresets(false);
+  };
   const [dialing, setDialing] = useState<{ peerId: string; port: number; protocol: string } | null>(null);
   const [dialedAddrs, setDialedAddrs] = useState<Record<string, string>>({});
   const [detected, setDetected] = useState<LocalListener[]>([]);
@@ -142,9 +181,48 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
   return (
     <div className="h-full flex flex-col">
       <div className="p-4 border-b border-white/5">
-        <div className="flex items-center gap-2 mb-3">
-          <Server className="w-4 h-4 text-violet-400" strokeWidth={2} />
-          <h3 className="font-semibold text-sm">Mening servislarim</h3>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Server className="w-4 h-4 text-violet-400" strokeWidth={2} />
+            <h3 className="font-semibold text-sm">Mening servislarim</h3>
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => setShowPresets((v) => !v)}
+              className="text-[11px] text-violet-300 hover:text-violet-200 flex items-center gap-1"
+            >
+              <Sparkles className="w-3 h-3" strokeWidth={2.5} />
+              Tezkor
+            </button>
+            {showPresets && (
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setShowPresets(false)}
+                />
+                <div className="absolute right-0 top-full mt-1 z-40 panel rounded-card p-1 min-w-[230px] max-h-[300px] overflow-y-auto shadow-xl">
+                  {presets.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => applyPreset(p)}
+                      title={p.hint}
+                      className="w-full text-left px-2.5 py-1.5 rounded hover:bg-white/[0.06] flex items-center gap-2 text-xs"
+                    >
+                      <span className="flex-1 truncate">{p.label}</span>
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
+                        p.protocol === "udp"
+                          ? "bg-cyan-400/10 text-cyan-300"
+                          : "bg-violet-400/10 text-violet-300"
+                      }`}>
+                        {p.protocol.toUpperCase()}
+                      </span>
+                      <span className="font-mono text-[10px] text-zinc-500 shrink-0">:{p.port}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
         <p className="text-xs text-zinc-500 mb-3">
           Lokal portni mesh ga oching — boshqa peerlar to'g'ridan-to'g'ri ulana oladi.

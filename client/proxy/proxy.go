@@ -102,8 +102,30 @@ type Forwarder struct {
 	// the host's network.
 	exposed map[int]string
 
+	// activity is a ring buffer of recent peer dial attempts on
+	// services we're hosting. Used by the Settings → Activity panel
+	// for "who connected to my camera and when". Capped to keep
+	// memory bounded; oldest entries fall off the front.
+	activityMu sync.Mutex
+	activity   []ActivityEntry
+
 	closed chan struct{}
 }
+
+// ActivityEntry is one peer-dial event on a service we expose. The
+// proxy logs one of these on every onOpen{TCP,UDP} call — both the
+// successful and the rejected ones — so the user can see exactly
+// which peer pulled which service when, and why anything failed.
+type ActivityEntry struct {
+	Time     time.Time `json:"time"`
+	PeerID   string    `json:"peerId"`
+	Protocol string    `json:"protocol"` // "tcp" | "udp"
+	Port     int       `json:"port"`     // mesh-side port the peer asked for
+	Target   string    `json:"target"`   // upstream host:port we forwarded to
+	Result   string    `json:"result"`   // "ok" | "error: <msg>"
+}
+
+const activityRingMax = 200
 
 // udpDialStream holds the bookkeeping for a single source→host UDP
 // flow on the dialer side.
@@ -262,6 +284,31 @@ func (f *Forwarder) ExposedSnapshot() map[int]string {
 	for k, v := range f.exposed {
 		out[k] = v
 	}
+	return out
+}
+
+// recordActivity appends one peer-dial event to the ring buffer.
+// Cheap; called from the open handlers on every (success or rejection).
+func (f *Forwarder) recordActivity(e ActivityEntry) {
+	f.activityMu.Lock()
+	defer f.activityMu.Unlock()
+	f.activity = append(f.activity, e)
+	if n := len(f.activity); n > activityRingMax {
+		// Drop the oldest entries in one slice copy rather than
+		// growing the underlying array indefinitely.
+		copy(f.activity, f.activity[n-activityRingMax:])
+		f.activity = f.activity[:activityRingMax]
+	}
+}
+
+// Activity returns a copy of the recent dial-event ring buffer,
+// newest entries last. Empty when nobody's tried to use any of
+// our exposed services yet.
+func (f *Forwarder) Activity() []ActivityEntry {
+	f.activityMu.Lock()
+	defer f.activityMu.Unlock()
+	out := make([]ActivityEntry, len(f.activity))
+	copy(out, f.activity)
 	return out
 }
 
@@ -617,11 +664,19 @@ func (f *Forwarder) onOpen(peerID string, id uint32, body []byte) {
 func (f *Forwarder) onOpenTCP(peerID string, id uint32, portStr string) {
 	port, err := strconv.Atoi(portStr)
 	if err != nil || port <= 0 || port > 65535 {
+		f.recordActivity(ActivityEntry{
+			Time: time.Now(), PeerID: peerID, Protocol: "tcp",
+			Port: port, Result: "error: bad port",
+		})
 		_ = f.send(peerID, frameOpenErr, id, []byte("bad port"))
 		return
 	}
 	target, ok := f.exposeTargetFor(port)
 	if !ok {
+		f.recordActivity(ActivityEntry{
+			Time: time.Now(), PeerID: peerID, Protocol: "tcp",
+			Port: port, Result: "error: port not exposed",
+		})
 		_ = f.send(peerID, frameOpenErr, id, []byte("port not exposed"))
 		return
 	}
@@ -631,9 +686,17 @@ func (f *Forwarder) onOpenTCP(peerID string, id uint32, portStr string) {
 	if err != nil {
 		f.logger.Warn("proxy: tcp dial target failed",
 			"target", target, "err", err)
+		f.recordActivity(ActivityEntry{
+			Time: time.Now(), PeerID: peerID, Protocol: "tcp",
+			Port: port, Target: target, Result: "error: " + err.Error(),
+		})
 		_ = f.send(peerID, frameOpenErr, id, []byte(err.Error()))
 		return
 	}
+	f.recordActivity(ActivityEntry{
+		Time: time.Now(), PeerID: peerID, Protocol: "tcp",
+		Port: port, Target: target, Result: "ok",
+	})
 	hs := &hostStream{id: id, peerID: peerID, conn: conn}
 	f.mu.Lock()
 	f.hostStreams[streamKey{peerID, id}] = hs
@@ -669,11 +732,19 @@ func (f *Forwarder) onOpenTCP(peerID string, id uint32, portStr string) {
 func (f *Forwarder) onOpenUDP(peerID string, id uint32, portStr string) {
 	port, err := strconv.Atoi(portStr)
 	if err != nil || port <= 0 || port > 65535 {
+		f.recordActivity(ActivityEntry{
+			Time: time.Now(), PeerID: peerID, Protocol: "udp",
+			Port: port, Result: "error: bad port",
+		})
 		_ = f.send(peerID, frameOpenErr, id, []byte("bad port"))
 		return
 	}
 	target, ok := f.exposeTargetFor(port)
 	if !ok {
+		f.recordActivity(ActivityEntry{
+			Time: time.Now(), PeerID: peerID, Protocol: "udp",
+			Port: port, Result: "error: port not exposed",
+		})
 		_ = f.send(peerID, frameOpenErr, id, []byte("port not exposed"))
 		return
 	}
@@ -683,9 +754,17 @@ func (f *Forwarder) onOpenUDP(peerID string, id uint32, portStr string) {
 	if err != nil {
 		f.logger.Warn("proxy: udp dial target failed",
 			"target", target, "err", err)
+		f.recordActivity(ActivityEntry{
+			Time: time.Now(), PeerID: peerID, Protocol: "udp",
+			Port: port, Target: target, Result: "error: " + err.Error(),
+		})
 		_ = f.send(peerID, frameOpenErr, id, []byte(err.Error()))
 		return
 	}
+	f.recordActivity(ActivityEntry{
+		Time: time.Now(), PeerID: peerID, Protocol: "udp",
+		Port: port, Target: target, Result: "ok",
+	})
 	hs := &hostStream{id: id, peerID: peerID, conn: conn, udp: true}
 	f.mu.Lock()
 	f.hostStreams[streamKey{peerID, id}] = hs

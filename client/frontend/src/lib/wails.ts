@@ -18,6 +18,7 @@ import type {
   BandwidthResult,
   LANDiscovery,
   RiskAssessment,
+  ActivityEntry,
 } from "../types";
 
 type Bridge = {
@@ -45,6 +46,7 @@ type Bridge = {
   LocalListeners: () => Promise<LocalListener[]>;
   ScanLAN: () => Promise<LANDiscovery[]>;
   AssessExposeRisk: (target: string, protocol: "tcp" | "udp", port: number) => Promise<RiskAssessment>;
+  ProxyActivity: () => Promise<ActivityEntry[]>;
   LogLines: (n: number) => Promise<string[]>;
   LogFilePath: () => Promise<string>;
   OpenLogFolder: () => Promise<void>;
@@ -153,6 +155,7 @@ const stub: Bridge = {
   LocalListeners: async () => [],
   ScanLAN: async () => [],
   AssessExposeRisk: async () => ({ level: "safe" as const, reason: "", hint: "" }),
+  ProxyActivity: async () => [],
   LogLines: async () => ["[preview] no logs"],
   LogFilePath: async () => "~/.portal/logs/portal.log",
   OpenLogFolder: async () => {},
