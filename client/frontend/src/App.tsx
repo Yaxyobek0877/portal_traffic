@@ -70,6 +70,15 @@ export default function App() {
 
     offs.push(
       subscribe<PortalT>("portal:ready", (p) => {
+        // Defensive: an older backend (or a backend with the legacy
+        // bug where *ev.Portal was emitted directly) sends payloads
+        // shaped like {PortalID:…, Code:…} — capitalised Go field
+        // names instead of our lowerCamel JSON tags. Ignore those
+        // rather than letting them overwrite the good data Welcome
+        // already put in the store from app.CreatePortal()'s return.
+        if (!p || !p.portalId) {
+          return;
+        }
         setPortal(p);
         setScreen("portal");
       })
