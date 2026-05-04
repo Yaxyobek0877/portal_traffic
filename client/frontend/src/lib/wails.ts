@@ -16,6 +16,7 @@ import type {
   TurnTestResult,
   CloudflareTurnConfig,
   BandwidthResult,
+  LANDiscovery,
 } from "../types";
 
 type Bridge = {
@@ -41,6 +42,7 @@ type Bridge = {
   GetTurnConfig: () => Promise<TurnConfig>;
   SetTurnConfig: (c: TurnConfig) => Promise<void>;
   LocalListeners: () => Promise<LocalListener[]>;
+  ScanLAN: () => Promise<LANDiscovery[]>;
   LogLines: (n: number) => Promise<string[]>;
   LogFilePath: () => Promise<string>;
   OpenLogFolder: () => Promise<void>;
@@ -147,6 +149,7 @@ const stub: Bridge = {
   GetTurnConfig: async () => ({ url: "", username: "", credential: "" }),
   SetTurnConfig: async () => {},
   LocalListeners: async () => [],
+  ScanLAN: async () => [],
   LogLines: async () => ["[preview] no logs"],
   LogFilePath: async () => "~/.portal/logs/portal.log",
   OpenLogFolder: async () => {},

@@ -105,6 +105,14 @@ export type LocalListener = {
   local: string;
 };
 
+export type LANDiscovery = {
+  ip: string;
+  port: number;
+  protocol: "tcp";
+  service: string; // "rtsp" | "http" | "ipp" | …
+  hostname: string;
+};
+
 export type TurnTestResult = {
   ok: boolean;
   message: string;

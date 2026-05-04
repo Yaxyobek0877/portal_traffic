@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Server, Link2, Trash2, Globe, Search, Zap, Copy, Check } from "lucide-react";
+import { Plus, Server, Link2, Trash2, Globe, Search, Zap, Copy, Check, Radar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { LocalListener, PeerView, ServiceView } from "../types";
+import type { LocalListener, LANDiscovery, PeerView, ServiceView } from "../types";
 import { app } from "../lib/wails";
 import { shortId } from "../lib/format";
 
@@ -22,6 +22,9 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
   const [dialedAddrs, setDialedAddrs] = useState<Record<string, string>>({});
   const [detected, setDetected] = useState<LocalListener[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [lanDevices, setLanDevices] = useState<LANDiscovery[]>([]);
+  const [lanScanning, setLanScanning] = useState(false);
+  const [lanScanned, setLanScanned] = useState(false);
 
   const refreshDetected = async () => {
     setScanning(true);
@@ -75,6 +78,33 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
       await app.UnexposeService(p);
       await refreshLocalServices();
     } catch {}
+  };
+
+  const scanLAN = async () => {
+    setLanScanning(true);
+    try {
+      const list = await app.ScanLAN();
+      setLanDevices(list);
+      setLanScanned(true);
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setLanScanning(false);
+    }
+  };
+
+  const exposeLANDevice = async (d: LANDiscovery) => {
+    setError("");
+    const target = `${d.ip}:${d.port}`;
+    const niceName =
+      (d.hostname && d.hostname.split(".")[0]) ||
+      `${d.service}-${d.ip.split(".").pop()}`;
+    try {
+      await app.ExposeService(niceName, "tcp", d.port, target);
+      await refreshLocalServices();
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    }
   };
 
   const dialPeerService = async (peer: PeerView, svc: ServiceView) => {
@@ -246,6 +276,68 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                   ) : (
                     <button
                       onClick={() => exposeDetected(d)}
+                      className="px-2 py-1 rounded text-[11px] font-medium bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 shrink-0 whitespace-nowrap"
+                    >
+                      Och
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-2.5">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Radar className="w-4 h-4 text-cyan-400" strokeWidth={2} />
+              Tarmoqdagi qurilmalar
+            </h3>
+            <button
+              onClick={scanLAN}
+              disabled={lanScanning}
+              className="text-[11px] text-zinc-400 hover:text-white disabled:opacity-50"
+            >
+              {lanScanning ? "Skanerlanmoqda…" : lanScanned ? "Qayta skanerlash" : "Skanerlash"}
+            </button>
+          </div>
+          {!lanScanned && !lanScanning && (
+            <div className="text-xs text-zinc-500 panel rounded-input px-3 py-3 text-center">
+              "Skanerlash"ni bosing — RTSP kameralar, NVR, printerlar va boshqa LAN qurilmalari topiladi (~10s).
+            </div>
+          )}
+          {lanScanned && lanDevices.length === 0 && !lanScanning && (
+            <div className="text-xs text-zinc-500 panel rounded-input px-3 py-3 text-center">
+              Tarmoqda boshqa qurilma topilmadi.
+            </div>
+          )}
+          <div className="space-y-1.5">
+            {lanDevices.map((d) => {
+              const exposed = localServices.some(
+                (s) => s.port === d.port && s.protocol === d.protocol,
+              );
+              return (
+                <div
+                  key={`${d.ip}:${d.port}`}
+                  className="panel rounded-input px-3 py-2 flex items-center gap-2 text-sm"
+                >
+                  <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" strokeWidth={2} />
+                  <div className="min-w-0 flex-1 leading-tight">
+                    <div className="truncate text-xs font-medium">
+                      {d.hostname || d.service}
+                    </div>
+                    <div className="font-mono text-[10px] text-zinc-500">
+                      {d.ip}:{d.port}
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 bg-cyan-400/10 text-cyan-300 uppercase">
+                    {d.service}
+                  </span>
+                  {exposed ? (
+                    <span className="text-[11px] text-emerald-400 font-medium shrink-0">ochilgan ✓</span>
+                  ) : (
+                    <button
+                      onClick={() => exposeLANDevice(d)}
                       className="px-2 py-1 rounded text-[11px] font-medium bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 shrink-0 whitespace-nowrap"
                     >
                       Och

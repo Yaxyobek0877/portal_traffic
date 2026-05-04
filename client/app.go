@@ -24,6 +24,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"portal_traffic_client/crashreport"
+	"portal_traffic_client/lanscan"
 	"portal_traffic_client/logsink"
 	"portal_traffic_client/mesh"
 	"portal_traffic_client/nat"
@@ -917,6 +918,23 @@ func (a *App) ClearLogs() {
 // + `lsof -iUDP` (macOS), or `ss -lntp` + `ss -lnup` (Linux). Errors
 // are absorbed so the UI stays usable on platforms where neither is
 // available (Windows, sandboxed environments).
+// ScanLAN does a quick TCP probe across the host's local /24 on a
+// short list of well-known service ports (RTSP cameras, HTTP web
+// UIs, network printers, etc.) so the user can one-click expose LAN
+// devices without typing IP:port by hand. ~5–10 seconds for a typical
+// home network.
+func (a *App) ScanLAN() []lanscan.Discovery {
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	out := lanscan.Scan(ctx)
+	a.logger.Info("lan scan complete", "found", len(out))
+	if out == nil {
+		// JSON-marshal nil slice as [] not null — UI iterates over it.
+		out = []lanscan.Discovery{}
+	}
+	return out
+}
+
 func (a *App) LocalListeners() []LocalListener {
 	out := []LocalListener{}
 	probes := localListenerProbes()
