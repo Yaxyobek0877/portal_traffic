@@ -51,6 +51,11 @@ export function Welcome() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Which recent-row is currently being rejoined. Used to show a
+  // per-row spinner instead of a global one — the rest of the list
+  // stays clickable in case the network call fails and the user wants
+  // to try a different recent.
+  const [rejoiningId, setRejoiningId] = useState<number | null>(null);
 
   // Generation counter so a late-arriving result from a cancelled
   // connect attempt can't drag the user back into a portal they
@@ -62,14 +67,46 @@ export function Welcome() {
     app.RecentPortals(8).then(setHistory);
   }, [setSignalingUrl, setHistory]);
 
-  // Click on a recent row → pre-fill Join inputs and switch to join
-  // mode. The user still has to confirm — we don't auto-submit because
-  // a stale row (closed portal) would just throw an error and look
-  // broken.
-  const reuse = (id: string, c: string) => {
-    setMode("join");
-    setPortalId(id);
-    setCode(c);
+  // One-click rejoin from the Recent list. Mirrors what the mobile
+  // client does (PortalViewModel.rejoinRecent):
+  //
+  //  - Owner rows: the server destroys an owner's portal the moment
+  //    they disconnect, so the saved portalId is dead. Best-effort
+  //    re-create with the same nickname; user gets a fresh ID + code.
+  //  - Joiner rows: just call JoinPortal with the saved id + code.
+  //    If the portal has since closed we surface the existing
+  //    "no such portal" error and the user can try a different row.
+  //
+  // The previous behaviour (pre-fill the join form, make the user
+  // click submit again) was a holdover from before the dashboard
+  // redesign — pure friction now.
+  const rejoinRow = async (h: typeof history[number]) => {
+    if (busy) return;
+    setError("");
+    setRejoiningId(h.id);
+    const myGen = ++genRef.current;
+    setBusy(true);
+    try {
+      // Use the signed-in user's nickname (post-account work this
+      // is always populated). Fall back to the historical handle if
+      // the field is somehow empty so we never call into the backend
+      // with a blank name.
+      const nick = nickname.trim() || h.nickname;
+      const p = h.isOwner
+        ? await app.CreatePortal(nick, false)
+        : await app.JoinPortal(nick, h.portalId, h.code);
+      if (myGen !== genRef.current) return;
+      setPortal(p);
+      setScreen("portal");
+    } catch (e: any) {
+      if (myGen !== genRef.current) return;
+      setError(e?.message || String(e));
+    } finally {
+      if (myGen === genRef.current) {
+        setBusy(false);
+        setRejoiningId(null);
+      }
+    }
   };
 
   // Smart-paste: pasting a full portal:// URL or "ID-CODE" string into
@@ -253,8 +290,66 @@ export function Welcome() {
             <p className="text-sm text-zinc-400 mt-1.5">{t("welcome.subtitle")}</p>
           </motion.div>
 
+          {/* Recent portals — promoted ABOVE the action cards because
+              for returning users (who have history) rejoining is the
+              primary intent, not creating a new portal. New users
+              with no recents still see the action cards prominently
+              after the empty-state placeholder. */}
+          {history.length > 0 && (
+            <section className="mt-6">
+              <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-zinc-500 mb-2">
+                <HistoryIcon className="w-3 h-3" />
+                {t("welcome.recent")}
+              </div>
+              <div className="space-y-1.5">
+                {history.slice(0, 6).map((h) => {
+                  const peerInitial = (h.nickname?.trim()[0] || "?").toUpperCase();
+                  // Owner rows are rejoinable even without a saved code
+                  // (the rejoin spawns a fresh portal anyway). Joiner
+                  // rows need a code to attempt the join.
+                  const canRejoin = h.isOwner || !!h.code;
+                  const isThisRowBusy = rejoiningId === h.id;
+                  return (
+                    <button
+                      key={h.id}
+                      onClick={() => canRejoin && rejoinRow(h)}
+                      disabled={!canRejoin || (busy && !isThisRowBusy)}
+                      className="w-full panel rounded-input px-3 py-2.5 flex items-center gap-3 text-sm hover:bg-white/[0.07] disabled:opacity-50 disabled:cursor-not-allowed text-left transition group"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/30 to-indigo-500/20 flex items-center justify-center text-[11px] font-bold shrink-0">
+                        {peerInitial}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-violet-300 text-sm">{h.portalId}</span>
+                          {h.isOwner && (
+                            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">
+                              <Crown className="w-2.5 h-2.5" />
+                              {t("common.owner")}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-zinc-500 truncate">
+                          {h.nickname}
+                        </div>
+                      </div>
+                      {isThisRowBusy ? (
+                        <div className="w-4 h-4 border-2 border-violet-300/30 border-t-violet-300 rounded-full animate-spin shrink-0" />
+                      ) : (
+                        <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 group-hover:translate-x-0.5 transition shrink-0" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {/* Action area — Idle: 2 cards. Join: inline form. Create
-              busy state shows on the create card itself, no view swap. */}
+              busy state shows on the create card itself, no view swap.
+              When the user already has recent portals these are the
+              "make something new" path; when they don't, this is the
+              only thing that matters. */}
           <div className="mt-6">
             <AnimatePresence mode="wait" initial={false}>
               {mode !== "join" ? (
@@ -416,53 +511,21 @@ export function Welcome() {
             )}
           </div>
 
-          {/* Recent portals — list, not afterthought. Always rendered:
-              empty state is its own teaching moment. */}
-          <section className="mt-8">
-            <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-zinc-500 mb-2">
-              <HistoryIcon className="w-3 h-3" />
-              {t("welcome.recent")}
-            </div>
-
-            {history.length === 0 ? (
+          {/* First-time empty state. Only shown for users with no
+              history yet — once they have any recents the section
+              above takes over. The dashed-border hint teaches what
+              the section is for, not a 'broken' look. */}
+          {history.length === 0 && (
+            <section className="mt-8">
+              <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-zinc-500 mb-2">
+                <HistoryIcon className="w-3 h-3" />
+                {t("welcome.recent")}
+              </div>
               <div className="rounded-input border border-dashed border-white/[0.08] p-6 text-center text-xs text-zinc-500">
                 {t("welcome.recent.empty")}
               </div>
-            ) : (
-              <div className="space-y-1.5">
-                {history.slice(0, 6).map((h) => {
-                  const peerInitial = (h.nickname?.trim()[0] || "?").toUpperCase();
-                  return (
-                    <button
-                      key={h.id}
-                      onClick={() => h.code && reuse(h.portalId, h.code)}
-                      disabled={!h.code}
-                      className="w-full panel rounded-input px-3 py-2.5 flex items-center gap-3 text-sm hover:bg-white/[0.07] disabled:opacity-50 disabled:cursor-not-allowed text-left transition group"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/30 to-indigo-500/20 flex items-center justify-center text-[11px] font-bold shrink-0">
-                        {peerInitial}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-violet-300 text-sm">{h.portalId}</span>
-                          {h.isOwner && (
-                            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">
-                              <Crown className="w-2.5 h-2.5" />
-                              {t("common.owner")}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-zinc-500 truncate">
-                          {h.nickname}
-                        </div>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 group-hover:translate-x-0.5 transition shrink-0" />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+            </section>
+          )}
 
           {/* Footer chrome — NAT warning + signaling URL, muted so it
               fades into the background rather than competing with
