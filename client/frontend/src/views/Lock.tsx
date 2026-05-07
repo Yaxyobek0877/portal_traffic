@@ -1,31 +1,44 @@
-// Local-account gate. Sits in front of Welcome on every launch:
-//   - First launch (no account configured) → Sign-Up mode: username +
-//     password + confirm. SignUp creates the row, flips unlocked, and
-//     pre-fills Welcome's nickname with the username.
-//   - Subsequent launches → Sign-In mode: username + password. SignIn
-//     verifies both; on failure the password field is cleared and
-//     refocused. "Forgot password?" runs ResetVault and bumps the
-//     user back into Sign-Up.
+// Local-account gate — Sign-In / Sign-Up tabbed card. Sits in front
+// of Welcome on every launch.
 //
-// The whole component is gated by App.tsx — when usePortalStore.unlocked
-// flips true, this view is unmounted and Welcome takes over.
+// Layout: a single auth card with a two-tab segmented control at the
+// top ([Kirish] | [Ro'yxatdan o'tish]) and the form below. Tab choice
+// resolves on mount from app.HasAccount() — returning users land on
+// Sign-In with the username pre-filled; first-time users land on
+// Sign-Up. Free switching between tabs from there. Signing up while
+// an account already exists overwrites it — we warn before submitting.
+//
+// Language toggle lives only in the titlebar (consistent with Welcome);
+// no bottom pill anymore.
 
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Lock as LockIcon, ShieldCheck, KeyRound, AlertTriangle, User } from "lucide-react";
+import {
+  Lock as LockIcon,
+  ShieldCheck,
+  KeyRound,
+  AlertTriangle,
+  User,
+  ArrowRight,
+} from "lucide-react";
 import { Logo } from "../components/Logo";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
 import { useT } from "../i18n";
 
-type Mode = "loading" | "signup" | "signin";
+type Tab = "signin" | "signup";
 
 export function Lock() {
   const { t, lang, setLang } = useT();
   const setUnlocked = usePortalStore((s) => s.setUnlocked);
   const setNickname = usePortalStore((s) => s.setNickname);
 
-  const [mode, setMode] = useState<Mode>("loading");
+  // Initial state is "loading" so we don't flash the wrong tab while
+  // the HasAccount probe is in flight. The form is rendered behind a
+  // skeleton; tab buttons fade in once we know the right default.
+  const [tab, setTab] = useState<Tab | "loading">("loading");
+  const [hasAccount, setHasAccount] = useState(false);
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -36,45 +49,57 @@ export function Lock() {
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  // Probe the backend once on mount: existing account → Sign-In;
-  // otherwise → Sign-Up. We also pre-fill the username on Sign-In so
-  // returning users only have to type their password.
+  // Probe the backend once on mount: existing account → Sign-In tab,
+  // pre-filled username; otherwise → Sign-Up tab.
   useEffect(() => {
     let cancelled = false;
     app
       .HasAccount()
       .then(async (has) => {
         if (cancelled) return;
+        setHasAccount(has);
         if (has) {
           const u = await app.CurrentUsername().catch(() => "");
           if (cancelled) return;
           setUsername(u);
-          setMode("signin");
+          setTab("signin");
         } else {
-          setMode("signup");
+          setTab("signup");
         }
       })
       .catch(() => {
         // Backend not reachable: default to Sign-Up so the user can
         // at least proceed past the screen.
-        if (!cancelled) setMode("signup");
+        if (!cancelled) setTab("signup");
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Auto-focus the right field when the mode resolves. On Sign-In the
-  // username is already pre-filled, so the password field gets focus;
+  // Auto-focus the right field when the tab changes. On Sign-In the
+  // username is usually already filled, so focus jumps to password;
   // on Sign-Up we start at the username field.
   useEffect(() => {
-    if (mode === "signup") usernameRef.current?.focus();
-    if (mode === "signin") passwordRef.current?.focus();
-  }, [mode]);
+    if (tab === "signup") usernameRef.current?.focus();
+    if (tab === "signin") passwordRef.current?.focus();
+  }, [tab]);
+
+  // Switch tab. Wipes the password fields so the previous mode's
+  // text doesn't bleed into the next one (common phishing-style
+  // foot-gun). Username is preserved — it's not sensitive and the
+  // user often wants to re-use it on the other tab.
+  const switchTab = (next: Tab) => {
+    if (next === tab || busy) return;
+    setError("");
+    setPassword("");
+    setConfirm("");
+    setTab(next);
+  };
 
   const submit = async () => {
     setError("");
-    if (mode === "signup") {
+    if (tab === "signup") {
       const uname = username.trim();
       if (!uname) {
         setError(t("lock.signup.error.username_empty"));
@@ -144,12 +169,13 @@ export function Lock() {
     setBusy(true);
     try {
       await app.ResetVault();
+      setHasAccount(false);
       setUsername("");
       setPassword("");
       setConfirm("");
       setError("");
       setResetOpen(false);
-      setMode("signup");
+      setTab("signup");
     } catch {
       setResetOpen(false);
       setError(t("lock.signup.error.failed"));
@@ -158,22 +184,19 @@ export function Lock() {
     }
   };
 
-  // Toggle between modes (the "I already have an account" / "Create one"
-  // links). Wipes form state so the previous screen's password text
-  // doesn't bleed across.
-  const switchMode = (next: Mode) => {
-    setError("");
-    setPassword("");
-    setConfirm("");
-    setMode(next);
-  };
+  // Styling helpers — keep the JSX below readable.
+  const tabClass = (t: Tab) =>
+    `flex-1 h-9 text-xs font-semibold rounded-md transition ${
+      tab === t
+        ? "bg-violet-500/30 text-white shadow-inner"
+        : "text-zinc-400 hover:bg-white/[0.04]"
+    } disabled:opacity-50 disabled:cursor-not-allowed`;
 
   return (
     <div className="h-full flex flex-col">
-      {/* Titlebar drag region. The OS traffic lights live in the left
-          padding; we keep the right side for the secondary lang toggle.
-          A primary, prominent language switcher lives below the form
-          so users don't miss it on the small titlebar instance. */}
+      {/* Titlebar drag region with the corner UZ/EN toggle. The bottom
+          language pill from the previous iteration is gone — this one
+          is the only language switcher now. */}
       <div className="draggable titlebar-pad flex justify-end items-center px-3 gap-1" style={{ height: 68 }}>
         <div className="no-drag flex rounded overflow-hidden border border-white/10 text-[11px] font-mono">
           <button
@@ -193,204 +216,204 @@ export function Lock() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center px-6 -mt-6">
-        <div className="w-full max-w-[420px] text-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 22 }}
-            className="relative inline-block"
-          >
-            <Logo size={120} />
-            <div className="absolute -bottom-1 -right-1 bg-zinc-900 border border-violet-500/40 rounded-full p-2 shadow-lg">
-              {mode === "signup" ? (
-                <ShieldCheck className="w-4 h-4 text-violet-300" />
-              ) : (
-                <LockIcon className="w-4 h-4 text-violet-300" />
-              )}
-            </div>
-          </motion.div>
+      <div className="flex-1 flex items-center justify-center px-6 -mt-4">
+        <div className="w-full max-w-[420px]">
+          {/* Logo header */}
+          <div className="text-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: "spring", stiffness: 200, damping: 22 }}
+              className="relative inline-block"
+            >
+              <Logo size={96} />
+              <div className="absolute -bottom-0.5 -right-0.5 bg-zinc-900 border border-violet-500/40 rounded-full p-1.5 shadow-lg">
+                {tab === "signup" ? (
+                  <ShieldCheck className="w-3.5 h-3.5 text-violet-300" />
+                ) : (
+                  <LockIcon className="w-3.5 h-3.5 text-violet-300" />
+                )}
+              </div>
+            </motion.div>
+            <motion.h1
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              className="text-xl font-extrabold tracking-tight mt-3"
+            >
+              Portal
+            </motion.h1>
+          </div>
 
-          <motion.h1
+          {/* Auth card */}
+          <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="text-2xl font-extrabold tracking-tight mt-4"
+            transition={{ delay: 0.2 }}
+            className="panel rounded-input mt-5 p-5"
           >
-            {mode === "signup" ? t("lock.signup.title") : t("lock.signin.title")}
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="text-xs text-zinc-400 mt-2 leading-relaxed"
-          >
-            {mode === "signup" ? t("lock.signup.subtitle") : t("lock.signin.subtitle")}
-          </motion.p>
-
-          {mode === "loading" && <div className="mt-10 text-xs text-zinc-500">…</div>}
-
-          {(mode === "signup" || mode === "signin") && (
-            <div className="mt-5 space-y-3 text-left">
-              <div>
-                <label className="text-xs uppercase tracking-widest text-zinc-500 ml-1">
-                  {mode === "signup"
-                    ? t("lock.signup.username.label")
-                    : t("lock.signin.username.label")}
-                </label>
-                <div className="relative mt-1.5">
-                  <User className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    ref={usernameRef}
-                    type="text"
-                    placeholder={
-                      mode === "signup"
-                        ? t("lock.signup.username.placeholder")
-                        : t("lock.signin.username.placeholder")
-                    }
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    onKeyDown={onKey}
-                    className="input-base w-full pl-9"
-                    maxLength={24}
-                    autoComplete="username"
-                    disabled={busy}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs uppercase tracking-widest text-zinc-500 ml-1">
-                  {mode === "signup"
-                    ? t("lock.signup.password.label")
-                    : t("lock.signin.password.label")}
-                </label>
-                <div className="relative mt-1.5">
-                  <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    ref={passwordRef}
-                    type="password"
-                    placeholder={
-                      mode === "signup"
-                        ? t("lock.signup.password.placeholder")
-                        : t("lock.signin.password.placeholder")
-                    }
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={onKey}
-                    className="input-base w-full pl-9"
-                    maxLength={128}
-                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                    disabled={busy}
-                  />
-                </div>
-              </div>
-
-              {mode === "signup" && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <label className="text-xs uppercase tracking-widest text-zinc-500 ml-1">
-                    {t("lock.signup.confirm.label")}
-                  </label>
-                  <input
-                    type="password"
-                    placeholder={t("lock.signup.confirm.placeholder")}
-                    value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)}
-                    onKeyDown={onKey}
-                    className="input-base w-full mt-1.5"
-                    maxLength={128}
-                    autoComplete="new-password"
-                    disabled={busy}
-                  />
-                </motion.div>
-              )}
-
-              {error && (
-                <div className="rounded-input border border-rose-500/30 bg-rose-500/5 p-2.5 text-xs text-rose-300">
-                  {error}
-                </div>
-              )}
-
+            {/* Tab segmented control. Disabled while a submit is in
+                flight to keep the user from switching tabs mid-request. */}
+            <div className="flex gap-1 p-1 bg-black/30 rounded-md mb-5">
               <button
-                onClick={submit}
-                disabled={busy}
-                className="btn-primary rounded-btn h-11 w-full text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                type="button"
+                onClick={() => switchTab("signin")}
+                disabled={busy || tab === "loading"}
+                className={tabClass("signin")}
               >
-                <KeyRound className="w-4 h-4" />
-                {busy
-                  ? mode === "signup"
-                    ? t("lock.signup.submitting")
-                    : t("lock.signin.checking")
-                  : mode === "signup"
-                  ? t("lock.signup.submit")
-                  : t("lock.signin.submit")}
+                {t("lock.signin.title")}
               </button>
-
-              {mode === "signup" && (
-                <p className="text-[11px] text-zinc-500 leading-relaxed pt-1">
-                  {t("lock.signup.hint")}
-                </p>
-              )}
-
-              {mode === "signin" && (
-                <button
-                  type="button"
-                  onClick={() => setResetOpen(true)}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 underline pt-1"
-                >
-                  {t("lock.signin.forgot")}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => switchTab("signup")}
+                disabled={busy || tab === "loading"}
+                className={tabClass("signup")}
+              >
+                {t("lock.signup.title")}
+              </button>
             </div>
-          )}
 
-          {/* Primary, can't-miss language switcher. The titlebar one is
-              tiny and easy to overlook on a Sign-Up screen the user
-              has never seen before — this row makes it obvious. */}
-          {mode !== "loading" && (
-            <div className="mt-8 flex items-center justify-center gap-3 text-xs">
-              <span className="text-zinc-500 uppercase tracking-widest text-[10px]">
-                {t("lock.language")}
-              </span>
-              <div className="flex rounded-full overflow-hidden border border-white/10 font-mono">
-                <button
-                  type="button"
-                  onClick={() => setLang("uz")}
-                  className={`px-3 py-1 ${lang === "uz" ? "bg-violet-500/30 text-white" : "text-zinc-400 hover:bg-white/[0.06]"}`}
-                >
-                  O'zbek
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLang("en")}
-                  className={`px-3 py-1 ${lang === "en" ? "bg-violet-500/30 text-white" : "text-zinc-400 hover:bg-white/[0.06]"}`}
-                >
-                  English
-                </button>
+            {/* Subtitle that swaps with the tab. Same fixed line height
+                across modes so the form below doesn't jump on switch. */}
+            <p className="text-xs text-zinc-400 leading-relaxed text-center min-h-[3rem] flex items-center justify-center">
+              {tab === "signup" ? t("lock.signup.subtitle") : t("lock.signin.subtitle")}
+            </p>
+
+            {/* Sign-Up-on-existing-account warning. Quietly informs
+                rather than blocks; the user is the owner of the device
+                and they may genuinely want to start over. */}
+            {tab === "signup" && hasAccount && (
+              <div className="mt-2 rounded-input border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-amber-200/90 leading-relaxed">
+                {t("lock.signup.replace_warning")}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Toggle between sign-up and sign-in. Useful both ways:
-              after a Reset the user lands in Sign-Up but might just
-              want to retry; on Sign-In they may want to reconsider. */}
-          {mode !== "loading" && (
-            <div className="mt-4">
-              {mode === "signup" ? (
+            {tab === "loading" ? (
+              <div className="h-40 flex items-center justify-center text-xs text-zinc-500">
+                …
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="text-[11px] uppercase tracking-widest text-zinc-500 ml-1">
+                    {tab === "signup"
+                      ? t("lock.signup.username.label")
+                      : t("lock.signin.username.label")}
+                  </label>
+                  <div className="relative mt-1.5">
+                    <User className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      ref={usernameRef}
+                      type="text"
+                      placeholder={
+                        tab === "signup"
+                          ? t("lock.signup.username.placeholder")
+                          : t("lock.signin.username.placeholder")
+                      }
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      onKeyDown={onKey}
+                      className="input-base w-full pl-9"
+                      maxLength={24}
+                      autoComplete="username"
+                      disabled={busy}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] uppercase tracking-widest text-zinc-500 ml-1">
+                    {tab === "signup"
+                      ? t("lock.signup.password.label")
+                      : t("lock.signin.password.label")}
+                  </label>
+                  <div className="relative mt-1.5">
+                    <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      ref={passwordRef}
+                      type="password"
+                      placeholder={
+                        tab === "signup"
+                          ? t("lock.signup.password.placeholder")
+                          : t("lock.signin.password.placeholder")
+                      }
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={onKey}
+                      className="input-base w-full pl-9"
+                      maxLength={128}
+                      autoComplete={tab === "signup" ? "new-password" : "current-password"}
+                      disabled={busy}
+                    />
+                  </div>
+                </div>
+
+                {tab === "signup" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <label className="text-[11px] uppercase tracking-widest text-zinc-500 ml-1">
+                      {t("lock.signup.confirm.label")}
+                    </label>
+                    <input
+                      type="password"
+                      placeholder={t("lock.signup.confirm.placeholder")}
+                      value={confirm}
+                      onChange={(e) => setConfirm(e.target.value)}
+                      onKeyDown={onKey}
+                      className="input-base w-full mt-1.5"
+                      maxLength={128}
+                      autoComplete="new-password"
+                      disabled={busy}
+                    />
+                  </motion.div>
+                )}
+
+                {error && (
+                  <div className="rounded-input border border-rose-500/30 bg-rose-500/5 p-2.5 text-xs text-rose-300">
+                    {error}
+                  </div>
+                )}
+
                 <button
-                  type="button"
-                  onClick={() => switchMode("signin")}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 underline"
+                  onClick={submit}
+                  disabled={busy}
+                  className="btn-primary rounded-btn h-11 w-full text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  {t("lock.signup.switch")}
+                  {busy ? (
+                    tab === "signup" ? (
+                      t("lock.signup.submitting")
+                    ) : (
+                      t("lock.signin.checking")
+                    )
+                  ) : (
+                    <>
+                      {tab === "signup" ? t("lock.signup.submit") : t("lock.signin.submit")}
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
-              ) : null}
-            </div>
-          )}
+
+                {/* Bottom row — context-sensitive secondary actions. */}
+                <div className="pt-1 text-center">
+                  {tab === "signin" ? (
+                    <button
+                      type="button"
+                      onClick={() => setResetOpen(true)}
+                      className="text-[11px] text-zinc-500 hover:text-zinc-300 underline"
+                    >
+                      {t("lock.signin.forgot")}
+                    </button>
+                  ) : (
+                    <p className="text-[11px] text-zinc-500 leading-relaxed">
+                      {t("lock.signup.hint")}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </motion.div>
         </div>
       </div>
 

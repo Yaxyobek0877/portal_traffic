@@ -82,8 +82,7 @@ export type StringKey =
   | "chat.send_file"
   | "chat.drop_to_send"
 
-  // Lock screen — first-run sign-up + every-launch sign-in
-  | "lock.language"
+  // Lock screen — tabbed Sign-In / Sign-Up
   | "lock.signup.title"
   | "lock.signup.subtitle"
   | "lock.signup.username.label"
@@ -94,7 +93,7 @@ export type StringKey =
   | "lock.signup.confirm.placeholder"
   | "lock.signup.submit"
   | "lock.signup.submitting"
-  | "lock.signup.switch"
+  | "lock.signup.replace_warning"
   | "lock.signup.error.username_empty"
   | "lock.signup.error.username_too_long"
   | "lock.signup.error.password_too_short"

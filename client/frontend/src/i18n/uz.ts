@@ -78,19 +78,19 @@ export const uz: Dict = {
   "chat.drop_to_send": "Tashlang — meshda yuborish boshlanadi",
 
   // Lock screen
-  "lock.language": "Til",
   "lock.signup.title": "Ro'yxatdan o'tish",
   "lock.signup.subtitle":
-    "Portal sizning ma'lumotlaringizni shu kompyuterda saqlaydi. Akkaunt yaratib qo'ysangiz — boshqa odam noutbukingizni ochsa ham portallaringizga kira olmaydi.",
+    "Akkaunt yaratib qo'ying — keyingi safar parol bilan kirasiz.",
   "lock.signup.username.label": "Foydalanuvchi nomi",
   "lock.signup.username.placeholder": "alice",
   "lock.signup.password.label": "Parol",
   "lock.signup.password.placeholder": "Kamida 4 ta belgi",
   "lock.signup.confirm.label": "Parolni takrorlang",
   "lock.signup.confirm.placeholder": "Yana bir marta",
-  "lock.signup.submit": "Akkaunt yaratish",
+  "lock.signup.submit": "Davom etish",
   "lock.signup.submitting": "Saqlanmoqda...",
-  "lock.signup.switch": "Allaqachon akkauntim bor — kirish",
+  "lock.signup.replace_warning":
+    "Bu kompyuterda allaqachon akkaunt bor. Yangisini yaratsangiz, eski akkaunt o'chiriladi (portal tarixi saqlanadi).",
   "lock.signup.error.username_empty": "Foydalanuvchi nomini kiriting.",
   "lock.signup.error.username_too_long": "Foydalanuvchi nomi 24 ta belgidan oshmasligi kerak.",
   "lock.signup.error.password_too_short": "Parol kamida 4 ta belgidan iborat bo'lishi kerak.",
@@ -99,7 +99,7 @@ export const uz: Dict = {
   "lock.signup.hint":
     "Eslab qoling: parol unutsangiz, tiklash mumkin emas — faqat tarix tozalanadi va qaytadan boshlaysiz.",
   "lock.signin.title": "Kirish",
-  "lock.signin.subtitle": "Davom etish uchun foydalanuvchi nomi va parolingizni kiriting.",
+  "lock.signin.subtitle": "Akkauntingizga kirish uchun ma'lumotlarni kiriting.",
   "lock.signin.username.label": "Foydalanuvchi nomi",
   "lock.signin.username.placeholder": "alice",
   "lock.signin.password.label": "Parol",

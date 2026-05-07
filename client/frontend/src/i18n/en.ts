@@ -78,19 +78,19 @@ export const en: Dict = {
   "chat.drop_to_send": "Drop — sending into the mesh starts now",
 
   // Lock screen
-  "lock.language": "Language",
-  "lock.signup.title": "Create account",
+  "lock.signup.title": "Sign up",
   "lock.signup.subtitle":
-    "Portal stores your data on this device. Set up an account so nobody else can open the app and see your portals if they pick up your laptop.",
+    "Create an account — you'll sign in with the password next time.",
   "lock.signup.username.label": "Username",
   "lock.signup.username.placeholder": "alice",
   "lock.signup.password.label": "Password",
   "lock.signup.password.placeholder": "At least 4 characters",
   "lock.signup.confirm.label": "Confirm password",
   "lock.signup.confirm.placeholder": "Type it again",
-  "lock.signup.submit": "Create account",
+  "lock.signup.submit": "Continue",
   "lock.signup.submitting": "Saving...",
-  "lock.signup.switch": "Already have an account — sign in",
+  "lock.signup.replace_warning":
+    "An account already exists on this device. Creating a new one will replace it (portal history is preserved).",
   "lock.signup.error.username_empty": "Please enter a username.",
   "lock.signup.error.username_too_long": "Username can't be longer than 24 characters.",
   "lock.signup.error.password_too_short": "Password must be at least 4 characters.",
@@ -99,7 +99,7 @@ export const en: Dict = {
   "lock.signup.hint":
     "Heads up: if you forget the password, there's no recovery — only a local reset that wipes history and starts over.",
   "lock.signin.title": "Sign in",
-  "lock.signin.subtitle": "Enter your username and password to continue.",
+  "lock.signin.subtitle": "Enter your details to access your account.",
   "lock.signin.username.label": "Username",
   "lock.signin.username.placeholder": "alice",
   "lock.signin.password.label": "Password",
