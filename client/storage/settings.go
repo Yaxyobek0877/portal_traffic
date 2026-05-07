@@ -82,9 +82,11 @@ const (
 	KeyLogUpload    = "log_upload_enabled"
 	KeyLogUploadURL = "log_upload_url"
 
-	// Local vault unlock — bcrypt hash of the master password the user
-	// set on first launch. Empty = no password configured (auth off).
-	// Matched in constant time by bcrypt.CompareHashAndPassword. See
-	// client/auth.go for HasPassword / SetPassword / VerifyPassword.
-	KeyAuthHash = "auth_hash"
+	// Local account — username/password gate the app shows on launch.
+	// auth_username is plaintext (it's not a secret; it doubles as the
+	// default Portal nickname after sign-in). auth_hash is bcrypt-hashed.
+	// Both empty → no account configured → SignUp screen is shown.
+	// See client/auth.go.
+	KeyAuthUsername = "auth_username"
+	KeyAuthHash     = "auth_hash"
 )

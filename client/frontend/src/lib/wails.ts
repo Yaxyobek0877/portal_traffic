@@ -66,14 +66,16 @@ type Bridge = {
   OpenCrashFolder: () => Promise<void>;
   ClearCrashReports: () => Promise<void>;
 
-  // Local vault unlock (added v0.5.0). HasPassword tells us whether to
-  // show the setup screen vs. the unlock screen on launch. SetPassword
-  // throws on too-short input ("password_too_short"). VerifyPassword
-  // returns false on mismatch — never throws so the UI can show its
-  // own localised error. ResetVault wipes hash + history.
-  HasPassword: () => Promise<boolean>;
-  SetPassword: (password: string) => Promise<void>;
-  VerifyPassword: (password: string) => Promise<boolean>;
+  // Local account (added v0.5.0). HasAccount picks Sign-Up vs. Sign-In
+  // mode on launch. SignUp throws on validation failure — error
+  // strings are the canonical ones the lock view matches on:
+  // "username_empty" / "username_too_long" / "password_too_short".
+  // SignIn returns false on any mismatch (never throws). CurrentUsername
+  // is read after sign-in to pre-fill Welcome's nickname.
+  HasAccount: () => Promise<boolean>;
+  SignUp: (username: string, password: string) => Promise<void>;
+  SignIn: (username: string, password: string) => Promise<boolean>;
+  CurrentUsername: () => Promise<string>;
   ResetVault: () => Promise<void>;
 };
 
@@ -212,13 +214,14 @@ const stub: Bridge = {
   OpenCrashFolder: async () => {},
   ClearCrashReports: async () => {},
 
-  // In preview mode treat the vault as unlocked + no password set.
-  // SetPassword silently succeeds; VerifyPassword accepts any input
-  // long enough to be valid. The lock screen mostly stays out of the
-  // dev-loop developer's way.
-  HasPassword: async () => false,
-  SetPassword: async () => {},
-  VerifyPassword: async (pwd) => pwd.length >= 4,
+  // Preview-mode (no Wails runtime) auth stubs. HasAccount=false so
+  // the SignUp screen shows; SignUp silently succeeds; SignIn accepts
+  // any username plus a 4+ char password. Keeps the lock screen out
+  // of the way during pure-frontend development.
+  HasAccount: async () => false,
+  SignUp: async () => {},
+  SignIn: async (_u, p) => p.length >= 4,
+  CurrentUsername: async () => "",
   ResetVault: async () => {},
 };
 
