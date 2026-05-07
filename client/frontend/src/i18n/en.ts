@@ -116,6 +116,9 @@ export const en: Dict = {
   "lock.signin.checking": "Checking...",
   "lock.signin.error.wrong": "Wrong username or password.",
   "lock.signin.forgot": "Forgot password?",
+  "lock.remember": "Remember me on this device",
+  "lock.remember.hint":
+    "When on, the app skips the lock on next launch. Only enable on your own computer.",
   "lock.reset.title": "Reset account?",
   "lock.reset.body":
     "There's no recovery for a forgotten password — but you can wipe the local data and start fresh. Portal history, username and password are deleted; network settings (signaling, TURN) are kept.",

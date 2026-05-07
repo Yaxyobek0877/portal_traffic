@@ -116,6 +116,9 @@ export const uz: Dict = {
   "lock.signin.checking": "Tekshirilmoqda...",
   "lock.signin.error.wrong": "Foydalanuvchi nomi yoki parol noto'g'ri.",
   "lock.signin.forgot": "Parolni unutdingizmi?",
+  "lock.remember": "Bu qurilmada eslab qol",
+  "lock.remember.hint":
+    "Yoqilgan bo'lsa, ilovani qaytadan ochganda parol so'ralmaydi. Faqat o'zingizning kompyuteringizda yoqing.",
   "lock.reset.title": "Akkauntni tiklash?",
   "lock.reset.body":
     "Parol esga tushmasa, faqatgina mahalliy ma'lumotlarni tozalab qaytadan boshlash mumkin: portal tarixi, foydalanuvchi nomi va parol o'chiriladi. Tarmoq sozlamalari (signal serveri, TURN) saqlanadi.",

@@ -15,13 +15,29 @@ import type {
 
 type Screen = "welcome" | "portal" | "settings";
 
+const REMEMBER_KEY = "portal:remembered";
+
+// True on cold start iff the user previously checked "remember me" on
+// the lock screen and hasn't signed out since. Read once at module
+// init; subsequent flips go through setRemembered.
+const initialRemembered =
+  typeof localStorage !== "undefined" &&
+  localStorage.getItem(REMEMBER_KEY) === "1";
+
 type Store = {
   // Vault unlock — App.tsx renders the Lock view until this flips true.
-  // The Lock view itself toggles this on successful setup or unlock; we
-  // don't persist it (every cold start should re-prompt). Reset goes
-  // through the explicit "forgot password" flow, not by clearing this.
+  // Initialised from the remembered flag so users who opted into "stay
+  // signed in" skip the lock entirely on launch. Sign-out and the
+  // forgot-password reset path both flip both flags off in lockstep.
   unlocked: boolean;
   setUnlocked: (b: boolean) => void;
+
+  // "Remember me on this device" — persisted to localStorage. When
+  // true, the app starts pre-unlocked. Toggled by the Lock screen
+  // checkbox at sign-in/sign-up time and cleared by Welcome's
+  // sign-out and the reset-vault flow.
+  remembered: boolean;
+  setRemembered: (b: boolean) => void;
 
   screen: Screen;
   setScreen: (s: Screen) => void;
@@ -72,8 +88,17 @@ const MAX_MESSAGES = 500;
 const transferKey = (t: TransferProgress) => `${t.peerId}:${t.xferId}:${t.direction}`;
 
 export const usePortalStore = create<Store>((set) => ({
-  unlocked: false,
+  unlocked: initialRemembered,
   setUnlocked: (b) => set({ unlocked: b }),
+
+  remembered: initialRemembered,
+  setRemembered: (b) => {
+    try {
+      if (b) localStorage.setItem(REMEMBER_KEY, "1");
+      else localStorage.removeItem(REMEMBER_KEY);
+    } catch {}
+    set({ remembered: b });
+  },
 
   screen: "welcome",
   setScreen: (s) => set({ screen: s }),

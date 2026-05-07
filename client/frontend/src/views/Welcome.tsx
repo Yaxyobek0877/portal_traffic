@@ -39,6 +39,7 @@ export function Welcome() {
   const setPortal = usePortalStore((s) => s.setPortal);
   const setScreen = usePortalStore((s) => s.setScreen);
   const setUnlocked = usePortalStore((s) => s.setUnlocked);
+  const setRemembered = usePortalStore((s) => s.setRemembered);
   const setSignalingUrl = usePortalStore((s) => s.setSignalingUrl);
   const signalingUrl = usePortalStore((s) => s.signalingUrl);
   const history = usePortalStore((s) => s.history);
@@ -156,12 +157,15 @@ export function Welcome() {
 
   // Sign out flips the vault back to the locked state. We don't reset
   // the account or wipe history — the user can sign back in with the
-  // same credentials. If they're somehow connecting when they hit
-  // sign-out, Leave() tears the connection down cleanly.
+  // same credentials. The remembered flag is also cleared, otherwise
+  // the next cold start would skip the lock and we'd silently undo
+  // the sign-out the user just asked for. If they're somehow
+  // connecting when they hit sign-out, Leave() tears it down cleanly.
   const signOut = async () => {
     try {
       await app.Leave();
     } catch {}
+    setRemembered(false);
     setUnlocked(false);
   };
 

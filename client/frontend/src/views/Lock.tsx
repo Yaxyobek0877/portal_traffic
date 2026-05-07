@@ -32,6 +32,7 @@ export function Lock() {
   const { t, lang, setLang } = useT();
   const setUnlocked = usePortalStore((s) => s.setUnlocked);
   const setNickname = usePortalStore((s) => s.setNickname);
+  const setRemembered = usePortalStore((s) => s.setRemembered);
 
   // Initial state is "loading" so we don't flash the wrong tab while
   // the HasAccount probe is in flight. The form is rendered behind a
@@ -42,6 +43,9 @@ export function Lock() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  // Default ON — most users want to skip the lock on subsequent
+  // launches. Anyone worried about a shared laptop can untick it.
+  const [rememberMe, setRememberMe] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resetOpen, setResetOpen] = useState(false);
@@ -121,6 +125,7 @@ export function Lock() {
       try {
         await app.SignUp(uname, password);
         setNickname(uname);
+        setRemembered(rememberMe);
         setUnlocked(true);
       } catch (e: any) {
         const msg = (e?.message || String(e)).toLowerCase();
@@ -148,6 +153,7 @@ export function Lock() {
       const ok = await app.SignIn(username.trim(), password);
       if (ok) {
         setNickname(username.trim());
+        setRemembered(rememberMe);
         setUnlocked(true);
       } else {
         setError(t("lock.signin.error.wrong"));
@@ -170,6 +176,10 @@ export function Lock() {
     try {
       await app.ResetVault();
       setHasAccount(false);
+      // The remembered flag is tied to the previous account. Clearing
+      // it here means the next launch falls back through the Lock
+      // setup flow as expected.
+      setRemembered(false);
       setUsername("");
       setPassword("");
       setConfirm("");
@@ -369,6 +379,26 @@ export function Lock() {
                     />
                   </motion.div>
                 )}
+
+                {/* Remember-me — kept compact above the submit button so
+                    it reads as a property of the action rather than a
+                    separate setting. Default ON; users on shared
+                    machines untick it for a per-launch lock. */}
+                <label className="flex items-start gap-2 cursor-pointer select-none pt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    disabled={busy}
+                    className="mt-0.5 w-3.5 h-3.5 rounded border-white/20 bg-white/[0.04] text-violet-500 focus:ring-1 focus:ring-violet-500 cursor-pointer accent-violet-500"
+                  />
+                  <span className="text-[11px] text-zinc-300 leading-snug">
+                    {t("lock.remember")}
+                    <span className="block text-zinc-500 text-[10px] mt-0.5">
+                      {t("lock.remember.hint")}
+                    </span>
+                  </span>
+                </label>
 
                 {error && (
                   <div className="rounded-input border border-rose-500/30 bg-rose-500/5 p-2.5 text-xs text-rose-300">

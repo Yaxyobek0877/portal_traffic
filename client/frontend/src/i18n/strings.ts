@@ -118,6 +118,8 @@ export type StringKey =
   | "lock.signin.checking"
   | "lock.signin.error.wrong"
   | "lock.signin.forgot"
+  | "lock.remember"
+  | "lock.remember.hint"
   | "lock.reset.title"
   | "lock.reset.body"
   | "lock.reset.confirm"
