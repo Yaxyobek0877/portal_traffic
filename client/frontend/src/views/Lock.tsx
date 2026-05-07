@@ -266,7 +266,15 @@ export function Lock() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center px-6 -mt-4">
+      {/* Scroll container. The Sign-Up form (username + password +
+          confirm + 5-row strength checklist + remember-me) is taller
+          than a short window can fit. We give the body its own
+          overflow:auto + a min-h-full inner that centres when there's
+          slack and starts at the top when the form overflows — pure
+          flex centring leaves the top of the card hidden behind the
+          titlebar with no way to scroll up to it. */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="min-h-full flex items-center justify-center px-6 py-4">
         <div className="w-full max-w-[420px]">
           {/* Logo header */}
           <div className="text-center">
@@ -530,6 +538,7 @@ export function Lock() {
               </div>
             )}
           </motion.div>
+        </div>
         </div>
       </div>
 
