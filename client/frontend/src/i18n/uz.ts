@@ -92,7 +92,7 @@ export const uz: Dict = {
   "lock.signup.username.label": "Foydalanuvchi nomi",
   "lock.signup.username.placeholder": "alice",
   "lock.signup.password.label": "Parol",
-  "lock.signup.password.placeholder": "Kamida 4 ta belgi",
+  "lock.signup.password.placeholder": "Kamida 8 ta belgi, kuchli parol",
   "lock.signup.confirm.label": "Parolni takrorlang",
   "lock.signup.confirm.placeholder": "Yana bir marta",
   "lock.signup.submit": "Davom etish",
@@ -101,11 +101,19 @@ export const uz: Dict = {
     "Bu kompyuterda allaqachon akkaunt bor. Yangisini yaratsangiz, eski akkaunt o'chiriladi (portal tarixi saqlanadi).",
   "lock.signup.error.username_empty": "Foydalanuvchi nomini kiriting.",
   "lock.signup.error.username_too_long": "Foydalanuvchi nomi 24 ta belgidan oshmasligi kerak.",
-  "lock.signup.error.password_too_short": "Parol kamida 4 ta belgidan iborat bo'lishi kerak.",
+  "lock.signup.error.password_too_short": "Parol kamida 8 ta belgidan iborat bo'lishi kerak.",
+  "lock.signup.error.password_weak":
+    "Parol kuchsiz. Quyidagi mezonlarning hammasini bajaring.",
   "lock.signup.error.mismatch": "Parollar bir-biriga mos kelmadi.",
   "lock.signup.error.failed": "Saqlash imkonsiz bo'ldi. Qayta urinib ko'ring.",
   "lock.signup.hint":
     "Eslab qoling: parol unutsangiz, tiklash mumkin emas — faqat tarix tozalanadi va qaytadan boshlaysiz.",
+  "lock.signup.strength.title": "Parol mezonlari:",
+  "lock.signup.strength.length": "Kamida 8 ta belgi",
+  "lock.signup.strength.lower": "Kichik harf (a-z)",
+  "lock.signup.strength.upper": "Katta harf (A-Z)",
+  "lock.signup.strength.digit": "Raqam (0-9)",
+  "lock.signup.strength.special": "Maxsus belgi (!@#$...)",
   "lock.signin.title": "Kirish",
   "lock.signin.subtitle": "Akkauntingizga kirish uchun ma'lumotlarni kiriting.",
   "lock.signin.username.label": "Foydalanuvchi nomi",
@@ -115,6 +123,8 @@ export const uz: Dict = {
   "lock.signin.submit": "Kirish",
   "lock.signin.checking": "Tekshirilmoqda...",
   "lock.signin.error.wrong": "Foydalanuvchi nomi yoki parol noto'g'ri.",
+  "lock.signin.error.locked":
+    "Juda ko'p urinish bo'ldi. {0} soniyadan so'ng qayta urinib ko'ring.",
   "lock.signin.forgot": "Parolni unutdingizmi?",
   "lock.remember": "Bu qurilmada eslab qol",
   "lock.remember.hint":

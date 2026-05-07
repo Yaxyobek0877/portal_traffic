@@ -20,6 +20,8 @@ import {
   AlertTriangle,
   User,
   ArrowRight,
+  Check,
+  X as XIcon,
 } from "lucide-react";
 import { Logo } from "../components/Logo";
 import { app } from "../lib/wails";
@@ -49,6 +51,31 @@ export function Lock() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resetOpen, setResetOpen] = useState(false);
+  // Lockout countdown after 5 failed sign-ins. The submit button
+  // disables and a timer ticks down. Backend tracks the absolute
+  // expiry — we just decrement to show progress.
+  const [lockoutSec, setLockoutSec] = useState(0);
+
+  // Tick the lockout countdown once a second.
+  useEffect(() => {
+    if (lockoutSec <= 0) return;
+    const timer = setTimeout(() => setLockoutSec((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [lockoutSec]);
+
+  // Live password-strength evaluation. Mirrors validatePasswordStrength
+  // in client/auth.go so the checklist matches what the backend will
+  // accept on submit. unicode regex categories cover non-ASCII letters
+  // for usernames that bring those in.
+  const strength = {
+    length: password.length >= 8,
+    lower: /\p{Ll}/u.test(password),
+    upper: /\p{Lu}/u.test(password),
+    digit: /[0-9]/.test(password),
+    special: /[^\p{L}\p{N}\s]/u.test(password),
+  };
+  const allStrong =
+    strength.length && strength.lower && strength.upper && strength.digit && strength.special;
 
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -113,8 +140,12 @@ export function Lock() {
         setError(t("lock.signup.error.username_too_long"));
         return;
       }
-      if (password.length < 4) {
+      if (password.length < 8) {
         setError(t("lock.signup.error.password_too_short"));
+        return;
+      }
+      if (!allStrong) {
+        setError(t("lock.signup.error.password_weak"));
         return;
       }
       if (password !== confirm) {
@@ -135,6 +166,8 @@ export function Lock() {
           setError(t("lock.signup.error.username_too_long"));
         } else if (msg.includes("password_too_short")) {
           setError(t("lock.signup.error.password_too_short"));
+        } else if (msg.includes("password_weak")) {
+          setError(t("lock.signup.error.password_weak"));
         } else {
           setError(t("lock.signup.error.failed"));
         }
@@ -150,11 +183,18 @@ export function Lock() {
     }
     setBusy(true);
     try {
-      const ok = await app.SignIn(username.trim(), password);
-      if (ok) {
+      const result = await app.SignIn(username.trim(), password);
+      if (result.ok) {
+        setLockoutSec(0);
         setNickname(username.trim());
         setRemembered(rememberMe);
         setUnlocked(true);
+      } else if (result.lockoutSeconds > 0) {
+        setLockoutSec(result.lockoutSeconds);
+        setError(
+          t("lock.signin.error.locked").replace("{0}", String(result.lockoutSeconds))
+        );
+        setPassword("");
       } else {
         setError(t("lock.signin.error.wrong"));
         setPassword("");
@@ -380,6 +420,45 @@ export function Lock() {
                   </motion.div>
                 )}
 
+                {/* Live strength checklist — only on Sign-Up. Mirrors the
+                    backend rules so what the user sees is what SignUp
+                    will accept. Items turn green as they pass; the
+                    submit button only enables when all five do. */}
+                {tab === "signup" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-input border border-white/[0.06] bg-black/20 p-2.5 space-y-1"
+                  >
+                    <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-0.5">
+                      {t("lock.signup.strength.title")}
+                    </div>
+                    {(
+                      [
+                        ["length", strength.length],
+                        ["lower", strength.lower],
+                        ["upper", strength.upper],
+                        ["digit", strength.digit],
+                        ["special", strength.special],
+                      ] as const
+                    ).map(([key, ok]) => (
+                      <div
+                        key={key}
+                        className={`flex items-center gap-2 text-[11px] transition ${
+                          ok ? "text-emerald-300" : "text-zinc-500"
+                        }`}
+                      >
+                        {ok ? (
+                          <Check className="w-3 h-3 shrink-0" strokeWidth={3} />
+                        ) : (
+                          <XIcon className="w-3 h-3 shrink-0 text-zinc-600" strokeWidth={2.5} />
+                        )}
+                        <span>{t(`lock.signup.strength.${key}` as any)}</span>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+
                 {/* Remember-me — kept compact above the submit button so
                     it reads as a property of the action rather than a
                     separate setting. Default ON; users on shared
@@ -400,16 +479,21 @@ export function Lock() {
                   </span>
                 </label>
 
-                {error && (
+                {/* Error / lockout banner. The lockout text reflects the
+                    live countdown so the user can see when they'll be
+                    able to try again rather than guessing. */}
+                {(error || lockoutSec > 0) && (
                   <div className="rounded-input border border-rose-500/30 bg-rose-500/5 p-2.5 text-xs text-rose-300">
-                    {error}
+                    {lockoutSec > 0
+                      ? t("lock.signin.error.locked").replace("{0}", String(lockoutSec))
+                      : error}
                   </div>
                 )}
 
                 <button
                   onClick={submit}
-                  disabled={busy}
-                  className="btn-primary rounded-btn h-11 w-full text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                  disabled={busy || lockoutSec > 0}
+                  className="btn-primary rounded-btn h-11 w-full text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {busy ? (
                     tab === "signup" ? (
@@ -417,6 +501,8 @@ export function Lock() {
                     ) : (
                       t("lock.signin.checking")
                     )
+                  ) : lockoutSec > 0 ? (
+                    `${t("lock.signin.submit")} (${lockoutSec}s)`
                   ) : (
                     <>
                       {tab === "signup" ? t("lock.signup.submit") : t("lock.signin.submit")}

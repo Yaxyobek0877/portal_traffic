@@ -68,15 +68,28 @@ type Bridge = {
 
   // Local account (added v0.5.0). HasAccount picks Sign-Up vs. Sign-In
   // mode on launch. SignUp throws on validation failure — error
-  // strings are the canonical ones the lock view matches on:
-  // "username_empty" / "username_too_long" / "password_too_short".
-  // SignIn returns false on any mismatch (never throws). CurrentUsername
-  // is read after sign-in to pre-fill Welcome's nickname.
+  // strings the lock view matches on by prefix:
+  //   "username_empty" / "username_too_long" / "password_too_short"
+  //   "password_weak:lower,upper,digit,special" (v0.5.1+)
+  // SignIn returns a result struct with an OK bool and LockoutSeconds.
+  // LockoutSeconds is non-zero when an in-memory rate limit has kicked
+  // in (5 failures per username) — the UI shows a countdown instead
+  // of a generic "wrong credentials" banner. Storage errors surface
+  // as OK:false too, so the UI can't be used as a username-existence
+  // oracle.
   HasAccount: () => Promise<boolean>;
   SignUp: (username: string, password: string) => Promise<void>;
-  SignIn: (username: string, password: string) => Promise<boolean>;
+  SignIn: (
+    username: string,
+    password: string
+  ) => Promise<SignInResult>;
   CurrentUsername: () => Promise<string>;
   ResetVault: () => Promise<void>;
+};
+
+export type SignInResult = {
+  ok: boolean;
+  lockoutSeconds: number;
 };
 
 export type UpdateResult = {
@@ -216,11 +229,11 @@ const stub: Bridge = {
 
   // Preview-mode (no Wails runtime) auth stubs. HasAccount=false so
   // the SignUp screen shows; SignUp silently succeeds; SignIn accepts
-  // any username plus a 4+ char password. Keeps the lock screen out
-  // of the way during pure-frontend development.
+  // any 8+ char password. Keeps the lock screen out of the way during
+  // pure-frontend development.
   HasAccount: async () => false,
   SignUp: async () => {},
-  SignIn: async (_u, p) => p.length >= 4,
+  SignIn: async (_u, p) => ({ ok: p.length >= 8, lockoutSeconds: 0 }),
   CurrentUsername: async () => "",
   ResetVault: async () => {},
 };
