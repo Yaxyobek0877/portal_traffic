@@ -1,6 +1,30 @@
+// Account-app dashboard. After unlock the user lands here, signed in
+// as `nickname` (which == the username they registered with). The
+// screen is divided into:
+//
+//   1. Header bar — branding, lang toggle, settings, sign-out, user
+//      chip. Stays visible the whole time so the user always knows
+//      they're signed in.
+//   2. Hero — "Xush kelibsiz, <name>" greeting + short subtitle.
+//   3. Action area — two big cards (Create / Join). Create is
+//      one-click; Join expands inline into the ID/code form.
+//   4. Recent portals — proper list with avatar circles and badges.
+//      The dashboard's center of gravity, not a footnote.
+//   5. Footer chrome — NAT warning + signaling URL, muted so it
+//      doesn't compete with the action area.
+
 import React, { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { Sparkles, LogIn, History as HistoryIcon, AlertTriangle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Sparkles,
+  LogIn,
+  History as HistoryIcon,
+  AlertTriangle,
+  Settings as SettingsIcon,
+  LogOut,
+  ArrowRight,
+  Crown,
+} from "lucide-react";
 import { Logo } from "../components/Logo";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
@@ -12,9 +36,9 @@ type Mode = "idle" | "create" | "join";
 export function Welcome() {
   const { t, lang, setLang } = useT();
   const nickname = usePortalStore((s) => s.nickname);
-  const setNickname = usePortalStore((s) => s.setNickname);
   const setPortal = usePortalStore((s) => s.setPortal);
   const setScreen = usePortalStore((s) => s.setScreen);
+  const setUnlocked = usePortalStore((s) => s.setUnlocked);
   const setSignalingUrl = usePortalStore((s) => s.setSignalingUrl);
   const signalingUrl = usePortalStore((s) => s.signalingUrl);
   const history = usePortalStore((s) => s.history);
@@ -27,26 +51,28 @@ export function Welcome() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  // generation counter so we can ignore a late-arriving result from a
-  // connect attempt the user already cancelled. Without this, clicking
-  // "back" while the request is in flight just lets the eventual
-  // success drag the user back to the portal view.
+  // Generation counter so a late-arriving result from a cancelled
+  // connect attempt can't drag the user back into a portal they
+  // bailed out of.
   const genRef = useRef(0);
 
   useEffect(() => {
     app.SignalingURL().then(setSignalingUrl);
-    app.RecentPortals(5).then(setHistory);
+    app.RecentPortals(8).then(setHistory);
   }, [setSignalingUrl, setHistory]);
 
+  // Click on a recent row → pre-fill Join inputs and switch to join
+  // mode. The user still has to confirm — we don't auto-submit because
+  // a stale row (closed portal) would just throw an error and look
+  // broken.
   const reuse = (id: string, c: string) => {
     setMode("join");
     setPortalId(id);
     setCode(c);
   };
 
-  // When the user pastes a portal:// URL or formatted invite text into
-  // either of the join inputs, split it across both fields. Avoids the
-  // "type the digits one at a time" friction.
+  // Smart-paste: pasting a full portal:// URL or "ID-CODE" string into
+  // either join input splits across both fields.
   const handleInvitePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     const raw = e.clipboardData.getData("text");
     const parsed = parseInvite(raw);
@@ -64,31 +90,49 @@ export function Welcome() {
     setBusy(false);
     setMode("idle");
     setError("");
+    setPortalId("");
+    setCode("");
     try {
       await app.Leave();
     } catch {}
   };
 
-  const submit = async () => {
+  // One-click Create. Skips the old idle→create→submit pivot — the
+  // dashboard primary action shouldn't make the user click twice.
+  const handleCreate = async () => {
     setError("");
     if (!nickname.trim()) {
       setError(t("welcome.error.empty_nickname"));
       return;
     }
-    if (mode === "join" && (!portalId.trim() || !code.trim())) {
+    setMode("create");
+    const myGen = ++genRef.current;
+    setBusy(true);
+    try {
+      const p = await app.CreatePortal(nickname.trim(), false);
+      if (myGen !== genRef.current) return;
+      setPortal(p);
+      setScreen("portal");
+    } catch (e: any) {
+      if (myGen !== genRef.current) return;
+      setError(e?.message || String(e));
+      setMode("idle");
+    } finally {
+      if (myGen === genRef.current) setBusy(false);
+    }
+  };
+
+  const handleJoinSubmit = async () => {
+    setError("");
+    if (!portalId.trim() || !code.trim()) {
       setError(t("welcome.error.empty_id_or_code"));
       return;
     }
     const myGen = ++genRef.current;
     setBusy(true);
     try {
-      const p =
-        mode === "create"
-          ? await app.CreatePortal(nickname.trim(), false)
-          : await app.JoinPortal(nickname.trim(), portalId.trim(), code.trim());
-      if (myGen !== genRef.current) {
-        return;
-      }
+      const p = await app.JoinPortal(nickname.trim(), portalId.trim(), code.trim());
+      if (myGen !== genRef.current) return;
       setPortal(p);
       setScreen("portal");
     } catch (e: any) {
@@ -103,218 +147,338 @@ export function Welcome() {
   // strings; fall through to the raw message otherwise.
   const localizedError = (raw: string): string => {
     if (/no such portal/i.test(raw)) return t("welcome.error.no_such_portal");
-    if (/code does not match|portal_code_wrong/i.test(raw)) return t("welcome.error.wrong_code");
+    if (/code does not match|portal_code_wrong/i.test(raw))
+      return t("welcome.error.wrong_code");
     if (/portal_full/i.test(raw)) return t("welcome.error.full");
     if (/portal_locked/i.test(raw)) return t("welcome.error.locked");
     return raw;
   };
 
+  // Sign out flips the vault back to the locked state. We don't reset
+  // the account or wipe history — the user can sign back in with the
+  // same credentials. If they're somehow connecting when they hit
+  // sign-out, Leave() tears the connection down cleanly.
+  const signOut = async () => {
+    try {
+      await app.Leave();
+    } catch {}
+    setUnlocked(false);
+  };
+
+  const initial = (nickname.trim()[0] || "?").toUpperCase();
+
   return (
     <div className="h-full flex flex-col">
-      <div className="draggable titlebar-pad flex justify-end items-center px-3 gap-1" style={{ height: 68 }}>
-        {/* Language toggle only — full Settings panel is reachable
-            from the Portal screen, so the login stays uncluttered.
-            A user landing in the wrong language can flip it here
-            without going hunting through Settings. */}
-        <div className="no-drag flex rounded overflow-hidden border border-white/10 text-[11px] font-mono">
-          <button
-            type="button"
-            onClick={() => setLang("uz")}
-            className={`px-2 py-1 ${lang === "uz" ? "bg-violet-500/30 text-white" : "text-zinc-500 hover:bg-white/[0.04]"}`}
-          >
-            UZ
-          </button>
-          <button
-            type="button"
-            onClick={() => setLang("en")}
-            className={`px-2 py-1 ${lang === "en" ? "bg-violet-500/30 text-white" : "text-zinc-500 hover:bg-white/[0.04]"}`}
-          >
-            EN
-          </button>
+      {/* Header bar — always present, signals "you're signed in".
+          Drag region on the left half (around the brand), no-drag
+          on the right half so the toolbar buttons stay clickable. */}
+      <header
+        className="draggable titlebar-pad px-4 flex items-center justify-between border-b border-white/[0.04]"
+        style={{ height: 68 }}
+      >
+        <div className="no-drag flex items-center gap-2">
+          <Logo size={26} />
+          <span className="font-extrabold text-sm tracking-tight">Portal</span>
         </div>
-      </div>
 
-      <div className="flex-1 flex items-center justify-center px-6 -mt-6">
-        <div className="w-full max-w-[440px] text-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 22 }}
-          >
-            <Logo size={170} />
-          </motion.div>
-          <motion.h1
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="text-4xl font-extrabold tracking-tight mt-2"
-          >
-            Portal
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="text-sm text-zinc-400 mt-2 whitespace-pre-line"
-          >
-            {t("welcome.tagline")}
-          </motion.p>
+        <div className="no-drag flex items-center gap-1.5">
+          {/* Lang toggle stays compact in the header — same control
+              the Lock screen uses. */}
+          <div className="flex rounded overflow-hidden border border-white/10 text-[11px] font-mono">
+            <button
+              type="button"
+              onClick={() => setLang("uz")}
+              className={`px-2 py-1 ${lang === "uz" ? "bg-violet-500/30 text-white" : "text-zinc-500 hover:bg-white/[0.04]"}`}
+            >
+              UZ
+            </button>
+            <button
+              type="button"
+              onClick={() => setLang("en")}
+              className={`px-2 py-1 ${lang === "en" ? "bg-violet-500/30 text-white" : "text-zinc-500 hover:bg-white/[0.04]"}`}
+            >
+              EN
+            </button>
+          </div>
 
-          <div className="mt-8 space-y-3 text-left">
-            <div>
-              <label className="text-xs uppercase tracking-widest text-zinc-500 ml-1">
-                {t("welcome.nickname.label")}
-              </label>
-              <input
-                type="text"
-                placeholder={t("welcome.nickname.placeholder")}
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                className="input-base w-full mt-1.5"
-                maxLength={24}
-                autoFocus
-              />
+          <div className="h-5 w-px bg-white/10 mx-1" />
+
+          <button
+            onClick={() => setScreen("settings")}
+            title={t("common.tooltip.settings")}
+            className="p-2 rounded hover:bg-white/[0.05] text-zinc-400 hover:text-zinc-200 transition"
+          >
+            <SettingsIcon className="w-4 h-4" strokeWidth={2} />
+          </button>
+
+          <button
+            onClick={signOut}
+            title={t("welcome.signout")}
+            className="p-2 rounded hover:bg-rose-500/10 text-zinc-400 hover:text-rose-300 transition"
+          >
+            <LogOut className="w-4 h-4" strokeWidth={2} />
+          </button>
+
+          <div className="h-5 w-px bg-white/10 mx-1" />
+
+          {/* User chip — letter avatar + handle. Subtly says "this is
+              the account you're signed in as". */}
+          <div className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06]">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500/40 to-cyan-500/30 flex items-center justify-center text-[11px] font-extrabold text-white">
+              {initial}
             </div>
+            <span className="text-xs font-mono text-zinc-200 max-w-[140px] truncate">
+              {nickname || "—"}
+            </span>
+          </div>
+        </div>
+      </header>
 
-            {mode === "join" && (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="grid grid-cols-2 gap-2"
-              >
-                <div>
-                  <label className="text-xs uppercase tracking-widest text-zinc-500 ml-1">
-                    {t("welcome.portalId.label")}
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={t("welcome.portalId.placeholder")}
-                    value={portalId}
-                    onChange={(e) => setPortalId(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
-                    onPaste={handleInvitePaste}
-                    className="input-base w-full mt-1.5 font-mono text-center text-lg tracking-widest"
-                    maxLength={6}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs uppercase tracking-widest text-zinc-500 ml-1">
-                    {t("welcome.code.label")}
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={t("welcome.code.placeholder")}
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
-                    onPaste={handleInvitePaste}
-                    className="input-base w-full mt-1.5 font-mono text-center text-lg tracking-widest"
-                    maxLength={6}
-                  />
-                </div>
-              </motion.div>
-            )}
+      {/* Body */}
+      <main className="flex-1 overflow-y-auto px-6 pb-6">
+        <div className="max-w-2xl mx-auto pt-6">
+          {/* Hero greeting */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <h1 className="text-2xl font-extrabold tracking-tight">
+              {t("welcome.greeting")}, <span className="gradient-text">{nickname || "?"}</span>
+            </h1>
+            <p className="text-sm text-zinc-400 mt-1.5">{t("welcome.subtitle")}</p>
+          </motion.div>
 
-            {error && (
-              <div className="rounded-input border border-rose-500/30 bg-rose-500/5 p-3 text-xs space-y-2">
-                <div className="text-rose-300">{localizedError(error)}</div>
-                {/no such portal/i.test(error) && (
-                  <div className="flex gap-2">
+          {/* Action area — Idle: 2 cards. Join: inline form. Create
+              busy state shows on the create card itself, no view swap. */}
+          <div className="mt-6">
+            <AnimatePresence mode="wait" initial={false}>
+              {mode !== "join" ? (
+                <motion.div
+                  key="cards"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.18 }}
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                >
+                  {/* Create card — primary, gradient border */}
+                  <button
+                    onClick={handleCreate}
+                    disabled={busy}
+                    className="group relative text-left rounded-input p-4 panel hover:bg-white/[0.06] transition disabled:opacity-60 disabled:cursor-wait overflow-hidden"
+                  >
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition pointer-events-none bg-gradient-to-br from-violet-500/10 to-cyan-500/5" />
+                    <div className="relative">
+                      <div className="w-9 h-9 rounded-md bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
+                        <Sparkles className="w-4 h-4 text-violet-300" />
+                      </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <span className="font-semibold text-sm">{t("welcome.create.card_title")}</span>
+                        {busy && mode === "create" ? (
+                          <span className="text-xs text-violet-300 ml-auto animate-pulse">
+                            {t("common.connecting")}
+                          </span>
+                        ) : (
+                          <ArrowRight className="w-4 h-4 ml-auto text-zinc-500 group-hover:text-violet-300 transition group-hover:translate-x-0.5" />
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                        {t("welcome.create.card_hint")}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Join card — secondary */}
+                  <button
+                    onClick={() => {
+                      setError("");
+                      setMode("join");
+                    }}
+                    disabled={busy}
+                    className="group relative text-left rounded-input p-4 panel hover:bg-white/[0.06] transition disabled:opacity-60 disabled:cursor-wait"
+                  >
+                    <div className="w-9 h-9 rounded-md bg-cyan-500/15 border border-cyan-500/25 flex items-center justify-center">
+                      <LogIn className="w-4 h-4 text-cyan-300" />
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="font-semibold text-sm">{t("welcome.join.card_title")}</span>
+                      <ArrowRight className="w-4 h-4 ml-auto text-zinc-500 group-hover:text-cyan-300 transition group-hover:translate-x-0.5" />
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                      {t("welcome.join.card_hint")}
+                    </p>
+                  </button>
+                </motion.div>
+              ) : (
+                /* Inline join form — replaces the cards in place rather
+                   than navigating to a separate screen, so the mental
+                   model "I'm joining a portal" is uninterrupted. */
+                <motion.div
+                  key="joinform"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.18 }}
+                  className="panel rounded-input p-4 space-y-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-md bg-cyan-500/15 border border-cyan-500/25 flex items-center justify-center">
+                      <LogIn className="w-4 h-4 text-cyan-300" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold">{t("welcome.join.card_title")}</div>
+                      <div className="text-[11px] text-zinc-500">{t("welcome.join.card_hint")}</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] uppercase tracking-widest text-zinc-500 ml-1">
+                        {t("welcome.portalId.label")}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={t("welcome.portalId.placeholder")}
+                        value={portalId}
+                        onChange={(e) =>
+                          setPortalId(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))
+                        }
+                        onPaste={handleInvitePaste}
+                        className="input-base w-full mt-1.5 font-mono text-center text-lg tracking-widest"
+                        maxLength={6}
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] uppercase tracking-widest text-zinc-500 ml-1">
+                        {t("welcome.code.label")}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={t("welcome.code.placeholder")}
+                        value={code}
+                        onChange={(e) =>
+                          setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))
+                        }
+                        onPaste={handleInvitePaste}
+                        className="input-base w-full mt-1.5 font-mono text-center text-lg tracking-widest"
+                        maxLength={6}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
                     <button
-                      onClick={() => {
-                        setMode("create");
-                        setError("");
-                        setPortalId("");
-                        setCode("");
-                      }}
-                      className="text-xs text-emerald-300 hover:text-emerald-200 underline"
+                      onClick={busy ? cancel : () => setMode("idle")}
+                      className="panel rounded-btn h-10 text-sm hover:bg-white/[0.07]"
                     >
-                      {t("welcome.create_new_link")}
+                      {busy ? t("welcome.cancel") : t("welcome.back")}
+                    </button>
+                    <button
+                      onClick={handleJoinSubmit}
+                      disabled={busy}
+                      className="btn-primary rounded-btn h-10 text-sm font-semibold disabled:opacity-50"
+                    >
+                      {busy ? t("common.connecting") : t("welcome.joining")}
                     </button>
                   </div>
-                )}
-              </div>
-            )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-            {mode === "idle" ? (
-              <div className="grid grid-cols-2 gap-3 pt-3">
-                <button
-                  onClick={() => setMode("create")}
-                  className="btn-primary rounded-btn h-12 font-semibold flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  {t("welcome.create")}
-                </button>
-                <button
-                  onClick={() => setMode("join")}
-                  className="panel rounded-btn h-12 font-semibold flex items-center justify-center gap-2 hover:bg-white/[0.07]"
-                >
-                  <LogIn className="w-4 h-4" />
-                  {t("welcome.join")}
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3 pt-3">
-                <button
-                  onClick={busy ? cancel : () => setMode("idle")}
-                  className="panel rounded-btn h-11 text-sm hover:bg-white/[0.07]"
-                >
-                  {busy ? t("welcome.cancel") : t("welcome.back")}
-                </button>
-                <button
-                  onClick={submit}
-                  disabled={busy}
-                  className="btn-primary rounded-btn h-11 text-sm font-semibold disabled:opacity-50"
-                >
-                  {busy
-                    ? t("common.connecting")
-                    : mode === "create"
-                    ? t("welcome.creating")
-                    : t("welcome.joining")}
-                </button>
-              </div>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-3 rounded-input border border-rose-500/30 bg-rose-500/5 p-3 text-xs space-y-2"
+              >
+                <div className="text-rose-300">{localizedError(error)}</div>
+                {/no such portal/i.test(error) && (
+                  <button
+                    onClick={() => {
+                      setMode("idle");
+                      setError("");
+                      setPortalId("");
+                      setCode("");
+                      handleCreate();
+                    }}
+                    className="text-xs text-emerald-300 hover:text-emerald-200 underline"
+                  >
+                    {t("welcome.create_new_link")}
+                  </button>
+                )}
+              </motion.div>
             )}
           </div>
 
-          {history.length > 0 && mode === "idle" && (
-            <div className="mt-8 text-left">
-              <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-zinc-500 mb-2">
-                <HistoryIcon className="w-3 h-3" />
-                {t("welcome.recent")}
+          {/* Recent portals — list, not afterthought. Always rendered:
+              empty state is its own teaching moment. */}
+          <section className="mt-8">
+            <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-zinc-500 mb-2">
+              <HistoryIcon className="w-3 h-3" />
+              {t("welcome.recent")}
+            </div>
+
+            {history.length === 0 ? (
+              <div className="rounded-input border border-dashed border-white/[0.08] p-6 text-center text-xs text-zinc-500">
+                {t("welcome.recent.empty")}
               </div>
+            ) : (
               <div className="space-y-1.5">
-                {history.slice(0, 4).map((h) => (
-                  <button
-                    key={h.id}
-                    onClick={() => h.code && reuse(h.portalId, h.code)}
-                    disabled={!h.code}
-                    className="w-full panel rounded-input px-3 py-2 flex items-center justify-between text-sm hover:bg-white/[0.07] disabled:opacity-50"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-mono text-violet-300">{h.portalId}</span>
-                      <span className="text-zinc-500 truncate">{h.nickname}</span>
-                    </div>
-                    {h.isOwner && (
-                      <span className="text-[10px] uppercase tracking-wider text-amber-400">
-                        {t("common.owner")}
-                      </span>
-                    )}
-                  </button>
-                ))}
+                {history.slice(0, 6).map((h) => {
+                  const peerInitial = (h.nickname?.trim()[0] || "?").toUpperCase();
+                  return (
+                    <button
+                      key={h.id}
+                      onClick={() => h.code && reuse(h.portalId, h.code)}
+                      disabled={!h.code}
+                      className="w-full panel rounded-input px-3 py-2.5 flex items-center gap-3 text-sm hover:bg-white/[0.07] disabled:opacity-50 disabled:cursor-not-allowed text-left transition group"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/30 to-indigo-500/20 flex items-center justify-center text-[11px] font-bold shrink-0">
+                        {peerInitial}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-violet-300 text-sm">{h.portalId}</span>
+                          {h.isOwner && (
+                            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">
+                              <Crown className="w-2.5 h-2.5" />
+                              {t("common.owner")}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-zinc-500 truncate">
+                          {h.nickname}
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 group-hover:translate-x-0.5 transition shrink-0" />
+                    </button>
+                  );
+                })}
               </div>
-            </div>
-          )}
+            )}
+          </section>
 
-          {nat?.type === 3 && (
-            <div className="mt-6 panel rounded-input p-3 text-left flex gap-2 items-start border-amber-500/20 bg-amber-500/5">
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" strokeWidth={2} />
-              <div className="text-[11px] text-amber-200/90 leading-relaxed">
-                {t("welcome.symmetric_nat_warning")}
+          {/* Footer chrome — NAT warning + signaling URL, muted so it
+              fades into the background rather than competing with
+              the action area. */}
+          <footer className="mt-8 pt-4 border-t border-white/[0.05] space-y-2.5">
+            {nat?.type === 3 && (
+              <div className="rounded-input p-3 flex gap-2 items-start border border-amber-500/20 bg-amber-500/5">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" strokeWidth={2} />
+                <div className="text-[11px] text-amber-200/90 leading-relaxed">
+                  {t("welcome.symmetric_nat_warning")}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="text-xs text-zinc-600 mt-6 font-mono truncate">{signalingUrl}</div>
+            <div className="text-[10px] text-zinc-600 font-mono text-center truncate">
+              {signalingUrl}
+            </div>
+          </footer>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

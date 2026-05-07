@@ -2,6 +2,8 @@ import type { Dict } from "./strings";
 
 export const en: Dict = {
   // Welcome
+  "welcome.greeting": "Welcome back",
+  "welcome.subtitle": "Open a new portal or join your friend's.",
   "welcome.tagline": "Direct connections.\nNo servers in between.",
   "welcome.nickname.label": "Nickname",
   "welcome.nickname.placeholder": "alice",
@@ -10,12 +12,18 @@ export const en: Dict = {
   "welcome.code.label": "Code",
   "welcome.code.placeholder": "654321",
   "welcome.create": "Create portal",
+  "welcome.create.card_title": "New portal",
+  "welcome.create.card_hint": "One click — share the ID + code with your friend.",
   "welcome.join": "Join",
+  "welcome.join.card_title": "Join",
+  "welcome.join.card_hint": "Enter the portal ID and 6-digit code you were given.",
   "welcome.creating": "Create",
   "welcome.joining": "Join",
   "welcome.cancel": "Cancel",
   "welcome.back": "Back",
-  "welcome.recent": "Recent",
+  "welcome.recent": "Recent portals",
+  "welcome.recent.empty": "No portals yet — yours will show up here.",
+  "welcome.signout": "Sign out",
   "welcome.error.empty_nickname": "Please enter a nickname first",
   "welcome.error.empty_id_or_code": "Both ID and code are required",
   "welcome.error.no_such_portal":

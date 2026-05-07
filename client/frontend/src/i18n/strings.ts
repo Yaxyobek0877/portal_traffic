@@ -9,6 +9,8 @@
 
 export type StringKey =
   // Welcome screen
+  | "welcome.greeting"
+  | "welcome.subtitle"
   | "welcome.tagline"
   | "welcome.nickname.label"
   | "welcome.nickname.placeholder"
@@ -17,12 +19,18 @@ export type StringKey =
   | "welcome.code.label"
   | "welcome.code.placeholder"
   | "welcome.create"
+  | "welcome.create.card_title"
+  | "welcome.create.card_hint"
   | "welcome.join"
+  | "welcome.join.card_title"
+  | "welcome.join.card_hint"
   | "welcome.creating"
   | "welcome.joining"
   | "welcome.cancel"
   | "welcome.back"
   | "welcome.recent"
+  | "welcome.recent.empty"
+  | "welcome.signout"
   | "welcome.error.empty_nickname"
   | "welcome.error.empty_id_or_code"
   | "welcome.error.no_such_portal"

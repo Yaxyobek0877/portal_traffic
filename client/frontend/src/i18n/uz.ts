@@ -2,6 +2,8 @@ import type { Dict } from "./strings";
 
 export const uz: Dict = {
   // Welcome
+  "welcome.greeting": "Xush kelibsiz",
+  "welcome.subtitle": "Yangi portal oching yoki do'stingiznikiga qo'shiling.",
   "welcome.tagline": "To'g'ridan-to'g'ri ulanish.\nOrada hech qanday server yo'q.",
   "welcome.nickname.label": "Taxallus",
   "welcome.nickname.placeholder": "alice",
@@ -10,12 +12,18 @@ export const uz: Dict = {
   "welcome.code.label": "Kod",
   "welcome.code.placeholder": "654321",
   "welcome.create": "Portal yaratish",
+  "welcome.create.card_title": "Yangi portal",
+  "welcome.create.card_hint": "Bir bosishda yarating va do'stingizga ID + kod yuboring.",
   "welcome.join": "Qo'shilish",
+  "welcome.join.card_title": "Qo'shilish",
+  "welcome.join.card_hint": "Sizga berilgan ID va 6 xonali kodni kiriting.",
   "welcome.creating": "Yaratish",
   "welcome.joining": "Qo'shilish",
   "welcome.cancel": "Bekor qilish",
   "welcome.back": "Orqaga",
-  "welcome.recent": "Yaqindagilar",
+  "welcome.recent": "Yaqindagi portallar",
+  "welcome.recent.empty": "Hozircha hech qanday portalga kirmagansiz.",
+  "welcome.signout": "Chiqish",
   "welcome.error.empty_nickname": "Avval taxallus yozing",
   "welcome.error.empty_id_or_code": "ID va kod ikkalasi kerak",
   "welcome.error.no_such_portal":
