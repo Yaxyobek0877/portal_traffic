@@ -76,4 +76,33 @@ export const en: Dict = {
   "chat.send": "Send",
   "chat.send_file": "Send file",
   "chat.drop_to_send": "Drop — sending into the mesh starts now",
+
+  // Lock screen
+  "lock.setup.title": "Set a password",
+  "lock.setup.subtitle":
+    "Portal keeps your portal history and preferences on this device. A password stops anyone who opens your laptop from seeing them or rejoining on your behalf.",
+  "lock.setup.password.label": "New password",
+  "lock.setup.password.placeholder": "At least 4 characters",
+  "lock.setup.confirm.label": "Confirm password",
+  "lock.setup.confirm.placeholder": "Type it again",
+  "lock.setup.submit": "Save password",
+  "lock.setup.submitting": "Saving...",
+  "lock.setup.error.too_short": "Password must be at least 4 characters.",
+  "lock.setup.error.mismatch": "Passwords don't match.",
+  "lock.setup.error.failed": "Couldn't save the password. Try again.",
+  "lock.setup.hint":
+    "Heads up: if you forget it, there's no recovery — only a local reset that wipes history and starts over.",
+  "lock.unlock.title": "Unlock Portal",
+  "lock.unlock.subtitle": "Enter your password to continue.",
+  "lock.unlock.password.label": "Password",
+  "lock.unlock.password.placeholder": "••••",
+  "lock.unlock.submit": "Unlock",
+  "lock.unlock.checking": "Checking...",
+  "lock.unlock.error.wrong": "Wrong password.",
+  "lock.unlock.forgot": "Forgot password?",
+  "lock.reset.title": "Reset password?",
+  "lock.reset.body":
+    "There's no recovery for a forgotten password — but you can wipe the local data and start fresh. Portal history and the saved password are deleted; network settings (signaling, TURN) are kept.",
+  "lock.reset.confirm": "Yes, wipe and reset",
+  "lock.reset.cancel": "Cancel",
 };

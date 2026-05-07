@@ -16,6 +16,13 @@ import type {
 type Screen = "welcome" | "portal" | "settings";
 
 type Store = {
+  // Vault unlock — App.tsx renders the Lock view until this flips true.
+  // The Lock view itself toggles this on successful setup or unlock; we
+  // don't persist it (every cold start should re-prompt). Reset goes
+  // through the explicit "forgot password" flow, not by clearing this.
+  unlocked: boolean;
+  setUnlocked: (b: boolean) => void;
+
   screen: Screen;
   setScreen: (s: Screen) => void;
 
@@ -65,6 +72,9 @@ const MAX_MESSAGES = 500;
 const transferKey = (t: TransferProgress) => `${t.peerId}:${t.xferId}:${t.direction}`;
 
 export const usePortalStore = create<Store>((set) => ({
+  unlocked: false,
+  setUnlocked: (b) => set({ unlocked: b }),
+
   screen: "welcome",
   setScreen: (s) => set({ screen: s }),
 

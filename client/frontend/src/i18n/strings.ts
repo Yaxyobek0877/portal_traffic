@@ -80,7 +80,33 @@ export type StringKey =
   | "chat.empty_hint"
   | "chat.send"
   | "chat.send_file"
-  | "chat.drop_to_send";
+  | "chat.drop_to_send"
+
+  // Lock screen — first-run password setup + every-launch unlock
+  | "lock.setup.title"
+  | "lock.setup.subtitle"
+  | "lock.setup.password.label"
+  | "lock.setup.password.placeholder"
+  | "lock.setup.confirm.label"
+  | "lock.setup.confirm.placeholder"
+  | "lock.setup.submit"
+  | "lock.setup.submitting"
+  | "lock.setup.error.too_short"
+  | "lock.setup.error.mismatch"
+  | "lock.setup.error.failed"
+  | "lock.setup.hint"
+  | "lock.unlock.title"
+  | "lock.unlock.subtitle"
+  | "lock.unlock.password.label"
+  | "lock.unlock.password.placeholder"
+  | "lock.unlock.submit"
+  | "lock.unlock.checking"
+  | "lock.unlock.error.wrong"
+  | "lock.unlock.forgot"
+  | "lock.reset.title"
+  | "lock.reset.body"
+  | "lock.reset.confirm"
+  | "lock.reset.cancel";
 
 // Helper: when the key is missing in the active dictionary, fall back
 // to the en dictionary, then to the key itself. Catches dev-time

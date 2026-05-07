@@ -76,4 +76,33 @@ export const uz: Dict = {
   "chat.send": "Yuborish",
   "chat.send_file": "Fayl yuborish",
   "chat.drop_to_send": "Tashlang — meshda yuborish boshlanadi",
+
+  // Lock screen
+  "lock.setup.title": "Parol o'rnating",
+  "lock.setup.subtitle":
+    "Portal sizning portal tarixingiz va sozlamalaringizni shu kompyuterda saqlaydi. Parol noutbukingizni ochgan birortasi sizga tegishli portallarni ko'rmasligi uchun kerak.",
+  "lock.setup.password.label": "Yangi parol",
+  "lock.setup.password.placeholder": "Kamida 4 ta belgi",
+  "lock.setup.confirm.label": "Parolni takrorlang",
+  "lock.setup.confirm.placeholder": "Yana bir marta",
+  "lock.setup.submit": "Parolni saqlash",
+  "lock.setup.submitting": "Saqlanmoqda...",
+  "lock.setup.error.too_short": "Parol kamida 4 ta belgidan iborat bo'lishi kerak.",
+  "lock.setup.error.mismatch": "Parollar bir-biriga mos kelmadi.",
+  "lock.setup.error.failed": "Parolni saqlash imkonsiz bo'ldi. Qayta urinib ko'ring.",
+  "lock.setup.hint":
+    "Eslab qoling: agar unutsangiz, parolni tiklash mumkin emas — faqat tarix tozalanadi va qaytadan boshlaysiz.",
+  "lock.unlock.title": "Portalga kirish",
+  "lock.unlock.subtitle": "Davom etish uchun parolingizni kiriting.",
+  "lock.unlock.password.label": "Parol",
+  "lock.unlock.password.placeholder": "••••",
+  "lock.unlock.submit": "Kirish",
+  "lock.unlock.checking": "Tekshirilmoqda...",
+  "lock.unlock.error.wrong": "Parol noto'g'ri.",
+  "lock.unlock.forgot": "Parolni unutdingizmi?",
+  "lock.reset.title": "Parolni tiklash?",
+  "lock.reset.body":
+    "Parol esga tushmasa, faqatgina mahalliy ma'lumotlarni tozalab qaytadan boshlash mumkin: portal tarixi va saqlangan parol o'chiriladi. Tarmoq sozlamalari (signal serveri, TURN) saqlanadi.",
+  "lock.reset.confirm": "Ha, tozalash",
+  "lock.reset.cancel": "Bekor qilish",
 };

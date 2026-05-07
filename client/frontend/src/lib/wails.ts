@@ -65,6 +65,16 @@ type Bridge = {
   CrashReports: () => Promise<CrashReport[]>;
   OpenCrashFolder: () => Promise<void>;
   ClearCrashReports: () => Promise<void>;
+
+  // Local vault unlock (added v0.5.0). HasPassword tells us whether to
+  // show the setup screen vs. the unlock screen on launch. SetPassword
+  // throws on too-short input ("password_too_short"). VerifyPassword
+  // returns false on mismatch — never throws so the UI can show its
+  // own localised error. ResetVault wipes hash + history.
+  HasPassword: () => Promise<boolean>;
+  SetPassword: (password: string) => Promise<void>;
+  VerifyPassword: (password: string) => Promise<boolean>;
+  ResetVault: () => Promise<void>;
 };
 
 export type UpdateResult = {
@@ -201,6 +211,15 @@ const stub: Bridge = {
   CrashReports: async () => [],
   OpenCrashFolder: async () => {},
   ClearCrashReports: async () => {},
+
+  // In preview mode treat the vault as unlocked + no password set.
+  // SetPassword silently succeeds; VerifyPassword accepts any input
+  // long enough to be valid. The lock screen mostly stays out of the
+  // dev-loop developer's way.
+  HasPassword: async () => false,
+  SetPassword: async () => {},
+  VerifyPassword: async (pwd) => pwd.length >= 4,
+  ResetVault: async () => {},
 };
 
 export const app: Bridge =

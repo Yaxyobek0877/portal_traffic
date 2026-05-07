@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Welcome } from "./views/Welcome";
 import { PortalView } from "./views/Portal";
 import { Settings } from "./views/Settings";
+import { Lock } from "./views/Lock";
 import { usePortalStore } from "./stores/portalStore";
 import { app, subscribe } from "./lib/wails";
 import type { UpdateResult } from "./lib/wails";
@@ -16,6 +17,7 @@ import type {
 
 export default function App() {
   const { t } = useT();
+  const unlocked = usePortalStore((s) => s.unlocked);
   const screen = usePortalStore((s) => s.screen);
   const setScreen = usePortalStore((s) => s.setScreen);
   const setPortal = usePortalStore((s) => s.setPortal);
@@ -173,9 +175,16 @@ export default function App() {
           </button>
         </div>
       )}
-      {screen === "welcome" && <Welcome />}
-      {screen === "portal" && <PortalView />}
-      {screen === "settings" && <Settings />}
+      {/* Vault gate. Until the user creates or enters their master
+          password the rest of the UI stays unmounted, so e.g. a peek
+          at the laptop can't see portal history or trigger a re-join.
+          Banner and update toast intentionally render above this so
+          a "Reconnecting..." blip fired by background re-tries is
+          still visible — they don't leak any post-unlock state. */}
+      {!unlocked && <Lock />}
+      {unlocked && screen === "welcome" && <Welcome />}
+      {unlocked && screen === "portal" && <PortalView />}
+      {unlocked && screen === "settings" && <Settings />}
     </div>
   );
 }

@@ -81,4 +81,10 @@ const (
 	// Empty = default-on, "0" disables, anything else (e.g. "1") forces on.
 	KeyLogUpload    = "log_upload_enabled"
 	KeyLogUploadURL = "log_upload_url"
+
+	// Local vault unlock — bcrypt hash of the master password the user
+	// set on first launch. Empty = no password configured (auth off).
+	// Matched in constant time by bcrypt.CompareHashAndPassword. See
+	// client/auth.go for HasPassword / SetPassword / VerifyPassword.
+	KeyAuthHash = "auth_hash"
 )
