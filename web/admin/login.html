@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Portal — Kirish</title>
+<meta name="robots" content="noindex" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+
+<div class="auth-shell">
+  <div class="topbar">
+    <a class="brand" href="/"><span class="logo"></span><span>Portal</span></a>
+    <div class="right" id="topRight"></div>
+  </div>
+
+  <div class="auth-card-wrap">
+    <div class="panel auth-card">
+      <div class="auth-header">
+        <div class="logo">
+          <!-- minimal lock glyph -->
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="11" width="16" height="9" rx="2"/>
+            <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+          </svg>
+        </div>
+        <h1 id="title">—</h1>
+        <p id="subtitle">—</p>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button type="button" data-tab="signin" id="tabSignin" role="tab"></button>
+        <button type="button" data-tab="signup" id="tabSignup" role="tab"></button>
+      </div>
+
+      <form id="form" autocomplete="on" novalidate>
+        <div class="field with-icon">
+          <label for="username" id="lblUsername"></label>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          <input type="text" id="username" name="username" maxlength="24" autocomplete="username" required />
+        </div>
+
+        <div class="field with-icon">
+          <label for="password" id="lblPassword"></label>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="7.5" cy="15.5" r="2.5"/>
+            <path d="M9.5 13.5 19 4M14 9l3 3"/>
+          </svg>
+          <input type="password" id="password" name="password" maxlength="128" required />
+        </div>
+
+        <div class="field" id="confirmField" style="display:none">
+          <label for="confirm" id="lblConfirm"></label>
+          <input type="password" id="confirm" name="confirm" maxlength="128" autocomplete="new-password" />
+        </div>
+
+        <div class="strength" id="strength" style="display:none">
+          <div class="title" id="strTitle"></div>
+          <ul>
+            <li data-rule="length"><span class="mark"></span><span class="lbl"></span></li>
+            <li data-rule="lower"><span class="mark"></span><span class="lbl"></span></li>
+            <li data-rule="upper"><span class="mark"></span><span class="lbl"></span></li>
+            <li data-rule="digit"><span class="mark"></span><span class="lbl"></span></li>
+            <li data-rule="special"><span class="mark"></span><span class="lbl"></span></li>
+          </ul>
+        </div>
+
+        <label class="remember">
+          <input type="checkbox" id="remember" checked />
+          <span>
+            <span id="rememberLbl"></span>
+            <span class="hint" id="rememberHint"></span>
+          </span>
+        </label>
+
+        <div class="alert error" id="err" style="display:none"></div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="submitBtn"></button>
+      </form>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <a href="/">portal.1pro.uz</a>
+  </footer>
+</div>
+
+<script src="/admin/admin.js"></script>
+<script>
+(() => {
+  const A = window.PortalAdmin;
+  const $ = (id) => document.getElementById(id);
+
+  let tab = "signin"; // default; flips to signup if URL hash is #signup
+  if (location.hash === "#signup") tab = "signup";
+
+  let lockoutSec = 0;
+  let lockoutTimer = null;
+
+  // Build the top-right area (lang toggle).
+  A.buildLangToggle($("topRight"));
+
+  // Wire UI text from i18n and current tab.
+  function paint() {
+    document.title = A.t("title.login");
+    $("tabSignin").textContent = A.t("tab.signin");
+    $("tabSignup").textContent = A.t("tab.signup");
+    $("tabSignin").classList.toggle("active", tab === "signin");
+    $("tabSignup").classList.toggle("active", tab === "signup");
+
+    $("title").textContent = tab === "signup" ? A.t("tab.signup") : A.t("tab.signin");
+    $("subtitle").textContent = tab === "signup"
+      ? A.t("auth.signup.subtitle")
+      : A.t("auth.signin.subtitle");
+    $("lblUsername").textContent = A.t("field.username");
+    $("lblPassword").textContent = A.t("field.password");
+    $("lblConfirm").textContent  = A.t("field.confirm");
+
+    $("username").placeholder = A.t("ph.username");
+    $("password").placeholder = tab === "signup"
+      ? A.t("ph.password.signup")
+      : A.t("ph.password.signin");
+
+    $("confirmField").style.display = tab === "signup" ? "" : "none";
+    $("strength").style.display     = tab === "signup" ? "" : "none";
+    $("strTitle").textContent       = A.t("strength.title");
+
+    document.querySelectorAll("#strength li").forEach((li) => {
+      const lbl = li.querySelector(".lbl");
+      lbl.textContent = A.t("strength." + li.dataset.rule);
+    });
+
+    $("rememberLbl").textContent  = A.t("remember");
+    $("rememberHint").textContent = A.t("remember.hint");
+
+    refreshSubmit();
+  }
+  A.onPaint(paint);
+
+  function refreshSubmit() {
+    const btn = $("submitBtn");
+    if (lockoutSec > 0) {
+      btn.disabled = true;
+      btn.textContent = `${A.t("btn.signin")} (${lockoutSec}s)`;
+      return;
+    }
+    btn.disabled = false;
+    btn.textContent = tab === "signup" ? A.t("btn.signup") : A.t("btn.signin");
+  }
+
+  function startLockoutTimer() {
+    if (lockoutTimer) clearInterval(lockoutTimer);
+    lockoutTimer = setInterval(() => {
+      lockoutSec = Math.max(0, lockoutSec - 1);
+      refreshSubmit();
+      const errEl = $("err");
+      if (errEl.style.display !== "none" && lockoutSec > 0) {
+        errEl.textContent = A.t("err.locked").replace("{0}", String(lockoutSec));
+      }
+      if (lockoutSec === 0) clearInterval(lockoutTimer);
+    }, 1000);
+  }
+
+  function showError(msg) {
+    const el = $("err");
+    el.textContent = msg;
+    el.style.display = msg ? "" : "none";
+  }
+
+  // Strength checklist re-paint on every keystroke. Mirrors the
+  // server validation so what the user sees IS what SignUp will accept.
+  function refreshStrength() {
+    if (tab !== "signup") return;
+    const s = A.strength($("password").value);
+    document.querySelectorAll("#strength li").forEach((li) => {
+      const ok = !!s[li.dataset.rule];
+      li.classList.toggle("ok", ok);
+    });
+  }
+
+  // Tab switching wipes password fields (don't let password text
+  // bleed between modes); keeps username so the user can retry.
+  function switchTab(next) {
+    if (next === tab) return;
+    tab = next;
+    $("password").value = "";
+    $("confirm").value = "";
+    showError("");
+    refreshStrength();
+    paint();
+    history.replaceState(null, "", next === "signup" ? "#signup" : "#signin");
+  }
+  $("tabSignin").addEventListener("click", () => switchTab("signin"));
+  $("tabSignup").addEventListener("click", () => switchTab("signup"));
+  $("password").addEventListener("input", refreshStrength);
+
+  // Submit
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (lockoutSec > 0) return;
+
+    const username = $("username").value.trim();
+    const password = $("password").value;
+    const confirm  = $("confirm").value;
+
+    showError("");
+
+    if (tab === "signup") {
+      if (!username) return showError(A.t("err.username_invalid"));
+      if (!A.isStrong(password)) {
+        // Be specific about what failed when possible.
+        if (password.length < 8) return showError(A.t("err.password_too_short"));
+        return showError(A.t("err.password_weak"));
+      }
+      if (password !== confirm) return showError(A.t("err.password_mismatch"));
+    } else {
+      if (!username || !password) return showError(A.t("err.invalid"));
+    }
+
+    const btn = $("submitBtn");
+    btn.disabled = true;
+    btn.textContent = "…";
+
+    try {
+      const path = tab === "signup" ? "/api/auth/signup" : "/api/auth/signin";
+      await A.api(path, { method: "POST", body: { username, password } });
+      // Server set the session cookie; head to the dashboard.
+      // We don't need to do anything client-side for "remember me" —
+      // the cookie's lifetime already covers it.
+      const redirect = new URLSearchParams(location.search).get("next") || "/admin/dashboard";
+      location.href = redirect;
+    } catch (err) {
+      if (err.code === "locked_out") {
+        lockoutSec = err.lockoutSeconds || 30;
+        startLockoutTimer();
+      }
+      showError(A.formatError(err));
+    } finally {
+      refreshSubmit();
+    }
+  });
+
+  // Already-signed-in shortcut: ping /api/me; on 200 just go to the
+  // dashboard. Avoids making a returning user log in again.
+  (async () => {
+    try {
+      await A.api("/api/me");
+      const redirect = new URLSearchParams(location.search).get("next") || "/admin/dashboard";
+      location.href = redirect;
+    } catch (_) {
+      /* not signed in — stay on the login page */
+    }
+  })();
+})();
+</script>
+</body>
+</html>

@@ -701,6 +701,13 @@
       <a href="#qadamlar">Qanday ishlaydi</a>
       <a href="#roadmap">Roadmap</a>
       <a class="gh" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">GitHub</a>
+      <!-- Web admin entry point: /admin/login is served by the
+           signaling server and hands the user into the dashboard
+           after sign-in. Hidden on narrow nav widths via the
+           existing :not(.cta):not(.gh) display:none rule kicks in
+           for everything except cta/gh — this anchor uses .gh-style
+           rules so it stays visible on mobile too. -->
+      <a class="gh" href="/admin/login">Kirish</a>
       <a class="cta" href="https://github.com/Yaxyobek0877/portal_traffic#install">Yuklab olish</a>
     </div>
   </div>
