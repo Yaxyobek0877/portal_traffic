@@ -22,8 +22,11 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import uz.aihealth.portal_mobile.data.AuthApi
+import uz.aihealth.portal_mobile.data.AuthSession
 import uz.aihealth.portal_mobile.data.PortalSettings
 import uz.aihealth.portal_mobile.data.RecentPortal
+import uz.aihealth.portal_mobile.data.deriveApiBaseUrl
 import uz.aihealth.portal_mobile.mesh.ChatMessage
 import uz.aihealth.portal_mobile.mesh.MeshManager
 import uz.aihealth.portal_mobile.mesh.MeshState
@@ -36,13 +39,51 @@ import uz.aihealth.portal_mobile.transfer.TransferManifest
 import uz.aihealth.portal_mobile.transfer.TransferSink
 import java.io.File
 
+/**
+ * Auth status for the lock screen / dashboard gate.
+ *
+ *  - [Loading]      — boot-time /api/me probe is in flight; UI shows
+ *                     a brief skeleton instead of bouncing the user
+ *                     back to login on every cold start.
+ *  - [Anonymous]    — no valid session; show LockScreen.
+ *  - [Authenticated] — show the regular Welcome → Portal flow.
+ */
+sealed class AuthState {
+    object Loading : AuthState()
+    object Anonymous : AuthState()
+    data class Authenticated(val username: String) : AuthState()
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class PortalViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settings = PortalSettings(app)
+    private val authSession = AuthSession(app)
+    private val authApi = AuthApi(authSession) {
+        // Resolve the API base URL from the user-configurable override
+        // first, then derive it from the signaling URL as a fallback.
+        // signalUrl is mutable Compose state so we read it lazily.
+        authSession.resolveApiBaseUrl(deriveApiBaseUrl(signalUrl))
+    }
 
     var nickname by mutableStateOf("")
     var signalUrl by mutableStateOf(DEFAULT_SIGNALING_URL)
+
+    // ---- Web-account auth state ----
+
+    private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
+    val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    private val _authError = MutableStateFlow<String?>(null)
+    /** Last sign-in/sign-up error code (e.g. "invalid_credentials"). UI maps to localised text. */
+    val authError: StateFlow<String?> = _authError.asStateFlow()
+
+    private val _authLockoutSeconds = MutableStateFlow(0)
+    /** Server-supplied lockout countdown after too many failed attempts. */
+    val authLockoutSeconds: StateFlow<Int> = _authLockoutSeconds.asStateFlow()
+
+    private val _authBusy = MutableStateFlow(false)
+    val authBusy: StateFlow<Boolean> = _authBusy.asStateFlow()
 
     val recentPortals: StateFlow<List<RecentPortal>> = settings.recentPortals
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -74,6 +115,124 @@ class PortalViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val saved = settings.signalUrl.first()
             if (saved.isNotEmpty()) signalUrl = saved
+        }
+        // Boot-time auth probe. If we have a saved session cookie, ask
+        // /api/me whether it's still valid; on success we land directly
+        // on Welcome, on 401 the cookie is cleared and we show Lock.
+        viewModelScope.launch {
+            val cached = authSession.username.first()
+            val token = authSession.currentToken()
+            if (token.isNullOrEmpty()) {
+                _authState.value = AuthState.Anonymous
+                return@launch
+            }
+            // Optimistically render the cached username while the
+            // network probe runs — feels instantaneous and degrades
+            // gracefully on a slow network.
+            cached?.let { _authState.value = AuthState.Authenticated(it) }
+            when (val r = authApi.me()) {
+                is AuthApi.AuthResult.Success -> {
+                    nickname = if (nickname.isBlank()) r.data.username else nickname
+                    _authState.value = AuthState.Authenticated(r.data.username)
+                }
+                is AuthApi.AuthResult.Failure -> {
+                    // Network failures shouldn't bounce the user out of
+                    // the app — keep the optimistic Authenticated state
+                    // if we already showed it. Only auth-level failures
+                    // (401, 403, server-emitted error codes) drop us
+                    // back to Anonymous.
+                    if (r.code != "network") {
+                        _authState.value = AuthState.Anonymous
+                    } else if (cached == null) {
+                        _authState.value = AuthState.Anonymous
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- Auth actions ----
+
+    fun signUp(username: String, password: String) {
+        if (_authBusy.value) return
+        _authError.value = null
+        _authLockoutSeconds.value = 0
+        viewModelScope.launch {
+            _authBusy.value = true
+            try {
+                when (val r = authApi.signUp(username.trim(), password)) {
+                    is AuthApi.AuthResult.Success -> {
+                        // Username on a brand-new account becomes the
+                        // default Portal nickname so the user doesn't
+                        // have to retype it on Welcome.
+                        if (nickname.isBlank()) {
+                            nickname = r.data.username
+                            settings.setNickname(r.data.username)
+                        }
+                        _authState.value = AuthState.Authenticated(r.data.username)
+                    }
+                    is AuthApi.AuthResult.Failure -> {
+                        _authError.value = r.code
+                    }
+                }
+            } finally {
+                _authBusy.value = false
+            }
+        }
+    }
+
+    fun signIn(username: String, password: String) {
+        if (_authBusy.value) return
+        _authError.value = null
+        _authLockoutSeconds.value = 0
+        viewModelScope.launch {
+            _authBusy.value = true
+            try {
+                when (val r = authApi.signIn(username.trim(), password)) {
+                    is AuthApi.AuthResult.Success -> {
+                        if (nickname.isBlank()) nickname = r.data.username
+                        _authState.value = AuthState.Authenticated(r.data.username)
+                    }
+                    is AuthApi.AuthResult.Failure -> {
+                        _authError.value = r.code
+                        if (r.code == "locked_out") {
+                            _authLockoutSeconds.value = r.lockoutSeconds.coerceAtLeast(1)
+                            tickLockoutDown()
+                        }
+                    }
+                }
+            } finally {
+                _authBusy.value = false
+            }
+        }
+    }
+
+    fun signOut() {
+        viewModelScope.launch {
+            // Tear down any active mesh first — the user explicitly
+            // asked to sign out, leaving a portal connected behind a
+            // locked UI is a footgun.
+            try { _mesh.value?.leave() } catch (_: Throwable) {}
+            authApi.signOut()
+            _authState.value = AuthState.Anonymous
+        }
+    }
+
+    fun clearAuthError() {
+        _authError.value = null
+    }
+
+    /**
+     * Drive the lockout countdown to zero. Called once when the server
+     * returns a lockout; subsequent ticks happen here on the VM scope
+     * so the UI just reads the StateFlow.
+     */
+    private fun tickLockoutDown() {
+        viewModelScope.launch {
+            while (_authLockoutSeconds.value > 0) {
+                kotlinx.coroutines.delay(1000)
+                _authLockoutSeconds.value = (_authLockoutSeconds.value - 1).coerceAtLeast(0)
+            }
         }
     }
 

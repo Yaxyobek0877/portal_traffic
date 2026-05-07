@@ -41,6 +41,8 @@ fun WelcomeScreen(
     onGoToSettings: () -> Unit,
 ) {
     val recents by vm.recentPortals.collectAsState()
+    val authState by vm.authState.collectAsState()
+    val signedInUser = (authState as? uz.aihealth.portal_mobile.ui.AuthState.Authenticated)?.username
 
     LazyColumn(
         modifier = Modifier
@@ -49,7 +51,30 @@ fun WelcomeScreen(
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         item {
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(40.dp))
+            // Top-right "you're signed in as <user> · Chiqish" row —
+            // the mobile equivalent of the user chip + sign-out icon
+            // in the desktop header. Tapping the username text fires
+            // sign-out so we don't need a separate icon button on a
+            // narrow phone width.
+            if (signedInUser != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { vm.signOut() }) {
+                        Text(
+                            "$signedInUser · Chiqish",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            } else {
+                Spacer(Modifier.height(8.dp))
+            }
             Text("Portal", style = MaterialTheme.typography.displayMedium)
             Spacer(Modifier.height(8.dp))
             Text(
