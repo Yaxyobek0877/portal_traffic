@@ -1,0 +1,12 @@
+# Cloudflare Pages redirects/rewrites — clean URLs without ".html"
+# https://developers.cloudflare.com/pages/configuration/redirects/
+#
+# Order matters: 200 = internal rewrite (URL stays the same in the
+# browser), 301 = permanent redirect. We rewrite extension-less paths
+# to their .html files so links like `/admin/login` and `/admin/dashboard`
+# work without the file extension.
+
+/admin/login            /admin/login.html      200
+/admin/dashboard        /admin/dashboard.html  200
+/admin                  /admin/login.html      301
+/admin/                 /admin/login.html      301

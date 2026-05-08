@@ -1,0 +1,46 @@
+# Auto-deploys web/ to Cloudflare Pages on every push that touches it.
+#
+# Required GitHub secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN  — Custom token with these permissions:
+#                            • Account → Cloudflare Pages → Edit
+#                          Create at: https://dash.cloudflare.com/profile/api-tokens
+#   CLOUDFLARE_ACCOUNT_ID — Account ID from the right sidebar of the
+#                          dashboard home page.
+#
+# Required repository variable (Settings → Variables → Actions):
+#   CLOUDFLARE_PAGES_PROJECT — the existing Pages project name (e.g.
+#                              "portal-1pro-uz"). If you don't have a
+#                              project yet, run wrangler locally once:
+#                                wrangler pages project create portal-1pro-uz
+#                              then add a custom domain (portal.1pro.uz)
+#                              from the dashboard.
+
+name: Deploy web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # branch=main maps the deployment to the production environment
+          # in Pages, so the custom domain (portal.1pro.uz) gets the new
+          # build immediately. Other branches deploy to preview URLs.
+          command: pages deploy web --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT || 'portal-1pro-uz' }} --branch=main --commit-dirty=true
