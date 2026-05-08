@@ -695,8 +695,10 @@ func (a *App) dropSession(s *portalSession) {
 	a.closeSession(s)
 }
 
-// persistEnter records this portal in history and saves the nickname
-// for next launch. Best-effort; failures are logged at debug level.
+// persistEnter records this portal in history, saves the nickname
+// for next launch, and writes an active-session row so the portal
+// can be auto-restored after an app restart. Best-effort; failures
+// are logged at debug level.
 func (a *App) persistEnter(pv PortalView, nickname string, isOwner bool) {
 	a.mu.Lock()
 	a.nick = nickname
@@ -707,6 +709,17 @@ func (a *App) persistEnter(pv PortalView, nickname string, isOwner bool) {
 	}
 	_ = store.PutSetting(storage.KeyNickname, nickname)
 	_ = store.AddHistory(storage.HistoryEntry{
+		PortalID: pv.PortalID,
+		Code:     pv.Code,
+		Nickname: nickname,
+		IsOwner:  isOwner,
+	})
+	// active_sessions: row keyed on portal_id so the resume path on
+	// next launch knows what to dial. Owner rows that recreate with
+	// a fresh portal_id leave the old row behind here, but the next
+	// resume call only walks rows that match a live PortalID — and
+	// LeaveAllPortals from sign-out clears the table anyway.
+	_ = store.UpsertActiveSession(storage.ActiveSessionRow{
 		PortalID: pv.PortalID,
 		Code:     pv.Code,
 		Nickname: nickname,
@@ -727,6 +740,11 @@ func (a *App) Leave() error {
 // LeavePortal tears down a specific session by its localID. Emits
 // portal:closed so the UI can drop it from its map. Used by the
 // active-connections strip's X button.
+//
+// Deletes the matching active_sessions row — explicit X means
+// 'don't bring this back next launch'. The portal_history row
+// stays untouched so the dashboard's Recent strip still shows the
+// portal as a rejoin candidate.
 func (a *App) LeavePortal(sessionID string) error {
 	a.sessionsMu.Lock()
 	s := a.sessions[sessionID]
@@ -738,7 +756,9 @@ func (a *App) LeavePortal(sessionID string) error {
 	if s == nil {
 		return nil
 	}
+	pid := s.snapshotPortalID()
 	a.closeSession(s)
+	a.forgetActiveSession(pid)
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "portal:closed", map[string]string{"sessionId": sessionID})
 	}
@@ -748,6 +768,9 @@ func (a *App) LeavePortal(sessionID string) error {
 // LeaveAllPortals tears down every active session. Useful for sign-
 // out flows where we don't want the meshes hanging around after the
 // user vaults the app.
+//
+// Wipes active_sessions in the same shot — sign-out is the user
+// saying 'forget I was here'.
 func (a *App) LeaveAllPortals() error {
 	a.sessionsMu.Lock()
 	all := a.sessions
@@ -761,7 +784,104 @@ func (a *App) LeaveAllPortals() error {
 				map[string]string{"sessionId": s.localID})
 		}
 	}
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store != nil {
+		_ = store.ClearActiveSessions()
+	}
 	return nil
+}
+
+// forgetActiveSession deletes the active_sessions row keyed on the
+// portal_id, if any. Best-effort — runs after closeSession on the
+// LeavePortal path and on the server-side EventPortalClosed branch
+// in relayEvent.
+func (a *App) forgetActiveSession(portalID string) {
+	if portalID == "" {
+		return
+	}
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return
+	}
+	_ = store.DeleteActiveSession(portalID)
+}
+
+// ResumeActiveSessions walks every row in the active_sessions table
+// and re-dials it as a background session. Called by the frontend
+// once the user has unlocked the vault — we don't want to silently
+// reconnect ahead of authentication, even though the data on disk
+// is the same.
+//
+// Owner rows: the original portal_id is dead (server destroys an
+// owner's portal on disconnect), so we BackgroundCreatePortal with
+// the saved nickname. The new session gets a fresh portal_id; the
+// old active_sessions row is replaced via persistEnter's UpsertActive
+// which rewrites by the new portal_id. The stale row (old portal_id)
+// is dropped after the create succeeds.
+//
+// Joiner rows: try BackgroundJoinPortal with the saved portal_id +
+// code. On 'no such portal' or any other failure, drop the row —
+// the portal is gone, no point retrying every launch.
+//
+// Concurrent: each row gets its own goroutine so a slow signaling
+// connect doesn't stall others. Returns immediately; failures land
+// in the log.
+func (a *App) ResumeActiveSessions() error {
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+	rows, err := store.ListActiveSessions()
+	if err != nil {
+		a.logger.Warn("resume: list active sessions", "err", err)
+		return err
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	a.logger.Info("resume: dialing saved sessions", "count", len(rows))
+	for _, row := range rows {
+		row := row
+		go a.resumeOne(row)
+	}
+	return nil
+}
+
+// resumeOne handles a single active-session row. Best-effort —
+// failures get logged and the row is dropped so we don't loop on
+// it forever.
+func (a *App) resumeOne(row storage.ActiveSessionRow) {
+	if row.IsOwner {
+		a.logger.Info("resume: re-creating owner session",
+			"old_portal_id", row.PortalID, "nickname", row.Nickname)
+		// Drop the stale row first — BackgroundCreatePortal's persist
+		// step will write a new one keyed on the freshly-issued id.
+		a.forgetActiveSession(row.PortalID)
+		if _, err := a.BackgroundCreatePortal(row.Nickname); err != nil {
+			a.logger.Warn("resume: owner re-create failed",
+				"old_portal_id", row.PortalID, "err", err)
+		}
+		return
+	}
+	if row.Code == "" {
+		a.logger.Warn("resume: skipping joiner row with empty code",
+			"portal_id", row.PortalID)
+		a.forgetActiveSession(row.PortalID)
+		return
+	}
+	a.logger.Info("resume: rejoining session",
+		"portal_id", row.PortalID, "nickname", row.Nickname)
+	if _, err := a.BackgroundJoinPortal(row.Nickname, row.PortalID, row.Code); err != nil {
+		a.logger.Warn("resume: join failed; dropping row",
+			"portal_id", row.PortalID, "err", err)
+		a.forgetActiveSession(row.PortalID)
+	}
 }
 
 // SwitchPortal makes a different session foreground. The frontend's
@@ -2150,6 +2270,12 @@ func (a *App) relayEvent(s *portalSession, ev mesh.MeshEvent) {
 			a.activeID = ""
 		}
 		a.sessionsMu.Unlock()
+		// Server-initiated close means the portal is gone for good
+		// (owner left / portal expired). Drop the active_sessions
+		// row so the next-launch resume doesn't waste cycles re-
+		// dialing a dead portal_id and seeing 'no such portal' from
+		// the server.
+		a.forgetActiveSession(s.snapshotPortalID())
 		runtime.EventsEmit(a.ctx, "portal:closed", map[string]string{"sessionId": sid})
 
 	case mesh.EventChat:

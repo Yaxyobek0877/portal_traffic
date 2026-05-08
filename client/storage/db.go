@@ -127,6 +127,21 @@ func (s *Store) migrate() error {
 		updated_at INTEGER NOT NULL,
 		PRIMARY KEY (port, protocol)
 	);
+
+	-- Sessions the user wants restored on next launch. Bumped from
+	-- portal_history because semantics differ: history is "I've ever
+	-- been in this portal", active_sessions is "I'm in this portal
+	-- right now and want it back if the app crashes / I close it /
+	-- I reboot". Foreground and background sessions both land here;
+	-- LeavePortal is the only path that drops a row.
+	CREATE TABLE IF NOT EXISTS active_sessions (
+		portal_id   TEXT NOT NULL PRIMARY KEY,
+		code        TEXT NOT NULL DEFAULT '',
+		nickname    TEXT NOT NULL,
+		is_owner    INTEGER NOT NULL,
+		created_at  INTEGER NOT NULL,
+		last_seen   INTEGER NOT NULL
+	);
 	`
 	_, err := s.db.Exec(schema)
 	if err != nil {
@@ -146,7 +161,7 @@ func (s *Store) migrate() error {
 	}
 
 	// Stamp the current version (idempotent).
-	_, _ = s.db.Exec(`INSERT OR REPLACE INTO schema_version(version) VALUES(2)`)
+	_, _ = s.db.Exec(`INSERT OR REPLACE INTO schema_version(version) VALUES(3)`)
 	return nil
 }
 

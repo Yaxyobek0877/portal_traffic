@@ -3,6 +3,7 @@ package storage
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func openTemp(t *testing.T) *Store {
@@ -189,6 +190,85 @@ func TestHistoryDeleteOne(t *testing.T) {
 	}
 	if err := s.DeleteHistory(99999); err != nil {
 		t.Errorf("delete missing id should be no-op, got %v", err)
+	}
+}
+
+// active_sessions: round-trip insert + list + delete. Guards the
+// auto-reconnect path that the App calls on Startup.
+func TestActiveSessionsRoundTrip(t *testing.T) {
+	s := openTemp(t)
+	rows := []ActiveSessionRow{
+		{PortalID: "111111", Code: "aaaaaa", Nickname: "alice", IsOwner: true},
+		{PortalID: "222222", Code: "bbbbbb", Nickname: "alice", IsOwner: false},
+	}
+	for _, r := range rows {
+		if err := s.UpsertActiveSession(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.ListActiveSessions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("want 2 rows, got %d", len(got))
+	}
+	// Delete one, list again.
+	if err := s.DeleteActiveSession("111111"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.ListActiveSessions()
+	if len(got) != 1 || got[0].PortalID != "222222" {
+		t.Errorf("want only 222222 after delete, got %+v", got)
+	}
+	// Clear.
+	if err := s.ClearActiveSessions(); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.ListActiveSessions()
+	if len(got) != 0 {
+		t.Errorf("clear did not empty table: %+v", got)
+	}
+}
+
+// Upsert on existing portal_id refreshes mutable fields (code,
+// nickname, is_owner, last_seen) but preserves created_at — the
+// resume path renames the same conceptual session, not creates a
+// new one.
+func TestActiveSessionsUpsertPreservesCreated(t *testing.T) {
+	s := openTemp(t)
+	frozen := time.Unix(1_700_000_000, 0)
+	Now = func() time.Time { return frozen }
+	defer func() { Now = func() time.Time { return time.Now() } }()
+
+	if err := s.UpsertActiveSession(ActiveSessionRow{
+		PortalID: "111111", Code: "old", Nickname: "alice", IsOwner: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := s.ListActiveSessions()
+	if len(first) != 1 {
+		t.Fatalf("want 1 row, got %d", len(first))
+	}
+	originalCreated := first[0].CreatedAt
+
+	// Move time forward and upsert.
+	Now = func() time.Time { return frozen.Add(60 * time.Second) }
+	if err := s.UpsertActiveSession(ActiveSessionRow{
+		PortalID: "111111", Code: "new", Nickname: "alice2", IsOwner: false,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	second, _ := s.ListActiveSessions()
+	if len(second) != 1 {
+		t.Fatalf("upsert created a duplicate: %+v", second)
+	}
+	if !second[0].CreatedAt.Equal(originalCreated) {
+		t.Errorf("created_at should survive upsert: %v vs %v",
+			second[0].CreatedAt, originalCreated)
+	}
+	if second[0].Code != "new" || second[0].Nickname != "alice2" || second[0].IsOwner {
+		t.Errorf("upsert didn't update mutable fields: %+v", second[0])
 	}
 }
 

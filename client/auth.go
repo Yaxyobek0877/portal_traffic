@@ -303,5 +303,9 @@ func (a *App) ResetVault() error {
 		delete(signInLimit.state, priorUser)
 		signInLimit.mu.Unlock()
 	}
+	// Auto-reconnect rows belong to the prior identity — wipe them so
+	// the next account's first launch doesn't silently re-dial portals
+	// the previous user had open.
+	_ = store.ClearActiveSessions()
 	return store.ClearHistory()
 }

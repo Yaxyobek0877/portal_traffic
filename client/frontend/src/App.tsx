@@ -67,6 +67,21 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // Auto-resume sessions the user had open last time, once they've
+  // unlocked the vault. The Go side walks active_sessions and dials
+  // each in the background — owner rows recreate (fresh portal_id),
+  // joiner rows attempt the saved id+code and silently drop if the
+  // portal is gone. Active-portals strip on Welcome shows them as
+  // they come up.
+  //
+  // Guarded so the call only fires when unlock flips from false →
+  // true; otherwise a sign-out → sign-back-in cycle would re-dial,
+  // which is what we want, but a re-render loop wouldn't.
+  useEffect(() => {
+    if (!unlocked) return;
+    app.ResumeActiveSessions().catch(() => {});
+  }, [unlocked]);
+
   useEffect(() => {
     // One-shot bootstrap calls.
     app.NATInfo().then((r) => r && setNat(r));

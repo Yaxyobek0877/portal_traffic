@@ -45,6 +45,10 @@ type Bridge = {
   // session's localID (or "" when none).
   ActivePortals: () => Promise<PortalSummary[]>;
   ActiveSessionID: () => Promise<string>;
+  // ResumeActiveSessions re-dials every saved active-session row in
+  // the background. Called by the frontend right after unlock — see
+  // App.tsx's effect that depends on `unlocked`.
+  ResumeActiveSessions: () => Promise<void>;
   CurrentPortal: () => Promise<PortalView>;
   // Peers returns peers of the active session (legacy shape kept
   // for older callers); SessionPeers takes a localID.
@@ -192,6 +196,7 @@ const stub: Bridge = {
   SwitchPortal: async () => {},
   ActivePortals: async () => [],
   ActiveSessionID: async () => "",
+  ResumeActiveSessions: async () => {},
   SessionPeers: async () => [],
   SendChatTo: async () => 0,
   CurrentPortal: async () => ({
