@@ -383,21 +383,22 @@
     flex: 0 0 auto;
   }
   .login-card {
-    background: rgba(10,14,26,.6);
+    background: linear-gradient(180deg, rgba(10,14,26,.85), rgba(10,14,26,.55));
     border: 1px solid var(--border-2);
-    border-radius: var(--radius);
-    padding: 24px;
+    border-radius: 14px;
+    padding: 26px 24px 22px;
     display: flex; flex-direction: column; gap: 14px;
+    box-shadow: 0 24px 60px -20px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04);
   }
   .login-tabs {
     display: grid;
     grid-template-columns: 1fr 1fr;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius-xs);
+    border-radius: 10px;
     padding: 3px;
     gap: 3px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
   }
   .login-tab {
     background: transparent;
@@ -406,17 +407,130 @@
     font-family: inherit;
     font-size: 13px;
     font-weight: 600;
-    padding: 8px 10px;
-    border-radius: 5px;
+    padding: 9px 10px;
+    border-radius: 7px;
     cursor: pointer;
-    transition: background .15s ease, color .15s ease;
+    transition: background .18s ease, color .18s ease, transform .18s ease;
   }
   .login-tab:hover { color: var(--text); }
   .login-tab.active {
     background: var(--gradient);
     color: white;
-    box-shadow: 0 4px 12px -4px rgba(139,92,246,.5);
+    box-shadow: 0 4px 14px -4px rgba(139,92,246,.55);
   }
+  .login-field { display: flex; flex-direction: column; gap: 6px; }
+  .login-field label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    font-weight: 600;
+  }
+  .input-wrap {
+    position: relative;
+    display: flex; align-items: center;
+  }
+  .input-wrap .input-icon {
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%);
+    width: 16px; height: 16px;
+    color: var(--text-faint);
+    pointer-events: none;
+    transition: color .15s ease;
+  }
+  .input-wrap input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 9px;
+    padding: 12px 14px 12px 38px;
+    font-size: 15px;
+    font-family: inherit;
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+    outline: none;
+  }
+  .input-wrap input::placeholder { color: var(--text-faint); }
+  .input-wrap input:focus {
+    border-color: var(--accent);
+    background: var(--surface-2);
+    box-shadow: 0 0 0 3px rgba(139,92,246,.18);
+  }
+  .input-wrap input:focus + .input-toggle,
+  .input-wrap:focus-within .input-icon { color: var(--accent); }
+  .input-wrap input:invalid:not(:placeholder-shown) {
+    border-color: rgba(244,63,94,.45);
+  }
+  .input-toggle {
+    position: absolute;
+    right: 8px; top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: 0;
+    color: var(--text-faint);
+    width: 30px; height: 30px;
+    border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: color .15s ease, background .15s ease;
+  }
+  .input-toggle:hover { color: var(--text); background: var(--surface-2); }
+  .input-toggle svg { width: 16px; height: 16px; }
+  .login-hint {
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+  /* Password strength meter — hidden until signup tab is active. */
+  .strength {
+    display: none;
+    list-style: none;
+    padding: 4px 2px 0; margin: 0;
+    gap: 6px 14px;
+    flex-wrap: wrap;
+    flex-direction: row;
+  }
+  .strength.show { display: flex; }
+  .strength li {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px;
+    color: var(--text-faint);
+    transition: color .15s ease;
+  }
+  .strength li .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-faint);
+    transition: background .15s ease, box-shadow .15s ease;
+  }
+  .strength li.ok { color: #34d399; }
+  .strength li.ok .dot {
+    background: #34d399;
+    box-shadow: 0 0 6px rgba(52,211,153,.6);
+  }
+  /* Submit button: bigger, with gradient + spinner slot. */
+  .login-card #loginSubmit {
+    margin-top: 6px;
+    background: var(--gradient);
+    color: white;
+    border: 0;
+    padding: 13px 18px;
+    font-size: 15px; font-weight: 700;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px -8px rgba(139,92,246,.6);
+    transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+    font-family: inherit;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    letter-spacing: .01em;
+  }
+  .login-card #loginSubmit:hover { transform: translateY(-1px); box-shadow: 0 12px 32px -10px rgba(139,92,246,.75); }
+  .login-card #loginSubmit:active { transform: translateY(0); }
+  .login-card #loginSubmit:disabled { opacity: .65; cursor: progress; }
+  .login-card #loginSpinner { display: none; width: 16px; height: 16px; }
+  .login-card.busy #loginSpinner { display: inline-block; animation: loginSpin 0.8s linear infinite; }
+  @keyframes loginSpin { to { transform: rotate(360deg); } }
+  /* Password toggle: show eye-off when revealed. */
+  .input-wrap.revealed .input-toggle svg { opacity: .85; }
   .login-card label {
     display: flex; flex-direction: column; gap: 6px;
     font-size: 12px; color: var(--text-dim);
@@ -1056,23 +1170,63 @@
       <form class="login-card" id="webAdminForm" autocomplete="on" novalidate>
         <div class="login-tabs" role="tablist">
           <button type="button" class="login-tab active" id="tabSignin" role="tab">Kirish</button>
-          <button type="button" class="login-tab" id="tabSignup" role="tab">Akkaunt yaratish</button>
+          <button type="button" class="login-tab" id="tabSignup" role="tab">Ro'yxatdan o'tish</button>
         </div>
-        <label>
-          Foydalanuvchi
-          <input type="text" name="username" id="loginUsername" autocomplete="username" maxlength="24" placeholder="alice" />
-        </label>
-        <label>
-          Parol
-          <input type="password" name="password" id="loginPassword" autocomplete="current-password" maxlength="128" placeholder="••••••••" />
-        </label>
+
+        <div class="login-field">
+          <label for="loginUsername">Foydalanuvchi nomi</label>
+          <div class="input-wrap">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            <input type="text" name="username" id="loginUsername"
+                   autocomplete="username" maxlength="24" minlength="3"
+                   spellcheck="false" autocapitalize="none"
+                   placeholder="alice" required />
+          </div>
+          <div class="login-hint" id="loginUsernameHint">3–24 belgi · harf, raqam, _ yoki -</div>
+        </div>
+
+        <div class="login-field">
+          <label for="loginPassword">Parol</label>
+          <div class="input-wrap">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="4" y="11" width="16" height="9" rx="2"/>
+              <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+            </svg>
+            <input type="password" name="password" id="loginPassword"
+                   autocomplete="current-password" maxlength="128"
+                   placeholder="••••••••" required />
+            <button type="button" class="input-toggle" id="loginPasswordToggle" tabindex="-1" aria-label="Parolni ko'rsatish">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <ul class="strength" id="strength">
+          <li data-r="length"><span class="dot"></span> 8+ belgi</li>
+          <li data-r="lower"><span class="dot"></span> kichik harf</li>
+          <li data-r="upper"><span class="dot"></span> katta harf</li>
+          <li data-r="digit"><span class="dot"></span> raqam</li>
+          <li data-r="special"><span class="dot"></span> maxsus belgi</li>
+        </ul>
+
         <button type="submit" id="loginSubmit">
-          Kirish
+          <span id="loginSubmitText">Kirish</span>
+          <svg class="spin" id="loginSpinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
         </button>
+
         <div class="login-meta">
-          <span>Hisobingiz yo'qmi? <a href="#" id="goSignup">Akkaunt yarating</a></span>
+          <span id="loginToggleLine">Hisobingiz yo'qmi? <a href="#" id="goSignup">Ro'yxatdan o'ting →</a></span>
         </div>
-        <div class="login-status" id="loginStatus" role="status"></div>
+
+        <div class="login-status" id="loginStatus" role="status" aria-live="polite"></div>
       </form>
     </div>
   </div>
@@ -1477,6 +1631,6 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
   </div>
 </footer>
 
-<script src="/app.js?v=0.5.4" defer></script>
+<script src="/app.js?v=0.5.5" defer></script>
 </body>
 </html>
