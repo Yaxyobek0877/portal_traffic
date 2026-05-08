@@ -7,7 +7,117 @@ ga rioya qiladi.
 
 ## [Unreleased]
 
-v0.4.1 dan keyingi ishlanma bu yerga yoziladi.
+v0.5.0 dan keyingi ishlanma bu yerga yoziladi.
+
+## [0.5.0] — 2026-05-08
+
+Katta UX va arxitektura yangilanishi: hisob-vault tizimi, bir nechta
+portalga bir vaqtda ulanish, avtomatik qayta ulanish, foydalanuvchi
+profili, va xavfsizlik gate'lari. Asosiy yo'nalishlar — meeting
+rejimiga yaqin tajriba va session lifecycle ustidan to'liq nazorat.
+
+### Added — Yangi imkoniyatlar
+
+- **Mahalliy hisob (vault) + Lock screen** — har ishga tushishda
+  username + parol gate. bcrypt cost 10, 8-char strong-password
+  policy (lower + upper + digit + special), 5 ta urinishdan keyin
+  30s rate-limit lockout. "Eslab qol" bayrog'i remembered=true
+  bo'lsa keyingi cold start lock'ni o'tkazib yuboradi.
+- **Account-app dashboard** — Welcome ekrani signed-in tajribaga
+  aylantirildi: avatar/nickname pill, Lock screen tabbed Sign-Up /
+  Sign-In, sign-out flow vault'ni qaytadan qulflaydi.
+- **Multi-portal sessions** — bir App bir vaqtda bir nechta portalga
+  ulanishi mumkin. `portalSession` per-portal mesh + forwarder +
+  transfer engine'ni egallaydi; foreground / background sessiyalar
+  Welcome dashboard'ning "Faol ulanishlar" stripida ko'rinadi;
+  PortalHeader'da Layers chip + dropdown bilan portal switcher.
+- **Background-connect** — Welcome'dagi PlugZap tugmalari xonaga
+  kirmasdan portal yaratish/ulash imkonini beradi.
+- **Avtomatik qayta ulanish** — `active_sessions` jadvalga yozilgan
+  sessiyalar app restart paytida unlock keyin avtomatik tiklanadi.
+  Owner sessiyalar yangi portal_id bilan qayta yaratiladi (eski
+  o'lgan); joiner sessiyalar saqlangan id+code bilan urinadi.
+  Exposed servislar har yangi sessionga `restoreExposedServicesFor`
+  orqali qayta announce bo'ladi.
+- **Per-port "tasdiqlab yoqish" (approval gate)** — har servis
+  qatorida shield ikoni bilan toggle. Yoqilgan bo'lsa har peer dial
+  paytida egasiga modal popup chiqadi (kim, qaysi servis, TCP/UDP),
+  Allow/Deny tugmalari bilan. Decision per (peer, port, protocol)
+  sticky cache. 5s TCP / 3s UDP timeout — javobsiz qoldirilsa
+  avtomatik rad etiladi.
+- **Persistent peers** — peer chiqib ketsa A'zolar ro'yxatida offline
+  ko'rinishida qoladi (kulrang dot, opacity-60, "offline" yorlig'i).
+  Hover'da X tugmasi forget uchun. Online qaytsa avtomatik tirilib
+  qaytadi.
+- **Yangi Portal layout** — markaz = "Servislar" grid (siz +
+  peer'lar birga, prominent Ulash tugmalari), o'ng tomon yarmi
+  "Mening servislarim" formasi + LAN scan, yarmi Chat. Chap tomon
+  kengaytirilgan PeerCard — har peer uchun state, RTT, P2P/TURN
+  badge, traffic hisoblari, ICE pair manzillari, "Tezligi" probe.
+- **Settings'ni real ilova qilish** — sidebar nav (Profile / Network
+  / Diagnostics / Files / Activity / History / Logs / About).
+  Profile tab egasi avatar, parolni tiklash, sign-out; Network tab
+  faqat signaling URL + read-only TURN status (Cloudflare/qo'lda
+  TURN UI olib tashlandi — server-side avtomatik beriladi).
+- **Portal nomlash + Recent dedup** — har owner sessiyaga `label`
+  tayinlash mumkin (pencil ikoni). Owner sessiyalari nickname
+  bo'yicha dedup qilinadi. Faol ulanishdagi portallar Recent
+  ro'yxatidan yashiriladi (bir portal ikki joyda ko'rinmaydi).
+- **NVR / kamera workflow** — ServicesPanel formasi Nom / LAN IP /
+  Port / Protocol qatorlariga bo'lindi. Hikvision NVR (SDK :8000)
+  preset, smart-paste IP:port, mesh-port remap (kamera 554 → mesh
+  8554) qo'llab-quvvatlanadi. Inline target editor (pencil) — health
+  uchun aniq maslahat: localhost target bo'lsa "✏️ bilan LAN IP'ga
+  o'zgartiring".
+- **Portal app ikonkasi** — Logo komponenti motivi (binafsha→cyan
+  halqalar + yorug' markaz) static rasterize qilindi. Wails build
+  uni iconfile.icns / appicon.ico ga aylantiradi.
+
+### Changed — O'zgartirilgan
+
+- **TURN sozlamalari UI olib tashlandi** — Cloudflare TURN credentials
+  va manual TURN URL formalari Settings'dan chiqarildi. signaling
+  server `PortalCreated/Joined` event'larida qisqa muddatli ICE
+  servers yuboradi → mesh.applyServerICE avtomatik qo'llaydi.
+  Foydalanuvchi hech narsa sozlashi shart emas. Backward-compat:
+  Go-side `Get/Set/TestCloudflareTurn` metodlari mavjud.
+- **History dedup mantiqi** — Owner qatorlari nickname bo'yicha
+  dedup. Pre-existing duplikatlar keyingi `AddHistory` chaqiruvida
+  bitta qatorga consolidate bo'ladi (label saqlanadi).
+- **Health probe protocol-aware** — TCP service'lar TCP-dial bilan
+  probe qilinadi, UDP service'lar `unknown` deb belgilanadi (UDP'ni
+  protokolsiz tekshirib bo'lmaydi). Friendly xato xabarlari:
+  "qurilma yoqilgan, lekin shu portda servis yo'q", "qurilma o'chiq
+  yoki tarmoqda yo'q", va h.k.
+- **PortalHeader navigation** — "Asosiy" tugmasi (label + arrow-left)
+  prominent, portal'ni uzilmasdan dashboardga qaytaradi. Kichik
+  qizil LogOut ikoni alohida — bu portalni yopish (uzilish). Ilgari
+  ikkalasi bir tugmada edi, foydalanuvchilar tasodifan disconnect
+  qilib qo'yardi.
+- **Landing page** — yuklab olish kartochkalari hero CTA tugmalari
+  ustiga ko'tarildi, har platforma uchun .zip / .tar.gz / .exe
+  yorlig'i bilan ko'rinadi. Versiya pill'i `v0.5.0 · jonli reliz`.
+
+### Fixed — Tuzatilgan xatolar
+
+- **Portal ekrani bo'sh chiqishi** — multi-portal handover'da
+  PortalView'da `SessionID` yo'q bo'lgani sababli `setActiveSession`
+  top-level `portal`'ni `null` qilib qo'yardi. SessionID Go-side
+  struct'ga qo'shildi va store reducer'i mavjud projection'ni
+  saqlaydi.
+- **useShallow on session selectors** — zustand v5 + React 18'da
+  `Object.values(...).map(...)` selector har render'da yangi array
+  yaratardi → "Maximum update depth exceeded" infinite loop.
+  `useShallow` bilan elementwise compare.
+- **History list stale snapshot** — Create/Join keyin RecentPortals
+  qayta yuklanadi (`refreshLists` helper).
+
+### Hujjatlar — Documentation
+
+- `docs/ROOM-CONTROLS-GAPS.md` — server-side talab qiladigan uch
+  feature'ni hujjatlashtirdi: 8-char password format, code
+  regenerate, "ask admin" join mode. Har biri uchun kerak bo'lgan
+  protocol qo'shimchalari yozilgan.
 
 ## [0.4.1] — 2026-05-04
 

@@ -753,7 +753,7 @@
 
     <div class="pills">
       <span class="pill"><span class="dot"></span> signaling.1pro.uz · jonli</span>
-      <span class="pill"><span class="dot"></span> v0.4.0 · ommaviy reliz tayyorlanmoqda</span>
+      <span class="pill"><span class="dot"></span> v0.5.0 · jonli reliz</span>
       <span class="pill amber"><span class="dot"></span> PCP-1 shifrlash</span>
     </div>
 
@@ -763,38 +763,67 @@
       desktop dastur. 6 xonali kod ulashing — 16 tagacha qurilma to'g'ridan-to'g'ri ulanadi.
       Chat, fayl, hatto LAN-style port tunneli — hammasi P2P.
     </p>
+
+    <!-- Prominent download grid — moved above the CTA row per user
+         feedback ("ateparoqda tursa yaxshi edi"). Each tile is its own
+         link to the platform-specific asset on the latest GitHub
+         release; using the /releases/latest/download/<asset> path means
+         the URL stays stable across releases (GitHub rewrites it to the
+         current tag's asset). The mobile tile points at the README
+         since Android currently builds from source. -->
+    <h2 style="font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.18em;color:var(--text-faint);margin:24px 0 12px;text-align:center">
+      Yuklab olish · Download
+    </h2>
+    <div class="download-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;max-width:760px;margin:0 auto 28px;font-size:14px">
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-v0.5.0-darwin-arm64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
+         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
+        <strong style="font-size:15px">macOS</strong>
+        <span style="color:var(--text-dim);font-size:12px">Apple Silicon (M1/M2/M3/M4)</span>
+        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.zip · darwin-arm64</span>
+      </a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-v0.5.0-darwin-amd64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
+         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
+        <strong style="font-size:15px">macOS</strong>
+        <span style="color:var(--text-dim);font-size:12px">Intel (x86_64)</span>
+        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.zip · darwin-amd64</span>
+      </a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-v0.5.0-windows-amd64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
+         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
+        <strong style="font-size:15px">Windows</strong>
+        <span style="color:var(--text-dim);font-size:12px">10 / 11 · 64-bit</span>
+        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.exe · windows-amd64</span>
+      </a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-v0.5.0-linux-amd64.tar.gz" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
+         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
+        <strong style="font-size:15px">Linux</strong>
+        <span style="color:var(--text-dim);font-size:12px">Ubuntu 22.04+ · 64-bit</span>
+        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.tar.gz · linux-amd64</span>
+      </a>
+    </div>
+    <div style="text-align:center;margin-bottom:20px;font-size:12px;color:var(--text-faint)">
+      Barcha relizlar:
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases" rel="noreferrer" style="color:var(--accent);text-decoration:none">github.com/Yaxyobek0877/portal_traffic/releases</a>
+      · <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/mobile/README.md" rel="noreferrer" style="color:var(--text-dim);text-decoration:none">Android (manbadan)</a>
+    </div>
+
     <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/Yaxyobek0877/portal_traffic/releases" target="_blank" rel="noreferrer">
+      <a class="btn btn-primary" href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest" target="_blank" rel="noreferrer">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="7 10 12 15 17 10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
-        Yuklab olish
+        Reliz sahifasi
       </a>
       <a class="btn btn-ghost" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
         </svg>
         GitHub'da ko'rish
-      </a>
-    </div>
-
-    <div class="download-grid" style="margin-top:32px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;font-size:13px">
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest" target="_blank" rel="noreferrer" style="color:var(--text-dim);text-decoration:none;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);transition:border-color .15s">
-        <strong style="color:var(--text)">macOS</strong> · Apple Silicon
-      </a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest" target="_blank" rel="noreferrer" style="color:var(--text-dim);text-decoration:none;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);transition:border-color .15s">
-        <strong style="color:var(--text)">macOS</strong> · Intel
-      </a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest" target="_blank" rel="noreferrer" style="color:var(--text-dim);text-decoration:none;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);transition:border-color .15s">
-        <strong style="color:var(--text)">Windows</strong> · 10/11
-      </a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest" target="_blank" rel="noreferrer" style="color:var(--text-dim);text-decoration:none;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);transition:border-color .15s">
-        <strong style="color:var(--text)">Linux</strong> · amd64
-      </a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/mobile/README.md" target="_blank" rel="noreferrer" style="color:var(--text-dim);text-decoration:none;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);transition:border-color .15s">
-        <strong style="color:var(--text-faint)">Android</strong> · beta (manbadan)
       </a>
     </div>
 
