@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Crown, Wifi, WifiOff, Zap, Cloud } from "lucide-react";
+import { Crown, Wifi, WifiOff, Zap, Cloud, X } from "lucide-react";
 import type { PeerView } from "../types";
 import { avatarColor, avatarInitial } from "../lib/avatar";
 import { rttLabel, shortId } from "../lib/format";
@@ -9,11 +9,15 @@ type Props = {
   peer: PeerView;
   highlighted?: boolean;
   onClick?: () => void;
+  // Optional explicit-forget action. When set, an X appears on hover
+  // for offline peers so the user can prune their list.
+  onForget?: () => void;
 };
 
-export function PeerCard({ peer, highlighted, onClick }: Props) {
+export function PeerCard({ peer, highlighted, onClick, onForget }: Props) {
   const color = avatarColor(peer.nickname || peer.peerId);
   const initial = avatarInitial(peer.nickname || peer.peerId);
+  const offline = peer.state === "closed";
   const dot =
     peer.state === "connected"
       ? "bg-emerald-400 shadow-[0_0_10px_#34d399]"
@@ -41,12 +45,14 @@ export function PeerCard({ peer, highlighted, onClick }: Props) {
         type: "spring", stiffness: 300, damping: 28,
         boxShadow: { duration: 1.4 },
       }}
-      className={`panel rounded-card w-full text-left p-3 flex items-center gap-3 transition-colors ${
+      className={`panel rounded-card w-full text-left p-3 flex items-center gap-3 transition-colors group relative ${
         highlighted ? "border-accent2/50 bg-white/[0.06]" : ""
-      }`}
+      } ${offline ? "opacity-60" : ""}`}
     >
       <div
-        className="w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm text-white shrink-0"
+        className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm text-white shrink-0 ${
+          offline ? "grayscale" : ""
+        }`}
         style={{ background: `linear-gradient(135deg, ${color} 0%, #6366f1 100%)` }}
       >
         {initial}
@@ -56,6 +62,11 @@ export function PeerCard({ peer, highlighted, onClick }: Props) {
         <div className="flex items-center gap-1.5">
           <div className="font-medium truncate text-sm">{peer.nickname || shortId(peer.peerId)}</div>
           {peer.isOwner && <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />}
+          {offline && (
+            <span className="text-[9px] uppercase tracking-wider text-zinc-500 shrink-0">
+              offline
+            </span>
+          )}
         </div>
         <div className="text-xs text-zinc-400 font-mono mt-0.5">{peer.virtualIp}</div>
       </div>
@@ -74,6 +85,27 @@ export function PeerCard({ peer, highlighted, onClick }: Props) {
           <TransportBadge transport={peer.transport} />
         )}
       </div>
+
+      {/* Forget button — only renders for offline peers and only when
+          the parent supplies onForget (i.e. the row is in a list
+          where pruning makes sense). Hover-only so the row stays
+          quiet at rest. Stops click bubbling so 'Forget' doesn't
+          also trigger the card's onClick. */}
+      {offline && onForget && (
+        <span
+          role="button"
+          aria-label="Forget"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onForget();
+          }}
+          className="absolute top-1.5 right-1.5 p-1 rounded text-zinc-500 hover:text-rose-300 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+          title="Ro'yxatdan o'chirish"
+        >
+          <X className="w-3 h-3" />
+        </span>
+      )}
     </motion.button>
   );
 }

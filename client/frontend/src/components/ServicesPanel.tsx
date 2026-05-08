@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Server, Link2, Trash2, Globe, Search, Zap, Copy, Check, Radar, Sparkles, Pause, Play, Pencil, X } from "lucide-react";
+import { Plus, Server, Trash2, Globe, Search, Zap, Copy, Check, Radar, Sparkles, Pause, Play, Pencil, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { LocalListener, LANDiscovery, PeerView, ServiceView, RiskAssessment } from "../types";
 import { app, subscribe } from "../lib/wails";
-import { shortId } from "../lib/format";
 
 type Props = {
   localServices: ServiceView[];
@@ -72,8 +71,6 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
       requestAnimationFrame(() => lanIPRef.current?.focus());
     }
   };
-  const [dialing, setDialing] = useState<{ peerId: string; port: number; protocol: string } | null>(null);
-  const [dialedAddrs, setDialedAddrs] = useState<Record<string, string>>({});
   const [detected, setDetected] = useState<LocalListener[]>([]);
   const [scanning, setScanning] = useState(false);
   const [lanDevices, setLanDevices] = useState<LANDiscovery[]>([]);
@@ -399,18 +396,6 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
     }
     await refreshLocalServices();
     window.alert(`${opened} ta servis ochildi.${skipped > 0 ? ` ${skipped} ta xavfli/xato bo'lgani uchun o'tkazib yuborildi (qo'lda Och bosib alohida ko'rib chiqing).` : ""}`);
-  };
-
-  const dialPeerService = async (peer: PeerView, svc: ServiceView) => {
-    setDialing({ peerId: peer.peerId, port: svc.port, protocol: svc.protocol });
-    try {
-      const addr = await app.DialService(peer.peerId, svc.protocol as "tcp" | "udp", svc.port, 0);
-      setDialedAddrs((s) => ({ ...s, [`${peer.peerId}:${svc.protocol}:${svc.port}`]: addr }));
-    } catch (e: any) {
-      setError(e?.message || String(e));
-    } finally {
-      setDialing(null);
-    }
   };
 
   return (
@@ -819,63 +804,12 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
           </div>
         </div>
 
-        <div>
-          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <Link2 className="w-4 h-4 text-cyan-400" strokeWidth={2} />
-            Boshqa peerlardagi servislar
-          </h3>
-          {peers.every((p) => p.services.length === 0) && (
-            <div className="text-xs text-zinc-500 text-center py-6 panel rounded-input">
-              Hozircha hech kim servis e'lon qilmagan.
-            </div>
-          )}
-          <div className="space-y-3">
-          {peers.map((p) =>
-            p.services.length === 0 ? null : (
-              <div key={p.peerId} className="panel rounded-card p-3">
-                <div className="flex items-center gap-2 mb-2 min-w-0">
-                  <span className="text-sm font-medium truncate min-w-0">{p.nickname || shortId(p.peerId)}</span>
-                  <span className="text-xs text-zinc-500 font-mono shrink-0">{p.virtualIp}</span>
-                </div>
-                <div className="space-y-1.5">
-                  {p.services.map((s) => {
-                    const key = `${p.peerId}:${s.protocol}:${s.port}`;
-                    const local = dialedAddrs[key];
-                    const isDialing = dialing?.peerId === p.peerId &&
-                      dialing?.port === s.port && dialing?.protocol === s.protocol;
-                    return (
-                      <div
-                        key={`${s.protocol}:${s.port}`}
-                        className="flex items-center gap-2 text-xs bg-black/20 rounded p-2"
-                      >
-                        <Globe className="w-3 h-3 text-cyan-400 shrink-0" strokeWidth={2} />
-                        <span className="truncate flex-1 min-w-0">{s.name}</span>
-                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
-                          s.protocol === "udp" ? "bg-cyan-400/10 text-cyan-300" : "bg-violet-400/10 text-violet-300"
-                        }`}>
-                          {s.protocol.toUpperCase()}
-                        </span>
-                        <span className="font-mono text-zinc-500 shrink-0">:{s.port}</span>
-                        {local ? (
-                          <DialedPill addr={local} expectedPort={s.port} />
-                        ) : (
-                          <button
-                            disabled={isDialing}
-                            onClick={() => dialPeerService(p, s)}
-                            className="px-2 py-1 rounded bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 text-[11px] font-medium disabled:opacity-50 shrink-0"
-                          >
-                            Ulash
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )
-          )}
-          </div>
-        </div>
+        {/* "Boshqa peerlardagi servislar" used to live here — that
+            list moved to the members column (PeerServicesList). Each
+            peer's announced services now sit next to the peer card
+            with their dial buttons, so this panel is purely about
+            "what I expose to the room", not "what others are
+            exposing". One mental model per column. */}
       </div>
     </div>
   );

@@ -152,7 +152,12 @@ export default function App() {
     offs.push(
       subscribe<PeerEvent>("peer:left", (e) => {
         if (!e || !e.peer) return;
-        removePeer(e.peer.peerId, e.sessionId);
+        // Mark as closed instead of yanking the row out of the
+        // session's peer map — the user asked to keep ever-connected
+        // peers visible (with an offline indicator) so they can see
+        // who was in the room earlier. Explicit removal lives behind
+        // the per-peer Forget button now.
+        upsertPeer({ ...e.peer, sessionId: e.sessionId, state: "closed" });
         refreshSummaries();
       })
     );
