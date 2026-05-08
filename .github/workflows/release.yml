@@ -236,7 +236,14 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Portal ${{ steps.tag.outputs.tag }}
           body_path: .github/release_body.md
-          draft: true
+          # draft=false means the release goes live immediately, so
+          # /releases/latest/download/<asset> resolves to the new tag
+          # without a manual "Publish" click in the GitHub UI. The
+          # downside is a build that's mid-upload could be visible for
+          # a few seconds; we accept that — the alternative was the
+          # operator forgetting to publish (which left v0.5.4 stuck on
+          # v0.5.3 for the /download/ proxy until manually flipped).
+          draft: false
           prerelease: ${{ contains(steps.tag.outputs.tag, '-rc') || contains(steps.tag.outputs.tag, '-beta') }}
           files: |
             artifacts/**/*.zip
