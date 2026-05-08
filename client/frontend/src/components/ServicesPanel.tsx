@@ -65,8 +65,19 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
   const [lanScanning, setLanScanning] = useState(false);
   const [lanScanned, setLanScanned] = useState(false);
   const [lanProgress, setLanProgress] = useState<{ done: number; total: number; hits: number; current: string } | null>(null);
+  // Guided "LAN qurilma" form. Lives next to the auto-scan list,
+  // collects everything the host-side forwarder needs to point a
+  // mesh port at a LAN-attached IP camera / NVR / printer / game
+  // server / dev server.
+  const [manualName, setManualName] = useState("");
   const [manualIP, setManualIP] = useState("");
   const [manualPort, setManualPort] = useState<number | "">("");
+  const [manualProto, setManualProto] = useState<"tcp" | "udp" | "both">("tcp");
+  // Optional mesh-side port. Empty → mirror the LAN port (most users
+  // want 127.0.0.1:554 ↔ camera:554). Non-empty lets users remap, e.g.
+  // expose a camera's :554 as :8554 so it doesn't collide with their
+  // own local :554 listener.
+  const [manualMeshPort, setManualMeshPort] = useState<number | "">("");
   const [showManual, setShowManual] = useState(false);
 
   useEffect(() => {
@@ -213,24 +224,69 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
     }
   };
 
+  // submitManualLAN handles "I have a LAN device's IP+port and I want
+  // to share it with the room". Supports a name, TCP / UDP / both, and
+  // an optional mesh-side port distinct from the LAN port (the "Och
+  // bilan ulanmoqchi bo'lgan port" mechanism — useful when the LAN
+  // port collides with something the user has running locally).
+  //
+  // The pasted IP can be plain ("192.168.1.100") or "host:port" — we
+  // split it so the user doesn't have to fight two fields when they
+  // copy-paste from elsewhere.
   const submitManualLAN = async () => {
     setError("");
-    const ip = manualIP.trim();
+    let ipRaw = manualIP.trim();
+    let pastedPort: number | null = null;
+    // Smart-paste: if user typed "192.168.1.100:554" into the IP field,
+    // split into IP + port automatically.
+    const m = ipRaw.match(/^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/);
+    if (m) {
+      ipRaw = m[1];
+      pastedPort = Number(m[2]);
+    }
+    const ip = ipRaw;
     if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) {
       setError("IP 192.168.1.100 ko'rinishida bo'lishi kerak");
       return;
     }
-    if (typeof manualPort !== "number" || manualPort < 1 || manualPort > 65535) {
+    let lanPort: number;
+    if (pastedPort !== null) {
+      lanPort = pastedPort;
+    } else if (typeof manualPort === "number") {
+      lanPort = manualPort;
+    } else {
       setError("Port 1–65535 oralig'ida bo'lishi kerak");
       return;
     }
-    const target = `${ip}:${manualPort}`;
-    if (!(await confirmRisk(target, "tcp", manualPort))) return;
+    if (lanPort < 1 || lanPort > 65535) {
+      setError("Port 1–65535 oralig'ida bo'lishi kerak");
+      return;
+    }
+    // Mesh-side port: defaults to the LAN port. The Go forwarder
+    // accepts any port for the mesh-side announcement; the target
+    // string carries the LAN destination separately.
+    const meshPort =
+      typeof manualMeshPort === "number" && manualMeshPort >= 1 && manualMeshPort <= 65535
+        ? manualMeshPort
+        : lanPort;
+
+    const target = `${ip}:${lanPort}`;
+    const protocols: ("tcp" | "udp")[] =
+      manualProto === "both" ? ["tcp", "udp"] : [manualProto];
+    // Risk check on the first protocol — same target/port combo, the
+    // assessor's verdict is identical for tcp/udp.
+    if (!(await confirmRisk(target, protocols[0], lanPort))) return;
     try {
-      const niceName = `host-${ip.split(".").pop()}`;
-      await app.ExposeService(niceName, "tcp", manualPort, target);
+      const niceName =
+        manualName.trim() || `host-${ip.split(".").pop()}`;
+      for (const p of protocols) {
+        await app.ExposeService(niceName, p, meshPort, target);
+      }
+      setManualName("");
       setManualIP("");
       setManualPort("");
+      setManualMeshPort("");
+      setManualProto("tcp");
       setShowManual(false);
       await refreshLocalServices();
     } catch (e: any) {
@@ -481,9 +537,26 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                     />
                     <Globe className={`w-3.5 h-3.5 shrink-0 ${paused ? "text-amber-400" : "text-emerald-400"}`} strokeWidth={2} />
                     <div className="min-w-0 flex-1 leading-tight">
-                      <div className="truncate font-medium">{s.name}</div>
+                      <div className="truncate font-medium flex items-center gap-1.5">
+                        {s.name}
+                        {/* "LAN" pill — surfaces the fact that this
+                            row forwards to a non-localhost address.
+                            Hover (title) shows the full target so the
+                            user can copy it without a tooltip squint. */}
+                        {s.target && s.target !== `127.0.0.1:${s.port}` && (
+                          <span
+                            className="text-[9px] uppercase tracking-wider font-mono px-1 py-0.5 rounded bg-cyan-500/15 text-cyan-300 shrink-0"
+                            title={`LAN qurilma — ${s.target}`}
+                          >
+                            LAN
+                          </span>
+                        )}
+                      </div>
                       {s.target && s.target !== `127.0.0.1:${s.port}` && (
-                        <div className="font-mono text-[10px] text-zinc-500 truncate">
+                        <div
+                          className="font-mono text-[10px] text-cyan-300/70 truncate"
+                          title={s.target}
+                        >
                           → {s.target}
                         </div>
                       )}
@@ -647,20 +720,63 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
             </button>
             {showManual && (
               <div className="mt-2 panel rounded-input p-3 space-y-2">
+                {/* Row 1: name + protocol — set what kind of service
+                    this is and how friends will find it in the list.
+                    Name defaults to "host-<last-octet>" if left blank. */}
                 <div className="flex gap-2 items-stretch">
                   <input
                     type="text"
-                    placeholder="IP (192.168.1.100)"
+                    placeholder="Nom (kamera, nvr, printer…)"
+                    value={manualName}
+                    onChange={(e) => setManualName(e.target.value)}
+                    className="input-base text-sm flex-1"
+                  />
+                  <div className="flex rounded overflow-hidden border border-white/10 text-[11px] font-mono shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setManualProto("tcp")}
+                      className={`px-2 ${manualProto === "tcp" ? "bg-violet-500/30 text-white" : "text-zinc-400 hover:bg-white/[0.04]"}`}
+                      title="HTTP, RTSP-TCP, SSH, Minecraft Java"
+                    >
+                      TCP
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setManualProto("udp")}
+                      className={`px-2 ${manualProto === "udp" ? "bg-violet-500/30 text-white" : "text-zinc-400 hover:bg-white/[0.04]"}`}
+                      title="RTP video, CS2, Bedrock — UDP-based services"
+                    >
+                      UDP
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setManualProto("both")}
+                      className={`px-2 border-l border-white/10 ${manualProto === "both" ? "bg-violet-500/30 text-white" : "text-zinc-400 hover:bg-white/[0.04]"}`}
+                      title="TCP + UDP (Steam game servers)"
+                    >
+                      Ikkalasi
+                    </button>
+                  </div>
+                </div>
+                {/* Row 2: LAN IP + port. The IP field smart-pastes
+                    "host:port" so users dropping a copied address
+                    don't need to split it manually. */}
+                <div className="flex gap-2 items-stretch">
+                  <input
+                    type="text"
+                    placeholder="LAN IP (192.168.1.100)"
                     value={manualIP}
                     onChange={(e) => setManualIP(e.target.value)}
                     className="input-base text-sm flex-1 min-w-[120px] font-mono"
+                    title="Tarmoqdagi qurilmaning IP'si. 'IP:port' ko'rinishida yozsangiz, port avtomatik ajratiladi."
                   />
                   <input
                     type="number"
-                    placeholder="Port"
+                    placeholder="LAN port"
                     value={manualPort}
                     onChange={(e) => setManualPort(e.target.value === "" ? "" : Number(e.target.value))}
                     className="input-base w-24 text-sm font-mono"
+                    title="Qurilmaning portsi (masalan: 554 RTSP, 80 HTTP, 631 IPP printer)"
                   />
                   <button
                     onClick={submitManualLAN}
@@ -670,10 +786,21 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                     Och
                   </button>
                 </div>
+                {/* Row 3 (optional): different mesh-side port. Default
+                    is "same as LAN port" — the user only fills this
+                    when they have a local listener on the same port
+                    and need to remap. */}
+                <input
+                  type="number"
+                  placeholder="Mesh-port (ixtiyoriy — bo'sh = LAN port)"
+                  value={manualMeshPort}
+                  onChange={(e) => setManualMeshPort(e.target.value === "" ? "" : Number(e.target.value))}
+                  className="input-base w-full text-sm font-mono"
+                  title="Mesh tomonida boshqa peerlar ulanadigan port. Standart — LAN portga teng. Lokalda shu port band bo'lsa boshqa raqam tanlang (masalan, kamera LAN'da 554, mesh'da 8554)."
+                />
                 <p className="text-[10px] text-zinc-500 leading-relaxed">
-                  IP'ni biladigan, lekin skan topmagan qurilmani to'g'ridan-to'g'ri ekspoz qiling.
-                  Misol: <code className="font-mono text-zinc-400">192.168.1.50</code> port{" "}
-                  <code className="font-mono text-zinc-400">8000</code> (NVR HTTP UI).
+                  Tarmoqdagi boshqa qurilmaning portini xonadagi do'stlarga ulashing —
+                  IP kamera, NVR, printer, dev server. Mesh-port bo'sh qoldirilsa LAN port bilan bir xil bo'ladi.
                 </p>
               </div>
             )}
