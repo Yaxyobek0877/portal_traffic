@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Server, Link2, Trash2, Globe, Search, Zap, Copy, Check, Radar, Sparkles, Pause, Play } from "lucide-react";
+import { Plus, Server, Link2, Trash2, Globe, Search, Zap, Copy, Check, Radar, Sparkles, Pause, Play, Pencil, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { LocalListener, LANDiscovery, PeerView, ServiceView, RiskAssessment } from "../types";
 import { app, subscribe } from "../lib/wails";
@@ -31,6 +31,7 @@ const presets: Preset[] = [
   { id: "factorio",          label: "Factorio",              defaultName: "factorio",    protocol: "udp", port: 34197, hint: "" },
   { id: "terraria",          label: "Terraria",              defaultName: "terraria",    protocol: "tcp", port: 7777,  hint: "" },
   { id: "rtsp",              label: "RTSP kamera",           defaultName: "kamera",      protocol: "tcp", port: 554,   showAdvanced: true, hint: "Hikvision / Dahua / Reolink — LAN target kiriting" },
+  { id: "hikvision-nvr",     label: "Hikvision NVR (SDK)",   defaultName: "nvr",         protocol: "tcp", port: 8000,  showAdvanced: true, hint: "Hikvision NVR — SDK / iVMS-4500 ishlatadigan port" },
   { id: "http-web",          label: "Web UI (HTTP)",         defaultName: "web",         protocol: "tcp", port: 80,    showAdvanced: true, hint: "NVR, smart home, router admin" },
   { id: "https-web",         label: "Web UI (HTTPS)",        defaultName: "web",         protocol: "tcp", port: 443,   showAdvanced: true, hint: "" },
   { id: "ssh",               label: "SSH",                   defaultName: "ssh",         protocol: "tcp", port: 22,    hint: "Masofadan terminal — kuchli kalit shart" },
@@ -206,6 +207,34 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
       await refreshLocalServices();
     } catch (e: any) {
       setError(e?.message || String(e));
+    }
+  };
+
+  // retargetService is the inline-edit path for an existing exposed
+  // row. ExposeService is already idempotent on (port, protocol) —
+  // calling it with the same key but a different target updates the
+  // forwarder's target table and the persisted row in one shot. This
+  // lets users fix a 127.0.0.1:80 mistarget to 192.168.1.100:80
+  // without losing the row's name + history.
+  const retargetService = async (s: ServiceView, newTarget: string) => {
+    setError("");
+    const trimmed = newTarget.trim();
+    if (trimmed && !/^[\w.\-]+:\d{1,5}$/.test(trimmed)) {
+      setError("Target host:port shaklida bo'lishi kerak (masalan 192.168.1.100:554)");
+      return false;
+    }
+    if (trimmed) {
+      const proto = s.protocol === "udp" ? "udp" : "tcp";
+      if (!(await confirmRisk(trimmed, proto, s.port))) return false;
+    }
+    try {
+      const proto = (s.protocol === "udp" ? "udp" : "tcp") as "tcp" | "udp";
+      await app.ExposeService(s.name, proto, s.port, trimmed);
+      await refreshLocalServices();
+      return true;
+    } catch (e: any) {
+      setError(e?.message || String(e));
+      return false;
     }
   };
 
@@ -502,110 +531,50 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
         <AnimatePresence>
           {localServices.length > 0 && (
             <motion.div layout className="mt-3 space-y-1.5">
-              {localServices.map((s) => {
-                const paused = !!s.paused;
-                const health = s.health || "unknown";
-                const dotClass = paused
-                  ? "bg-amber-400 shadow-[0_0_4px_#fbbf24]"
-                  : health === "ok"
-                  ? "bg-emerald-400 shadow-[0_0_4px_#34d399]"
-                  : health === "down"
-                  ? "bg-rose-400 shadow-[0_0_4px_#fb7185]"
-                  : "bg-zinc-500";
-                const dotLabel = paused
-                  ? "Pauza qilingan — peer'lar ulanolmaydi"
-                  : health === "ok"
-                  ? `Target ${s.target || "localhost"} javob bermoqda`
-                  : health === "down"
-                  ? `Ulanish muvaffaqiyatsiz: ${s.healthError || s.target || "?"}\n\nNimalarni tekshirish kerak:\n• Qurilma yoqilganmi?\n• IP manzili to'g'rimi?\n• Shu portda haqiqatan ham servis ishlayaptimi?`
-                  : s.protocol === "udp"
-                  ? "UDP holatini avtomatik tekshirib bo'lmaydi — peer ulanganda aniqlanadi"
-                  : "Holati hali tekshirilmagan";
-                return (
-                  <motion.div
-                    key={`${s.protocol}:${s.port}`}
-                    layout
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className={`panel rounded-input px-3 py-2 flex items-center gap-2 text-sm ${
-                      paused ? "opacity-60" : ""
-                    }`}
-                    title={s.target ? `→ ${s.target}` : undefined}
-                  >
-                    <span
-                      title={dotLabel}
-                      className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`}
-                    />
-                    <Globe className={`w-3.5 h-3.5 shrink-0 ${paused ? "text-amber-400" : "text-emerald-400"}`} strokeWidth={2} />
-                    <div className="min-w-0 flex-1 leading-tight">
-                      <div className="truncate font-medium flex items-center gap-1.5">
-                        {s.name}
-                        {/* "LAN" pill — surfaces the fact that this
-                            row forwards to a non-localhost address.
-                            Hover (title) shows the full target so the
-                            user can copy it without a tooltip squint. */}
-                        {s.target && s.target !== `127.0.0.1:${s.port}` && (
-                          <span
-                            className="text-[9px] uppercase tracking-wider font-mono px-1 py-0.5 rounded bg-cyan-500/15 text-cyan-300 shrink-0"
-                            title={`LAN qurilma — ${s.target}`}
-                          >
-                            LAN
-                          </span>
-                        )}
-                      </div>
-                      {s.target && s.target !== `127.0.0.1:${s.port}` && (
-                        <div
-                          className="font-mono text-[10px] text-cyan-300/70 truncate"
-                          title={s.target}
-                        >
-                          → {s.target}
-                        </div>
-                      )}
-                    </div>
-                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
-                      s.protocol === "udp" ? "bg-cyan-400/10 text-cyan-300" : "bg-violet-400/10 text-violet-300"
-                    }`}>
-                      {s.protocol.toUpperCase()}
-                    </span>
-                    <span className="font-mono text-xs text-zinc-500 shrink-0">:{s.port}</span>
-                    <button
-                      onClick={() => togglePause(s)}
-                      className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-amber-300 shrink-0"
-                      title={paused ? "Davom ettirish" : "Vaqtincha to'xtatish"}
-                    >
-                      {paused ? (
-                        <Play className="w-3.5 h-3.5" strokeWidth={2} />
-                      ) : (
-                        <Pause className="w-3.5 h-3.5" strokeWidth={2} />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => removeExposed(s.port)}
-                      className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-rose-400 shrink-0"
-                      title="Olib tashlash"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
-                    </button>
-                  </motion.div>
-                );
-              })}
+              {localServices.map((s) => (
+                <ExposedRow
+                  key={`${s.protocol}:${s.port}`}
+                  s={s}
+                  onTogglePause={() => togglePause(s)}
+                  onRemove={() => removeExposed(s.port)}
+                  onRetarget={(t) => retargetService(s, t)}
+                />
+              ))}
               {/* Inline diagnostic for any 'down' rows. Lives outside
-                  the row itself so it can wrap at full width without
-                  fighting the row's grid. Only appears when something
-                  has actually failed; healthy rows stay quiet. */}
+                  the row itself so it can wrap at full width. The
+                  'localhost-but-down' case gets a louder hint
+                  pointing at the LAN-target affordance, because
+                  this is by far the most common misconfiguration:
+                  user pasted IP into the name, hit Och, and ended
+                  up exposing 127.0.0.1:port instead of forwarding
+                  to a LAN device. The pencil edit on the row fixes
+                  it in one click. */}
               {localServices.some((s) => s.health === "down" && !s.paused) && (
                 <div className="mt-1.5 panel rounded-input px-3 py-2 text-[10px] text-rose-300 bg-rose-500/[0.04] border-rose-500/20 leading-relaxed space-y-1">
                   {localServices
                     .filter((s) => s.health === "down" && !s.paused)
-                    .map((s) => (
-                      <div key={`err-${s.protocol}:${s.port}`}>
-                        <span className="font-mono text-rose-200">
-                          {s.protocol.toUpperCase()}:{s.port}
-                        </span>{" "}
-                        <span className="text-rose-300/80">{s.healthError || `target ${s.target || "—"} javob bermoqda emas`}</span>
-                      </div>
-                    ))}
+                    .map((s) => {
+                      const isLocalhost = !s.target || s.target === `127.0.0.1:${s.port}`;
+                      return (
+                        <div key={`err-${s.protocol}:${s.port}`}>
+                          <span className="font-mono text-rose-200">
+                            {s.protocol.toUpperCase()}:{s.port}
+                          </span>{" "}
+                          <span className="text-rose-300/80">
+                            {s.healthError ||
+                              `target ${s.target || "—"} javob bermoqda emas`}
+                          </span>
+                          {isLocalhost && (
+                            <div className="text-amber-300/90 mt-1 ml-1">
+                              💡 Bu lokal kompyuterga (127.0.0.1) ishora qilyapti.
+                              Tarmoqdagi qurilma kerak bo'lsa, ✏️ tugmasini bosib{" "}
+                              target ni <code className="font-mono">192.168.x.x:{s.port}</code>{" "}
+                              ga o'zgartiring.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </motion.div>
@@ -1016,6 +985,217 @@ function LANResults({
         );
       })}
     </div>
+  );
+}
+
+// ExposedRow renders one row in 'Mening servislarim'. Encapsulates
+// per-row state (the inline target editor) so the parent doesn't
+// have to track which row is being edited and toggling one row
+// doesn't blow away the input in another.
+//
+// The pencil icon swaps the row into an edit mode where the user can
+// rewrite the LAN target — fixes the common "I forgot to fill in
+// the LAN IP and now my row points at 127.0.0.1:80 by accident"
+// problem without losing the row's name, history, or label.
+function ExposedRow({
+  s,
+  onTogglePause,
+  onRemove,
+  onRetarget,
+}: {
+  s: ServiceView;
+  onTogglePause: () => void;
+  onRemove: () => void;
+  onRetarget: (target: string) => Promise<boolean>;
+}) {
+  const paused = !!s.paused;
+  const health = s.health || "unknown";
+  const isLocalhost = !s.target || s.target === `127.0.0.1:${s.port}`;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(isLocalhost ? "" : s.target || "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!editing) {
+      setDraft(isLocalhost ? "" : s.target || "");
+    }
+  }, [s.target, isLocalhost, editing]);
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      const ok = await onRetarget(draft);
+      if (ok) setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const dotClass = paused
+    ? "bg-amber-400 shadow-[0_0_4px_#fbbf24]"
+    : health === "ok"
+    ? "bg-emerald-400 shadow-[0_0_4px_#34d399]"
+    : health === "down"
+    ? "bg-rose-400 shadow-[0_0_4px_#fb7185]"
+    : "bg-zinc-500";
+  const dotLabel = paused
+    ? "Pauza qilingan — peer'lar ulanolmaydi"
+    : health === "ok"
+    ? `Target ${s.target || "localhost"} javob bermoqda`
+    : health === "down"
+    ? `Ulanish muvaffaqiyatsiz: ${s.healthError || s.target || "?"}\n\nNimalarni tekshirish kerak:\n• Qurilma yoqilganmi?\n• IP manzili to'g'rimi?\n• Shu portda haqiqatan ham servis ishlayaptimi?`
+    : s.protocol === "udp"
+    ? "UDP holatini avtomatik tekshirib bo'lmaydi — peer ulanganda aniqlanadi"
+    : "Holati hali tekshirilmagan";
+
+  if (editing) {
+    return (
+      <motion.div
+        layout
+        className="panel rounded-input px-3 py-2 space-y-2 text-sm border-violet-500/30"
+      >
+        <div className="flex items-center gap-2">
+          <Pencil className="w-3.5 h-3.5 text-violet-300 shrink-0" strokeWidth={2} />
+          <span className="font-medium truncate flex-1">{s.name}</span>
+          <span
+            className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
+              s.protocol === "udp"
+                ? "bg-cyan-400/10 text-cyan-300"
+                : "bg-violet-400/10 text-violet-300"
+            }`}
+          >
+            {s.protocol.toUpperCase()}
+          </span>
+          <span className="font-mono text-xs text-zinc-500 shrink-0">:{s.port}</span>
+        </div>
+        <div className="flex gap-2 items-stretch">
+          <input
+            type="text"
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+              if (e.key === "Escape") setEditing(false);
+            }}
+            placeholder={`LAN target (192.168.1.100:${s.port}) — bo'sh = localhost`}
+            className="input-base text-sm flex-1 font-mono"
+            disabled={saving}
+          />
+          <button
+            onClick={submit}
+            disabled={saving}
+            title="Saqlash"
+            className="px-2 rounded text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"
+          >
+            <Check className="w-4 h-4" strokeWidth={2} />
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            disabled={saving}
+            title="Bekor qilish"
+            className="px-2 rounded text-zinc-400 hover:bg-white/[0.07] disabled:opacity-50"
+          >
+            <X className="w-4 h-4" strokeWidth={2} />
+          </button>
+        </div>
+        <p className="text-[10px] text-zinc-500 leading-relaxed">
+          Maqsad: tarmoqdagi qurilmaga forward qilish. Misol: kamera{" "}
+          <code className="font-mono text-zinc-400">192.168.1.100:554</code>,
+          NVR <code className="font-mono text-zinc-400">192.168.1.50:8000</code>.
+          Bo'sh qoldirsangiz, lokal kompyuterdagi {s.port}-port ishlatiladi.
+        </p>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }}
+      className={`panel rounded-input px-3 py-2 flex items-center gap-2 text-sm ${
+        paused ? "opacity-60" : ""
+      }`}
+      title={s.target ? `→ ${s.target}` : undefined}
+    >
+      <span
+        title={dotLabel}
+        className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`}
+      />
+      <Globe
+        className={`w-3.5 h-3.5 shrink-0 ${
+          paused ? "text-amber-400" : "text-emerald-400"
+        }`}
+        strokeWidth={2}
+      />
+      <div className="min-w-0 flex-1 leading-tight">
+        <div className="truncate font-medium flex items-center gap-1.5">
+          {s.name}
+          {!isLocalhost && (
+            <span
+              className="text-[9px] uppercase tracking-wider font-mono px-1 py-0.5 rounded bg-cyan-500/15 text-cyan-300 shrink-0"
+              title={`LAN qurilma — ${s.target}`}
+            >
+              LAN
+            </span>
+          )}
+        </div>
+        {!isLocalhost && (
+          <div
+            className="font-mono text-[10px] text-cyan-300/70 truncate"
+            title={s.target}
+          >
+            → {s.target}
+          </div>
+        )}
+        {/* Show the target line for localhost rows too — the user
+            looking at a 127.0.0.1:80 entry that's down should see
+            the target right there so they know it's LOCAL, not LAN. */}
+        {isLocalhost && (
+          <div className="font-mono text-[10px] text-zinc-500 truncate">
+            → 127.0.0.1:{s.port}{" "}
+            <span className="text-zinc-600">(lokal)</span>
+          </div>
+        )}
+      </div>
+      <span
+        className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
+          s.protocol === "udp"
+            ? "bg-cyan-400/10 text-cyan-300"
+            : "bg-violet-400/10 text-violet-300"
+        }`}
+      >
+        {s.protocol.toUpperCase()}
+      </span>
+      <span className="font-mono text-xs text-zinc-500 shrink-0">:{s.port}</span>
+      <button
+        onClick={() => setEditing(true)}
+        className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-violet-300 shrink-0"
+        title="Target o'zgartirish (LAN qurilmaga forward qilish)"
+      >
+        <Pencil className="w-3.5 h-3.5" strokeWidth={2} />
+      </button>
+      <button
+        onClick={onTogglePause}
+        className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-amber-300 shrink-0"
+        title={paused ? "Davom ettirish" : "Vaqtincha to'xtatish"}
+      >
+        {paused ? (
+          <Play className="w-3.5 h-3.5" strokeWidth={2} />
+        ) : (
+          <Pause className="w-3.5 h-3.5" strokeWidth={2} />
+        )}
+      </button>
+      <button
+        onClick={onRemove}
+        className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-rose-400 shrink-0"
+        title="Olib tashlash"
+      >
+        <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+      </button>
+    </motion.div>
   );
 }
 
