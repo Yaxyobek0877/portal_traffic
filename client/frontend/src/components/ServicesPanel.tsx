@@ -39,24 +39,38 @@ const presets: Preset[] = [
 ];
 
 export function ServicesPanel({ localServices, peers, refreshLocalServices }: Props) {
+  // Top expose form. Name and LAN IP are kept as SEPARATE inputs —
+  // the previous "Nom yoki IP:port" combo input was confusing because
+  // it forced the user to know the magic format and silently used the
+  // IP's last octet as the row name (so an exposed 192.168.192.11
+  // ended up labelled "11"). Cleaner split:
+  //
+  //   - name: the human-readable label users see in the row
+  //   - lanIP: empty → forward to localhost; non-empty → forward to
+  //     this LAN host. Smart-paste of "host:port" splits into ip+port
+  //     automatically so a copied address still works in one click.
   const [name, setName] = useState("");
+  const [lanIP, setLanIP] = useState("");
   const [port, setPort] = useState<number | "">("");
   const [proto, setProto] = useState<"tcp" | "udp" | "both">("tcp");
-  const [target, setTarget] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
   const [error, setError] = useState("");
+  // Ref to the LAN IP input so hardware presets (RTSP / NVR /
+  // printer) can focus it after applyPreset — the user's next
+  // keystroke fills the IP without an extra click.
+  const lanIPRef = React.useRef<HTMLInputElement>(null);
 
   const applyPreset = (p: Preset) => {
     setName(p.defaultName);
     setPort(p.port);
     setProto(p.protocol);
-    if (p.showAdvanced) {
-      setShowAdvanced(true);
-    } else {
-      setTarget("");
-    }
     setShowPresets(false);
+    if (p.showAdvanced) {
+      // Hardware preset → user almost certainly needs to fill in the
+      // LAN IP next. Clear stale input and focus the field.
+      setLanIP("");
+      requestAnimationFrame(() => lanIPRef.current?.focus());
+    }
   };
   const [dialing, setDialing] = useState<{ peerId: string; port: number; protocol: string } | null>(null);
   const [dialedAddrs, setDialedAddrs] = useState<Record<string, string>>({});
@@ -127,67 +141,66 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
     );
   };
 
-  // parseSmartName detects when the user typed something like
-  // "192.168.1.100:554" or "kamera 192.168.1.100:554" into the name
-  // field and pulls out the IP, port, and (optional) human label.
-  // Lets people share a LAN device with one input instead of three.
-  const parseSmartName = (
-    raw: string,
-  ): { name: string; ip: string; port: number } | null => {
+  // splitHostPort accepts "host" or "host:port" and returns the parts
+  // separately, so a user pasting "192.168.1.100:554" into the LAN IP
+  // field gets the port auto-filled. Empty input returns empty parts —
+  // the form then treats the row as a localhost expose.
+  const splitHostPort = (raw: string): { host: string; port: number | null } => {
     const trimmed = raw.trim();
-    if (!trimmed) return null;
-    const match = trimmed.match(/^(?:([\w.\-]+)\s+)?(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/);
-    if (!match) return null;
-    const [, label, ip, portStr] = match;
-    const portNum = Number(portStr);
-    if (portNum < 1 || portNum > 65535) return null;
-    const cleanLabel =
-      label || ip.split(".").pop()! ; // last octet as default label
-    return { name: cleanLabel, ip, port: portNum };
+    if (!trimmed) return { host: "", port: null };
+    const m = trimmed.match(/^([\w.\-]+):(\d{1,5})$/);
+    if (m) {
+      const portNum = Number(m[2]);
+      if (portNum >= 1 && portNum <= 65535) {
+        return { host: m[1], port: portNum };
+      }
+    }
+    return { host: trimmed, port: null };
   };
 
   const submitExpose = async () => {
     setError("");
-    // Smart-input: user typed "192.168.1.100:554" (optionally with a
-    // leading label) into the name field and didn't bother filling
-    // anything else. Promote that to a full expose with target =
-    // ip:port, port = port, name = label or last octet.
-    const smart = parseSmartName(name);
-    let effectivePort = port;
-    let effectiveTarget = target.trim();
-    let effectiveName = name;
-    if (smart && (typeof port !== "number" || port < 1)) {
-      effectivePort = smart.port;
-      effectiveTarget = `${smart.ip}:${smart.port}`;
-      effectiveName = smart.name;
-    }
-    if (typeof effectivePort !== "number" || effectivePort < 1 || effectivePort > 65535) {
+    // Smart-paste: if the user pasted "host:port" into the LAN IP
+    // field, split it. The explicit Port input still wins when the
+    // user typed both — we only auto-fill when Port is blank.
+    const { host: lanHost, port: pastedPort } = splitHostPort(lanIP);
+    const effectivePort: number | "" =
+      typeof port === "number" && port > 0 ? port : pastedPort ?? "";
+    if (
+      typeof effectivePort !== "number" ||
+      effectivePort < 1 ||
+      effectivePort > 65535
+    ) {
       setError("Port 1–65535 oralig'ida bo'lishi kerak");
       return;
     }
-    const trimmedTarget = effectiveTarget;
-    if (trimmedTarget && !/^[\w.\-]+:\d{1,5}$/.test(trimmedTarget)) {
-      setError("Target host:port shaklida bo'lishi kerak (masalan 192.168.1.100:554)");
+    // LAN target: empty IP → localhost expose; non-empty → forward to
+    // that host. We trust the user's typed IP/host shape (no DNS
+    // lookup here); the Go side validates host:port format.
+    const target = lanHost ? `${lanHost}:${effectivePort}` : "";
+    if (target && !/^[\w.\-]+:\d{1,5}$/.test(target)) {
+      setError("LAN IP noto'g'ri (masalan: 192.168.1.100)");
       return;
     }
     // "both" expands to two exposes — same name/port/target on TCP
-    // and UDP. Useful for Source / Steam game servers (CS2 27015 needs
-    // both; the TCP side is RCON / query). Risk check runs once
-    // against TCP since the target/port are identical.
+    // and UDP. Useful for Source-style game servers; the TCP side
+    // is RCON / query, the UDP side is the game tickrate.
     const protocols: ("tcp" | "udp")[] =
       proto === "both" ? ["tcp", "udp"] : [proto];
-    if (!(await confirmRisk(trimmedTarget, protocols[0], effectivePort))) {
+    if (!(await confirmRisk(target, protocols[0], effectivePort))) {
       return;
     }
     try {
-      const baseName = (smart ? smart.name : effectiveName) ||
-        `${proto === "both" ? "both" : proto}:${effectivePort}`;
+      // Empty name → let the Go side default to "${protocol}:${port}"
+      // ("tcp:80"). Better than the old behaviour of inferring a
+      // name from the IP's last octet, which produced "11" labels.
+      const baseName = name.trim();
       for (const p of protocols) {
-        await app.ExposeService(baseName, p, effectivePort, trimmedTarget);
+        await app.ExposeService(baseName, p, effectivePort, target);
       }
       setName("");
+      setLanIP("");
       setPort("");
-      setTarget("");
       await refreshLocalServices();
     } catch (e: any) {
       setError(e?.message || String(e));
@@ -447,24 +460,30 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
           </div>
         </div>
         <p className="text-xs text-zinc-500 mb-3">
-          Lokal portni mesh ga oching — boshqa peerlar to'g'ridan-to'g'ri ulana oladi.
+          Lokal yoki tarmoqdagi portni mesh'ga oching — boshqa peerlar to'g'ridan-to'g'ri ulanadi.
         </p>
-        <div className="flex flex-wrap gap-2 items-stretch">
-          <input
-            type="text"
-            placeholder="Nom yoki IP:port (192.168.1.100:554)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="input-base text-sm flex-1 min-w-[140px]"
-            title="Oddiy nom ('kamera') yozsangiz pastdagi port bilan ekspoz qilinadi. To'g'ridan-to'g'ri 'IP:port' yoki 'nom IP:port' yozsangiz, port va target avtomatik to'ldiriladi."
-          />
+        {/* Two-row layout. Row 1: identity (Nom + protokol) — what
+            this service is. Row 2: location (LAN IP + Port + Och) —
+            where it lives. Empty LAN IP = lokal kompyuter; non-empty
+            = forward to that LAN host. The IP field accepts plain
+            "192.168.1.100" or smart-paste "192.168.1.100:554"
+            (port auto-fills). */}
+        <div className="space-y-2">
           <div className="flex gap-2 items-stretch">
+            <input
+              type="text"
+              placeholder="Nom (kamera, ssh, web…) — ixtiyoriy"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input-base text-sm flex-1 min-w-[140px]"
+              title="Boshqa peerlar ro'yxatda nima ko'rishi. Bo'sh qoldirilsa, 'tcp:80' kabi avtomatik nom beriladi."
+            />
             <div className="flex rounded overflow-hidden border border-white/10 text-[11px] font-mono shrink-0">
               <button
                 type="button"
                 onClick={() => setProto("tcp")}
                 className={`px-2 ${proto === "tcp" ? "bg-violet-500/30 text-white" : "text-zinc-400 hover:bg-white/[0.04]"}`}
-                title="HTTP, SSH, Minecraft Java — TCP"
+                title="HTTP, SSH, RTSP-TCP — TCP"
               >
                 TCP
               </button>
@@ -480,11 +499,22 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                 type="button"
                 onClick={() => setProto("both")}
                 className={`px-2 border-l border-white/10 ${proto === "both" ? "bg-violet-500/30 text-white" : "text-zinc-400 hover:bg-white/[0.04]"}`}
-                title="Bir vaqtda TCP+UDP — Steam game serverlari (CS2 27015 game UDP + RCON TCP)"
+                title="Bir vaqtda TCP+UDP — Steam game serverlari"
               >
                 Ikkalasi
               </button>
             </div>
+          </div>
+          <div className="flex gap-2 items-stretch">
+            <input
+              ref={lanIPRef}
+              type="text"
+              placeholder="LAN IP (192.168.x.x) — bo'sh = lokal kompyuter"
+              value={lanIP}
+              onChange={(e) => setLanIP(e.target.value)}
+              className="input-base text-sm flex-1 font-mono"
+              title="Tarmoqdagi boshqa qurilmaga forward qilish kerak bo'lsa IP'sini yozing (kamera, NVR, printer). Bo'sh qoldirilsa, shu kompyuterning portini ekspoz qiladi. 'IP:port' shaklida yopishtirsangiz, port avtomatik to'ldiriladi."
+            />
             <input
               type="number"
               placeholder="Port"
@@ -500,32 +530,24 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
               Och
             </button>
           </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowAdvanced((v) => !v)}
-          className="mt-2 text-[11px] text-zinc-400 hover:text-zinc-200"
-        >
-          {showAdvanced ? "− LAN target" : "+ LAN qurilma (NVR / kamera / printer)"}
-        </button>
-        {showAdvanced && (
-          <div className="mt-2">
-            <input
-              type="text"
-              placeholder="192.168.1.100:554  (bo'sh = localhost)"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              className="input-base text-sm w-full font-mono"
-            />
-            <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
-              Tarmoqdagi boshqa qurilmaga forward qilish. Misol: RTSP kamera{" "}
-              <code className="font-mono text-zinc-400">192.168.1.100:554</code>,
-              NVR <code className="font-mono text-zinc-400">192.168.1.50:8000</code>,
-              printer <code className="font-mono text-zinc-400">192.168.1.7:631</code>.
-              Bo'sh qoldirilsa, lokalda turibdi deb qabul qilinadi.
+          {/* Helper: when the user has typed an IP, surface what the
+              row will end up forwarding to. Removes the "did I do that
+              right?" doubt before they hit Och. */}
+          {lanIP.trim() && (
+            <p className="text-[10px] text-cyan-300/80 leading-relaxed">
+              📡 LAN qurilmaga forward qilinadi. Mesh portga ulansangiz —{" "}
+              <code className="font-mono">
+                {(() => {
+                  const { host, port: pp } = splitHostPort(lanIP);
+                  const finalPort =
+                    typeof port === "number" && port > 0 ? port : pp;
+                  return host && finalPort ? `${host}:${finalPort}` : `${host || "?"}:?`;
+                })()}
+              </code>
+              {" "}ga yo'naltiriladi.
             </p>
-          </div>
-        )}
+          )}
+        </div>
         {error && <div className="text-xs text-rose-400 mt-2">{error}</div>}
 
         <AnimatePresence>
@@ -704,8 +726,9 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
               type="button"
               onClick={() => setShowManual((v) => !v)}
               className="text-[11px] text-zinc-400 hover:text-zinc-200"
+              title="LAN portni boshqa mesh-port bilan ekspoz qilish (masalan, kamera 554 → mesh 8554)"
             >
-              {showManual ? "− Qo'lda qo'shish" : "+ Qurilma topilmadimi? Qo'lda IP kiriting"}
+              {showManual ? "− Murakkab variant" : "+ Mesh-portni boshqacha qilib qo'shish"}
             </button>
             {showManual && (
               <div className="mt-2 panel rounded-input p-3 space-y-2">
