@@ -39,6 +39,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
@@ -66,6 +71,10 @@ fun LockScreen(
     var tab by remember { mutableStateOf(LockTab.SignIn) }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    // Two independent reveal flags so the password and confirm fields
+    // toggle separately — flipping one shouldn't unmask the other.
+    var showPassword by remember { mutableStateOf(false) }
+    var showConfirm by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf("") }
     var localValidation by remember { mutableStateOf<String?>(null) }
 
@@ -203,8 +212,19 @@ fun LockScreen(
                         label = { Text("Parol") },
                         singleLine = true,
                         enabled = !busy,
-                        visualTransformation = PasswordVisualTransformation(),
+                        visualTransformation = if (showPassword) VisualTransformation.None
+                                               else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        trailingIcon = {
+                            IconButton(onClick = { showPassword = !showPassword }) {
+                                Icon(
+                                    imageVector = if (showPassword) Icons.Filled.VisibilityOff
+                                                  else Icons.Filled.Visibility,
+                                    contentDescription = if (showPassword) "Parolni yashirish"
+                                                         else "Parolni ko'rsatish",
+                                )
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                     )
 
@@ -216,8 +236,19 @@ fun LockScreen(
                             label = { Text("Parolni takrorlang") },
                             singleLine = true,
                             enabled = !busy,
-                            visualTransformation = PasswordVisualTransformation(),
+                            visualTransformation = if (showConfirm) VisualTransformation.None
+                                                   else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            trailingIcon = {
+                                IconButton(onClick = { showConfirm = !showConfirm }) {
+                                    Icon(
+                                        imageVector = if (showConfirm) Icons.Filled.VisibilityOff
+                                                      else Icons.Filled.Visibility,
+                                        contentDescription = if (showConfirm) "Parolni yashirish"
+                                                             else "Parolni ko'rsatish",
+                                    )
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Spacer(Modifier.height(10.dp))

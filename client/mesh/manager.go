@@ -54,6 +54,15 @@ type Config struct {
 	HeartbeatInterval time.Duration
 	Logger            *slog.Logger
 
+	// CloudAuthToken is the optional server-account session token
+	// the manager appends to the signaling URL as `?token=...` so
+	// the signaling server can stamp portal ownership with the
+	// signed-in user's ID. When empty, the connection is anonymous
+	// and behaves exactly like older clients. The session lives in
+	// memory only; no persistence here — the App layer hands it
+	// over after a successful /api/auth/signin.
+	CloudAuthToken string
+
 	// Optional TURN server. If TurnURL is non-empty it's appended
 	// to ICEServers along with the credentials. Required for
 	// peers behind symmetric NAT or CGNAT — without TURN those
@@ -352,12 +361,33 @@ func (m *Manager) JoinPortal(ctx context.Context, portalID, code string) error {
 }
 
 func (m *Manager) dial(ctx context.Context) error {
-	c, err := signaling.Dial(ctx, m.cfg.SignalingURL, m.logger)
+	c, err := signaling.Dial(ctx, m.signalingURLWithAuth(), m.logger)
 	if err != nil {
 		return err
 	}
 	m.sig = c
 	return nil
+}
+
+// signalingURLWithAuth appends ?token=<sess> to cfg.SignalingURL when
+// the manager has been handed a cloud-auth session token. Stays a
+// no-op when the field is empty so anonymous deployments behave
+// identically. We append rather than parse-and-rebuild because the
+// token is a base64url string that's safe in a query value verbatim
+// and the URL is otherwise stable.
+func (m *Manager) signalingURLWithAuth() string {
+	u := m.cfg.SignalingURL
+	if m.cfg.CloudAuthToken == "" || u == "" {
+		return u
+	}
+	sep := "?"
+	for i := 0; i < len(u); i++ {
+		if u[i] == '?' {
+			sep = "&"
+			break
+		}
+	}
+	return u + sep + "token=" + m.cfg.CloudAuthToken
 }
 
 func (m *Manager) startRuntime() {
@@ -488,7 +518,7 @@ func (m *Manager) attemptReconnect() bool {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		c, err := signaling.Dial(ctx, m.cfg.SignalingURL, m.logger)
+		c, err := signaling.Dial(ctx, m.signalingURLWithAuth(), m.logger)
 		cancel()
 		if err != nil {
 			m.logger.Debug("reconnect dial failed", "attempt", attempt+1, "err", err)

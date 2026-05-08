@@ -211,6 +211,22 @@ type App struct {
 	approvalMu      sync.Mutex
 	approvalDecided map[approvalKey]bool          // per-(peer,port,proto) sticky decision
 	approvalPending map[string]chan bool          // per-requestID waiter
+
+	// cloudAuth holds the server-account session token + cached user
+	// info after a successful CloudSignIn / CloudSignUp. New mesh
+	// sessions pass cloudAuth.Token in mesh.Config.CloudAuthToken so
+	// the signaling server can stamp portals with the user ID, which
+	// in turn makes /api/portals show this device's portals on every
+	// other device the same user is signed into. Empty token = anon
+	// connection (legacy behaviour).
+	cloudMu   sync.RWMutex
+	cloudAuth cloudAuthState
+}
+
+type cloudAuthState struct {
+	Token    string `json:"token,omitempty"`
+	UserID   string `json:"userId,omitempty"`
+	Username string `json:"username,omitempty"`
 }
 
 type approvalKey struct {
@@ -271,6 +287,11 @@ func (a *App) Startup(ctx context.Context) {
 		a.url = store.GetOr(storage.KeySignalingURL, "")
 		a.nick = store.GetOr(storage.KeyNickname, "")
 	}
+
+	// Restore the cloud-account session token (if any) so the next
+	// portal we open includes ?token=... on its WebSocket connect.
+	// No network call — just reads the local file.
+	a.loadCloudAuth()
 
 	a.startLogSink()
 	go a.runHealthLoop()
@@ -2190,6 +2211,12 @@ func (a *App) bringUpSession(nickname string, makeActive bool, isOwner bool) (*p
 		TurnURL:           turn.URL,
 		TurnUsername:      turn.Username,
 		TurnCredential:    turn.Credential,
+		// CloudAuthToken: when the user is signed into a server account,
+		// the mesh adds ?token=... on its WebSocket connect so the
+		// signaling server stamps this portal's owner with the user
+		// ID, making the dashboard list it across every device the
+		// same account is signed into.
+		CloudAuthToken: a.CloudAuthToken(),
 	})
 	s.fwd = proxy.New(s.mesh, a.logger.With("session", s.localID))
 	s.mesh.SetProxyHandler(s.fwd)

@@ -22,6 +22,8 @@ import {
   ArrowRight,
   Check,
   X as XIcon,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Logo } from "../components/Logo";
 import { app } from "../lib/wails";
@@ -41,6 +43,11 @@ export function Lock() {
   // skeleton; tab buttons fade in once we know the right default.
   const [tab, setTab] = useState<Tab | "loading">("loading");
   const [hasAccount, setHasAccount] = useState(false);
+  // Password reveal state. Two flags so the password and confirm fields
+  // toggle independently — flipping the main field shouldn't unmask
+  // the confirm by accident.
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -389,7 +396,7 @@ export function Lock() {
                     <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       ref={passwordRef}
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       placeholder={
                         tab === "signup"
                           ? t("lock.signup.password.placeholder")
@@ -398,11 +405,20 @@ export function Lock() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       onKeyDown={onKey}
-                      className="input-base w-full pl-9"
+                      className="input-base w-full pl-9 pr-10"
                       maxLength={128}
                       autoComplete={tab === "signup" ? "new-password" : "current-password"}
                       disabled={busy}
                     />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60 flex items-center justify-center transition-colors"
+                      aria-label={showPassword ? "Parolni yashirish" : "Parolni ko'rsatish"}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
 
@@ -414,17 +430,28 @@ export function Lock() {
                     <label className="text-[11px] uppercase tracking-widest text-zinc-500 ml-1">
                       {t("lock.signup.confirm.label")}
                     </label>
-                    <input
-                      type="password"
-                      placeholder={t("lock.signup.confirm.placeholder")}
-                      value={confirm}
-                      onChange={(e) => setConfirm(e.target.value)}
-                      onKeyDown={onKey}
-                      className="input-base w-full mt-1.5"
-                      maxLength={128}
-                      autoComplete="new-password"
-                      disabled={busy}
-                    />
+                    <div className="relative mt-1.5">
+                      <input
+                        type={showConfirm ? "text" : "password"}
+                        placeholder={t("lock.signup.confirm.placeholder")}
+                        value={confirm}
+                        onChange={(e) => setConfirm(e.target.value)}
+                        onKeyDown={onKey}
+                        className="input-base w-full pr-10"
+                        maxLength={128}
+                        autoComplete="new-password"
+                        disabled={busy}
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => setShowConfirm((v) => !v)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60 flex items-center justify-center transition-colors"
+                        aria-label={showConfirm ? "Parolni yashirish" : "Parolni ko'rsatish"}
+                      >
+                        {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </motion.div>
                 )}
 
