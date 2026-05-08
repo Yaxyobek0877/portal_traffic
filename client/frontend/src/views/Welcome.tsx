@@ -104,6 +104,23 @@ export function Welcome() {
   // The previous behaviour (pre-fill the join form, make the user
   // click submit again) was a holdover from before the dashboard
   // redesign — pure friction now.
+  // refreshLists pulls a fresh ActivePortals + RecentPortals snapshot.
+  // Call after any create/join/leave so the dashboard reflects the
+  // current Go-side truth — owner-row dedup happens inside AddHistory
+  // and renames the row's portal_id to the freshest one, but the UI's
+  // local copy of `history` was a stale mount-time snapshot until this
+  // helper landed.
+  const refreshLists = async () => {
+    try {
+      const [active, recent] = await Promise.all([
+        app.ActivePortals(),
+        app.RecentPortals(8),
+      ]);
+      if (Array.isArray(active)) setSessionSummaries(active);
+      if (Array.isArray(recent)) setHistory(recent);
+    } catch {}
+  };
+
   const rejoinRow = async (h: typeof history[number], opts?: { background?: boolean }) => {
     if (busy) return;
     const background = !!opts?.background;
@@ -122,10 +139,7 @@ export function Welcome() {
         : () => app.JoinPortal(nick, h.portalId, h.code);
       const p = await fn();
       if (myGen !== genRef.current) return;
-      // Refresh the strip immediately so the new session appears
-      // without waiting for the event pipeline to catch up.
-      const list = await app.ActivePortals();
-      if (Array.isArray(list)) setSessionSummaries(list);
+      await refreshLists();
       if (!background) {
         setPortal(p);
         setScreen("portal");
@@ -184,8 +198,7 @@ export function Welcome() {
         ? await app.BackgroundCreatePortal(nickname.trim())
         : await app.CreatePortal(nickname.trim(), false);
       if (myGen !== genRef.current) return;
-      const list = await app.ActivePortals();
-      if (Array.isArray(list)) setSessionSummaries(list);
+      await refreshLists();
       if (!background) {
         setPortal(p);
         setScreen("portal");
@@ -215,8 +228,7 @@ export function Welcome() {
         ? await app.BackgroundJoinPortal(nickname.trim(), portalId.trim(), code.trim())
         : await app.JoinPortal(nickname.trim(), portalId.trim(), code.trim());
       if (myGen !== genRef.current) return;
-      const list = await app.ActivePortals();
-      if (Array.isArray(list)) setSessionSummaries(list);
+      await refreshLists();
       if (!background) {
         setPortal(p);
         setScreen("portal");
@@ -363,8 +375,7 @@ export function Welcome() {
                     }}
                     onLeave={async () => {
                       await app.LeavePortal(s.sessionId);
-                      const list = await app.ActivePortals();
-                      if (Array.isArray(list)) setSessionSummaries(list);
+                      await refreshLists();
                     }}
                   />
                 ))}
@@ -376,15 +387,31 @@ export function Welcome() {
               for returning users (who have history) rejoining is the
               primary intent, not creating a new portal. New users
               with no recents still see the action cards prominently
-              after the empty-state placeholder. */}
-          {history.length > 0 && (
+              after the empty-state placeholder.
+
+              Active sessions are excluded from this list — they're
+              already rendered in the "Faol ulanishlar" strip above,
+              so showing the same logical portal twice (once per
+              section, sometimes under different ids while owner
+              dedup is settling on the freshest portal_id) was the
+              source of the user-reported "ID changes and becomes
+              two" bug. */}
+          {(() => {
+            const activeIds = new Set(
+              sessions.map((s) => s.portalId).filter(Boolean)
+            );
+            const recentFiltered = history.filter(
+              (h) => !activeIds.has(h.portalId)
+            );
+            if (recentFiltered.length === 0) return null;
+            return (
             <section className="mt-6">
               <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-zinc-500 mb-2">
                 <HistoryIcon className="w-3 h-3" />
                 {t("welcome.recent")}
               </div>
               <div className="space-y-1.5">
-                {history.slice(0, 6).map((h) => (
+                {recentFiltered.slice(0, 6).map((h) => (
                   <RecentRow
                     key={h.id}
                     h={h}
@@ -405,7 +432,8 @@ export function Welcome() {
                 ))}
               </div>
             </section>
-          )}
+            );
+          })()}
 
           {/* Action area — Idle: 2 cards. Join: inline form. Create
               busy state shows on the create card itself, no view swap.

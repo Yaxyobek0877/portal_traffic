@@ -47,8 +47,25 @@ export function PortalView() {
     } catch {}
   };
 
-  const onLeave = async () => {
+  // onBack just navigates back to the dashboard. The portal stays
+  // CONNECTED in the background — exposed services keep working,
+  // peers stay alive, the active-portals strip on Welcome shows
+  // it. This is the user's "I want to do something else but my
+  // portal should keep running" affordance.
+  const onBack = () => {
+    setScreen("welcome");
+  };
+
+  // onClose tears down THIS specific session and goes back. Distinct
+  // from onBack so the user can leave the screen without forcing
+  // a disconnect. The header surfaces both paths via different
+  // buttons.
+  const onClose = async () => {
     await app.Leave();
+    // Leave() drops the active session; the per-session portal:closed
+    // event will land via the App.tsx handler and clean the store.
+    // We optimistically reset the local view here so the UI feels
+    // snappy even on a slow event loop.
     setPortal(null);
     clearPeers();
     clearMessages();
@@ -69,7 +86,7 @@ export function PortalView() {
 
   return (
     <div className="h-full flex flex-col">
-      <PortalHeader portal={portal} onLeave={onLeave} />
+      <PortalHeader portal={portal} onBack={onBack} onClose={onClose} />
 
       <div className="flex-1 grid grid-cols-[300px_1fr_360px] min-h-0">
         {/* Left: peer list */}

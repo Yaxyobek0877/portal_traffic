@@ -22,12 +22,18 @@ import { app } from "../lib/wails";
 
 type Props = {
   portal: PortalView;
-  onLeave: () => void;
+  // Two distinct affordances. onBack is the prominent "go to the
+  // dashboard but keep this portal connected" path; onClose actually
+  // tears down the session. Splitting them stopped the user from
+  // accidentally disconnecting whenever they wanted to peek at the
+  // dashboard or another active portal.
+  onBack: () => void;
+  onClose: () => void;
 };
 
 const HIDDEN_PLACEHOLDER = "••••••";
 
-export function PortalHeader({ portal, onLeave }: Props) {
+export function PortalHeader({ portal, onBack, onClose }: Props) {
   const { t } = useT();
   const setScreen = usePortalStore((s) => s.setScreen);
   const [copiedField, setCopiedField] = useState<"id" | "code" | "both" | null>(null);
@@ -106,12 +112,18 @@ export function PortalHeader({ portal, onLeave }: Props) {
 
       <div className="no-drag flex items-center gap-1">
         <PortalSwitcher />
+        {/* Dashboard — the prominent action. Keeps the portal
+            CONNECTED; the user can come back to it from the
+            active-portals strip. Labelled (not icon-only) because
+            the users said the icon-only "back" looked like a
+            sign-out, which is exactly the wrong mental model. */}
         <button
-          onClick={() => setScreen("welcome")}
+          onClick={onBack}
           title={t("header.dashboard")}
-          className="h-9 w-9 rounded-btn flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.05]"
+          className="h-9 px-3 rounded-btn text-xs flex items-center gap-1.5 panel hover:bg-white/[0.07]"
         >
-          <ArrowLeft className="w-4 h-4" strokeWidth={2} />
+          <ArrowLeft className="w-3.5 h-3.5" strokeWidth={2} />
+          <span>{t("header.dashboard_short")}</span>
         </button>
         <button
           onClick={() => setScreen("settings")}
@@ -120,11 +132,16 @@ export function PortalHeader({ portal, onLeave }: Props) {
         >
           <SettingsIcon className="w-4 h-4" strokeWidth={2} />
         </button>
+        {/* Close THIS portal — explicit destructive action, icon-
+            only and red so it doesn't compete with the dashboard
+            button visually. Tooltip carries the full text so users
+            on mobile/touch hover targets still know what it does. */}
         <button
-          onClick={onLeave}
-          className="h-9 px-3 rounded-btn text-xs flex items-center gap-1.5 text-rose-300 hover:bg-rose-500/10"
+          onClick={onClose}
+          title={t("header.close")}
+          className="h-9 w-9 rounded-btn flex items-center justify-center text-zinc-400 hover:text-rose-300 hover:bg-rose-500/10"
         >
-          <LogOut className="w-3.5 h-3.5" /> {t("header.leave")}
+          <LogOut className="w-4 h-4" />
         </button>
       </div>
 

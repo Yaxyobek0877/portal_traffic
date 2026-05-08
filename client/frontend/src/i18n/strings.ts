@@ -159,6 +159,8 @@ export type StringKey =
   | "header.copied"
   | "header.leave"
   | "header.dashboard"
+  | "header.dashboard_short"
+  | "header.close"
   | "header.switcher"
   | "header.switcher.title"
   | "header.qr.close"
