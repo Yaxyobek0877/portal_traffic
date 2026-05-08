@@ -199,8 +199,19 @@ type App struct {
 	// decorate each ServiceView with a green/yellow/red indicator the
 	// UI can render. Lets the user spot "camera offline" before a peer
 	// has to dial and find out the hard way.
-	healthMu     sync.Mutex
-	exposedHealth map[int]serviceHealth
+	healthMu      sync.Mutex
+	exposedHealth map[serviceHealthKey]serviceHealth
+}
+
+// serviceHealthKey identifies a single exposed service for the health
+// cache. Keying by (port, protocol) — not just port — keeps a TCP
+// probe failure from poisoning the UDP entry on the same port (and
+// vice versa). Common case: a user exposes both TCP+UDP on :80 to a
+// LAN device that only answers TCP; UDP should stay 'unknown', not
+// be inferred 'down' from the TCP outcome.
+type serviceHealthKey struct {
+	port     int
+	protocol string // "tcp" | "udp"
 }
 
 type serviceHealth struct {
@@ -1471,7 +1482,7 @@ func (a *App) LocalServices() []ServiceView {
 	}
 
 	a.healthMu.Lock()
-	healthCopy := make(map[int]serviceHealth, len(a.exposedHealth))
+	healthCopy := make(map[serviceHealthKey]serviceHealth, len(a.exposedHealth))
 	for k, v := range a.exposedHealth {
 		healthCopy[k] = v
 	}
@@ -1495,7 +1506,7 @@ func (a *App) LocalServices() []ServiceView {
 		}
 		if !s.Enabled {
 			v.Paused = true
-		} else if h, ok := healthCopy[s.Port]; ok {
+		} else if h, ok := healthCopy[serviceHealthKey{s.Port, s.Protocol}]; ok {
 			v.Health = h.status
 			v.HealthError = h.err
 		} else {
@@ -1526,9 +1537,10 @@ func (a *App) runHealthLoop() {
 }
 
 func (a *App) runHealthOnce() {
-	// Health is per-target, not per-session — every session's
-	// forwarder shares the same target table, so reading from the
-	// active session (or any other) returns the same answer.
+	// We need both the host:port target (lives on the forwarder) and
+	// the protocol (lives in storage rows). Walk both: forwarder
+	// snapshot tells us "is this port currently announced", storage
+	// tells us "tcp or udp" so the probe can pick the right strategy.
 	var f *proxy.Forwarder
 	for _, s := range a.allSessions() {
 		if s.fwd != nil {
@@ -1544,35 +1556,91 @@ func (a *App) runHealthOnce() {
 		return
 	}
 
-	results := make(map[int]serviceHealth, len(targets))
-	for port, target := range targets {
-		conn, err := net.DialTimeout("tcp", target, 2*time.Second)
-		h := serviceHealth{target: target, checkedAt: time.Now()}
-		if err != nil {
-			h.status = "down"
-			h.err = err.Error()
-		} else {
-			h.status = "ok"
-			_ = conn.Close()
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return
+	}
+	saved, err := store.ListExposedServices()
+	if err != nil {
+		a.logger.Debug("health: list exposed", "err", err)
+		return
+	}
+
+	results := make(map[serviceHealthKey]serviceHealth, len(saved))
+	for _, svc := range saved {
+		if !svc.Enabled {
+			continue
 		}
-		results[port] = h
+		target, ok := targets[svc.Port]
+		if !ok {
+			continue
+		}
+		key := serviceHealthKey{port: svc.Port, protocol: svc.Protocol}
+		h := serviceHealth{target: target, checkedAt: time.Now()}
+		switch svc.Protocol {
+		case "tcp":
+			conn, err := net.DialTimeout("tcp", target, 2*time.Second)
+			if err != nil {
+				h.status = "down"
+				h.err = friendlyHealthError(target, err)
+			} else {
+				h.status = "ok"
+				_ = conn.Close()
+			}
+		case "udp":
+			// UDP can't be probed without sending protocol-specific
+			// traffic — a "connect" succeeds even if nothing is
+			// listening (no SYN/ACK handshake), so we'd false-positive
+			// 'ok' on every UDP target. Mark as unknown and let the
+			// UI surface a neutral indicator.
+			h.status = "unknown"
+			h.err = "UDP holatini avtomatik tekshirib bo'lmaydi — peer ulanganda aniqlanadi"
+		default:
+			h.status = "unknown"
+		}
+		results[key] = h
 	}
 
 	a.healthMu.Lock()
 	if a.exposedHealth == nil {
-		a.exposedHealth = map[int]serviceHealth{}
+		a.exposedHealth = map[serviceHealthKey]serviceHealth{}
 	}
 	for k, v := range results {
 		a.exposedHealth[k] = v
 	}
-	// Drop entries for ports no longer exposed so stale "down"
-	// indicators don't stick around after Unexpose.
+	// Drop entries for (port, protocol) tuples no longer exposed so
+	// stale "down" indicators don't stick around after Unexpose.
 	for k := range a.exposedHealth {
 		if _, ok := results[k]; !ok {
 			delete(a.exposedHealth, k)
 		}
 	}
 	a.healthMu.Unlock()
+}
+
+// friendlyHealthError translates a raw net error into something
+// localised + actionable for the UI. Generic errors (refused, no
+// route, timeout) get the most-likely-cause hint appended; anything
+// we don't recognise falls through to the original string so we
+// don't hide useful diagnostic info from a power user.
+func friendlyHealthError(target string, err error) string {
+	msg := err.Error()
+	low := strings.ToLower(msg)
+	switch {
+	case strings.Contains(low, "no route to host"),
+		strings.Contains(low, "network is unreachable"):
+		return target + " — qurilma o'chiq yoki tarmoqda yo'q (IP'ni tekshiring)"
+	case strings.Contains(low, "connection refused"):
+		return target + " — qurilma yoqilgan, lekin shu portda servis yo'q (port to'g'rimi?)"
+	case strings.Contains(low, "i/o timeout"),
+		strings.Contains(low, "deadline exceeded"):
+		return target + " — javob bermoqda emas (qurilma yoqilganmi?)"
+	case strings.Contains(low, "no such host"):
+		return target + " — DNS topa olmadi (host nomi to'g'rimi?)"
+	}
+	return msg
 }
 
 // ExposeService registers a port and announces it to peers.

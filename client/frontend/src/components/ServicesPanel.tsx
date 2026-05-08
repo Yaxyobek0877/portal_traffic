@@ -517,7 +517,9 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                   : health === "ok"
                   ? `Target ${s.target || "localhost"} javob bermoqda`
                   : health === "down"
-                  ? `Target ulanmadi: ${s.healthError || s.target || "?"}`
+                  ? `Ulanish muvaffaqiyatsiz: ${s.healthError || s.target || "?"}\n\nNimalarni tekshirish kerak:\n• Qurilma yoqilganmi?\n• IP manzili to'g'rimi?\n• Shu portda haqiqatan ham servis ishlayaptimi?`
+                  : s.protocol === "udp"
+                  ? "UDP holatini avtomatik tekshirib bo'lmaydi — peer ulanganda aniqlanadi"
                   : "Holati hali tekshirilmagan";
                 return (
                   <motion.div
@@ -588,6 +590,24 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
                   </motion.div>
                 );
               })}
+              {/* Inline diagnostic for any 'down' rows. Lives outside
+                  the row itself so it can wrap at full width without
+                  fighting the row's grid. Only appears when something
+                  has actually failed; healthy rows stay quiet. */}
+              {localServices.some((s) => s.health === "down" && !s.paused) && (
+                <div className="mt-1.5 panel rounded-input px-3 py-2 text-[10px] text-rose-300 bg-rose-500/[0.04] border-rose-500/20 leading-relaxed space-y-1">
+                  {localServices
+                    .filter((s) => s.health === "down" && !s.paused)
+                    .map((s) => (
+                      <div key={`err-${s.protocol}:${s.port}`}>
+                        <span className="font-mono text-rose-200">
+                          {s.protocol.toUpperCase()}:{s.port}
+                        </span>{" "}
+                        <span className="text-rose-300/80">{s.healthError || `target ${s.target || "—"} javob bermoqda emas`}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
