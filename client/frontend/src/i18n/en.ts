@@ -43,16 +43,101 @@ export const en: Dict = {
 
   // Settings
   "settings.title": "Settings",
+  "settings.tab.profile": "Profile",
   "settings.tab.network": "Network",
   "settings.tab.identity": "Identity",
   "settings.tab.diagnostics": "Diagnostics",
   "settings.tab.files": "Files",
+  "settings.tab.activity": "Activity",
   "settings.tab.history": "History",
   "settings.tab.about": "About",
+  "settings.tab.logs": "Logs",
   "settings.back": "Back",
   "settings.language": "Language",
   "settings.language.uz": "O'zbek",
   "settings.language.en": "English",
+
+  // Profile
+  "settings.profile.title": "Profile",
+  "settings.profile.username": "Username",
+  "settings.profile.account_status": "Account status",
+  "settings.profile.account_local": "Local account",
+  "settings.profile.account_local_hint":
+    "Account info is stored on this computer only. Nothing is synced to a server.",
+  "settings.profile.signout": "Sign out",
+  "settings.profile.reset": "Reset account",
+  "settings.profile.reset_warn":
+    "Reset clears the username, password and portal history. Network settings are kept. This cannot be undone.",
+  "settings.profile.reset_confirm": "Yes, reset",
+  "settings.profile.reset_cancel": "Cancel",
+  "settings.profile.member_since": "Account created",
+
+  // Network
+  "settings.network.title": "Network",
+  "settings.network.signaling_label": "Signaling server URL",
+  "settings.network.signaling_hint": "Default:",
+  "settings.network.save": "Save",
+  "settings.network.saved": "Saved ✓",
+  "settings.network.turn_title": "TURN relay",
+  "settings.network.turn_managed":
+    "TURN is provisioned automatically by our signaling server.",
+  "settings.network.turn_managed_hint":
+    "If you're behind symmetric NAT or CGNAT, the signaling server hands out short-lived TURN credentials per session — there is nothing for you to configure.",
+  "settings.network.turn_status_label": "Status",
+  "settings.network.turn_status_active": "Active — server-managed",
+  "settings.network.turn_status_idle": "Ready — engages on demand",
+
+  // Diagnostics
+  "settings.diag.title": "Diagnostics",
+  "settings.diag.nat_label": "NAT type",
+  "settings.diag.detecting": "Detecting...",
+  "settings.diag.local": "local",
+  "settings.diag.public": "public",
+  "settings.diag.refresh": "Refresh",
+
+  // Files
+  "settings.files.title": "Files",
+  "settings.files.save_dir_label": "Received files location",
+  "settings.files.open": "Open",
+
+  // Activity
+  "settings.activity.title": "Peer connections",
+  "settings.activity.empty":
+    "No one has connected to your services yet. Once a guest hits \"Connect\" you'll see entries here.",
+  "settings.activity.loading": "Loading…",
+
+  // Logs
+  "settings.logs.title": "Logs",
+  "settings.logs.hint":
+    "In-app events keep the last 500 lines, and they're also rotated to disk daily.",
+  "settings.logs.show": "Show last 200 lines",
+  "settings.logs.open_folder": "Open log folder",
+  "settings.logs.copy": "Copy",
+  "settings.logs.clear": "Clear",
+  "settings.logs.close": "Close",
+  "settings.logs.empty": "(empty)",
+
+  // History
+  "settings.history.title": "Recent portals",
+  "settings.history.empty": "No portal history yet.",
+  "settings.history.clear": "Clear history",
+
+  // About
+  "settings.about.title": "About",
+  "settings.about.version": "Portal version",
+  "settings.about.check_now": "Check now",
+  "settings.about.checking": "Checking...",
+  "settings.about.up_to_date": "✓ You're on the latest version",
+  "settings.about.new_available": "New version available:",
+  "settings.about.open_download": "Open download page",
+  "settings.about.crashes_label": "Crash reports",
+  "settings.about.crashes_hint":
+    "Reports are stored locally only. They contain stack traces with home directory redacted, no portal IDs, peer IDs, IPs, or message content.",
+  "settings.about.crashes_empty": "No crash reports.",
+  "settings.about.crashes_more": "+ {0} more",
+  "settings.about.refresh": "Refresh",
+  "settings.about.clear_all": "Clear all",
+  "settings.about.docs": "Documentation",
 
   // Common
   "common.owner": "owner",

@@ -43,16 +43,101 @@ export const uz: Dict = {
 
   // Settings
   "settings.title": "Sozlamalar",
+  "settings.tab.profile": "Profil",
   "settings.tab.network": "Tarmoq",
   "settings.tab.identity": "Identitet",
   "settings.tab.diagnostics": "Diagnostika",
   "settings.tab.files": "Fayllar",
+  "settings.tab.activity": "Faollik",
   "settings.tab.history": "Tarix",
   "settings.tab.about": "Haqida",
+  "settings.tab.logs": "Loglar",
   "settings.back": "Orqaga",
   "settings.language": "Til",
   "settings.language.uz": "O'zbek",
   "settings.language.en": "English",
+
+  // Profile
+  "settings.profile.title": "Profil",
+  "settings.profile.username": "Foydalanuvchi nomi",
+  "settings.profile.account_status": "Akkaunt holati",
+  "settings.profile.account_local": "Mahalliy akkaunt",
+  "settings.profile.account_local_hint":
+    "Akkaunt ma'lumotlari faqat shu kompyuterda saqlanadi. Hech qanday server bilan sinxronlash yo'q.",
+  "settings.profile.signout": "Akkauntdan chiqish",
+  "settings.profile.reset": "Akkauntni tiklash",
+  "settings.profile.reset_warn":
+    "Akkauntni tiklash foydalanuvchi nomi, parolni va portal tarixini o'chiradi. Tarmoq sozlamalari saqlanadi. Bu amalni qaytarib bo'lmaydi.",
+  "settings.profile.reset_confirm": "Ha, tiklash",
+  "settings.profile.reset_cancel": "Bekor qilish",
+  "settings.profile.member_since": "Akkaunt yaratildi",
+
+  // Network
+  "settings.network.title": "Tarmoq",
+  "settings.network.signaling_label": "Signal serveri URL",
+  "settings.network.signaling_hint": "Standart:",
+  "settings.network.save": "Saqlash",
+  "settings.network.saved": "Saqlandi ✓",
+  "settings.network.turn_title": "TURN relay",
+  "settings.network.turn_managed":
+    "TURN serveri avtomatik server tomonidan ta'minlanadi.",
+  "settings.network.turn_managed_hint":
+    "Simmetrik NAT yoki CGNAT ortida bo'lsangiz, signal serveri qisqa muddatli kredensiallarni o'zi yuboradi — siz hech narsa sozlashingiz shart emas.",
+  "settings.network.turn_status_label": "Holat",
+  "settings.network.turn_status_active": "Faol — server tomonidan boshqarilmoqda",
+  "settings.network.turn_status_idle": "Tayyor — kerak bo'lganda yoqiladi",
+
+  // Diagnostics
+  "settings.diag.title": "Diagnostika",
+  "settings.diag.nat_label": "NAT turi",
+  "settings.diag.detecting": "Aniqlanmoqda...",
+  "settings.diag.local": "lokal",
+  "settings.diag.public": "tashqi",
+  "settings.diag.refresh": "Yangilash",
+
+  // Files
+  "settings.files.title": "Fayllar",
+  "settings.files.save_dir_label": "Qabul qilingan fayllar joylashuvi",
+  "settings.files.open": "Ochish",
+
+  // Activity
+  "settings.activity.title": "Peer ulanishlari",
+  "settings.activity.empty":
+    "Hech kim hali sizning servislaringizga ulanmagan. Mehmon \"Ulash\" bosganida shu yerda yozuv paydo bo'ladi.",
+  "settings.activity.loading": "Yuklanmoqda…",
+
+  // Logs
+  "settings.logs.title": "Loglar",
+  "settings.logs.hint":
+    "Dastur ichidagi voqealar oxirgi 500 qatorda saqlanadi va bir kunlik fayl sifatida ham diskka yoziladi.",
+  "settings.logs.show": "Oxirgi 200 qatorni ko'rish",
+  "settings.logs.open_folder": "Fayl papkasini ochish",
+  "settings.logs.copy": "Nusxa",
+  "settings.logs.clear": "Tozalash",
+  "settings.logs.close": "Yopish",
+  "settings.logs.empty": "(bo'sh)",
+
+  // History
+  "settings.history.title": "Yaqindagi portallar",
+  "settings.history.empty": "Hozircha tarix bo'sh.",
+  "settings.history.clear": "Tarixni tozalash",
+
+  // About
+  "settings.about.title": "Haqida",
+  "settings.about.version": "Portal versiyasi",
+  "settings.about.check_now": "Hozir tekshirish",
+  "settings.about.checking": "Tekshirilmoqda...",
+  "settings.about.up_to_date": "✓ Eng so'nggi versiyada",
+  "settings.about.new_available": "Yangi versiya mavjud:",
+  "settings.about.open_download": "Yuklab olish sahifasini ochish",
+  "settings.about.crashes_label": "Halokat hisobotlari",
+  "settings.about.crashes_hint":
+    "Hisobotlar faqat lokal saqlanadi. Ularda stack trace bor (uy papkasi yashirilgan), portal ID, peer ID, IP yoki xabar tarkibi yo'q.",
+  "settings.about.crashes_empty": "Halokat hisobotlari yo'q.",
+  "settings.about.crashes_more": "+ yana {0} ta",
+  "settings.about.refresh": "Yangilash",
+  "settings.about.clear_all": "Hammasini o'chirish",
+  "settings.about.docs": "Hujjatlar",
 
   // Common
   "common.owner": "egasi",
