@@ -80,6 +80,20 @@ export function PortalView() {
     } catch {}
   };
 
+  // Flip require_approval on the row. Idempotent — Go side just
+  // updates the persisted exposed_services row; the Forwarder picks
+  // it up on the next peer-open call (no need to re-announce).
+  const toggleApprovalOwn = async (s: ServiceView) => {
+    try {
+      await app.SetServiceApproval(
+        s.port,
+        s.protocol as "tcp" | "udp",
+        !s.requireApproval,
+      );
+      await refreshLocalServices();
+    } catch {}
+  };
+
   // retargetOwn — the inline pencil edit on a row. Returns true on
   // success so the row component can collapse its editor; false on
   // validation or backend errors so the editor stays open and the
@@ -232,6 +246,7 @@ export function PortalView() {
             onTogglePause={togglePauseOwn}
             onRemoveOwn={removeOwn}
             onRetargetOwn={retargetOwn}
+            onToggleApproval={toggleApprovalOwn}
           />
         </main>
 

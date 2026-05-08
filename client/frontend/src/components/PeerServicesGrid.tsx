@@ -49,6 +49,7 @@ type Props = {
   onTogglePause: (s: ServiceView) => void;
   onRemoveOwn: (port: number) => void;
   onRetargetOwn: (s: ServiceView, target: string) => Promise<boolean>;
+  onToggleApproval: (s: ServiceView) => void;
 };
 
 export function PeerServicesGrid({
@@ -59,6 +60,7 @@ export function PeerServicesGrid({
   onTogglePause,
   onRemoveOwn,
   onRetargetOwn,
+  onToggleApproval,
 }: Props) {
   const live = peers.filter((p) => p.state !== "closed");
   const peerCount = live.filter((p) => p.services.length > 0).length;
@@ -108,6 +110,7 @@ export function PeerServicesGrid({
             onTogglePause={onTogglePause}
             onRemove={onRemoveOwn}
             onRetarget={onRetargetOwn}
+            onToggleApproval={onToggleApproval}
           />
         )}
 
@@ -129,6 +132,7 @@ function OwnSection({
   onTogglePause,
   onRemove,
   onRetarget,
+  onToggleApproval,
 }: {
   services: ServiceView[];
   nickname: string;
@@ -136,6 +140,7 @@ function OwnSection({
   onTogglePause: (s: ServiceView) => void;
   onRemove: (port: number) => void;
   onRetarget: (s: ServiceView, target: string) => Promise<boolean>;
+  onToggleApproval: (s: ServiceView) => void;
 }) {
   const initial = (nickname.trim()[0] || "Y").toUpperCase();
   return (
@@ -165,6 +170,7 @@ function OwnSection({
             onTogglePause={() => onTogglePause(s)}
             onRemove={() => onRemove(s.port)}
             onRetarget={(t) => onRetarget(s, t)}
+            onToggleApproval={() => onToggleApproval(s)}
           />
         ))}
       </div>

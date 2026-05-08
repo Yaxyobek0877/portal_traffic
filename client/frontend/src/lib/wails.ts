@@ -49,6 +49,14 @@ type Bridge = {
   // the background. Called by the frontend right after unlock — see
   // App.tsx's effect that depends on `unlocked`.
   ResumeActiveSessions: () => Promise<void>;
+  // Per-port approval gate. SetServiceApproval flips the
+  // require_approval flag on a row; ApproveServiceRequest /
+  // DenyServiceRequest reply to a pending prompt; ResetApprovalCache
+  // clears sticky decisions so the host is re-asked next dial.
+  SetServiceApproval: (port: number, protocol: "tcp" | "udp", require: boolean) => Promise<void>;
+  ApproveServiceRequest: (requestId: string) => Promise<void>;
+  DenyServiceRequest: (requestId: string) => Promise<void>;
+  ResetApprovalCache: () => Promise<void>;
   CurrentPortal: () => Promise<PortalView>;
   // Peers returns peers of the active session (legacy shape kept
   // for older callers); SessionPeers takes a localID.
@@ -197,6 +205,10 @@ const stub: Bridge = {
   ActivePortals: async () => [],
   ActiveSessionID: async () => "",
   ResumeActiveSessions: async () => {},
+  SetServiceApproval: async () => {},
+  ApproveServiceRequest: async () => {},
+  DenyServiceRequest: async () => {},
+  ResetApprovalCache: async () => {},
   SessionPeers: async () => [],
   SendChatTo: async () => 0,
   CurrentPortal: async () => ({

@@ -44,6 +44,7 @@ export const en: Dict = {
   "welcome.error.wrong_code": "Wrong code. Double-check it or ask the owner.",
   "welcome.error.full": "Portal is full (16-peer max).",
   "welcome.error.locked": "Owner has locked this portal. Wait for it to open.",
+  "welcome.error.nickname_taken": "That nickname is already in use in this portal. Pick another.",
   "welcome.create_new_link": "Create a new portal →",
   "welcome.symmetric_nat_warning":
     "Symmetric NAT detected. Direct connections may not work; the app will fall back to a free TURN relay automatically — nothing to configure. Latency may be slightly higher.",

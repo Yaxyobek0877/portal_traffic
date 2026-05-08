@@ -119,12 +119,13 @@ func (s *Store) migrate() error {
 	-- comes online — saves users from having to re-Och every camera /
 	-- game server / dev URL on every session.
 	CREATE TABLE IF NOT EXISTS exposed_services (
-		port      INTEGER NOT NULL,
-		protocol  TEXT NOT NULL,
-		name      TEXT NOT NULL,
-		target    TEXT NOT NULL DEFAULT '',
-		enabled   INTEGER NOT NULL DEFAULT 1,
-		updated_at INTEGER NOT NULL,
+		port             INTEGER NOT NULL,
+		protocol         TEXT NOT NULL,
+		name             TEXT NOT NULL,
+		target           TEXT NOT NULL DEFAULT '',
+		enabled          INTEGER NOT NULL DEFAULT 1,
+		require_approval INTEGER NOT NULL DEFAULT 0,
+		updated_at       INTEGER NOT NULL,
 		PRIMARY KEY (port, protocol)
 	);
 
@@ -160,8 +161,20 @@ func (s *Store) migrate() error {
 		}
 	}
 
+	// Migration v4: add `require_approval` column to exposed_services
+	// for the per-port "owner approves each peer dial" gate. Default
+	// 0 (auto-allow) preserves the prior behaviour for everyone with
+	// an existing DB.
+	if !s.columnExists("exposed_services", "require_approval") {
+		if _, err := s.db.Exec(
+			`ALTER TABLE exposed_services ADD COLUMN require_approval INTEGER NOT NULL DEFAULT 0`,
+		); err != nil {
+			return fmt.Errorf("storage: migrate v4 (require_approval): %w", err)
+		}
+	}
+
 	// Stamp the current version (idempotent).
-	_, _ = s.db.Exec(`INSERT OR REPLACE INTO schema_version(version) VALUES(3)`)
+	_, _ = s.db.Exec(`INSERT OR REPLACE INTO schema_version(version) VALUES(4)`)
 	return nil
 }
 

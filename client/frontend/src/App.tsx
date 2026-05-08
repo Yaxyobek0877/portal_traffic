@@ -3,6 +3,7 @@ import { Welcome } from "./views/Welcome";
 import { PortalView } from "./views/Portal";
 import { Settings } from "./views/Settings";
 import { Lock } from "./views/Lock";
+import { ApprovalQueue } from "./components/ApprovalQueue";
 import { usePortalStore } from "./stores/portalStore";
 import { app, subscribe } from "./lib/wails";
 import type { UpdateResult } from "./lib/wails";
@@ -301,6 +302,11 @@ export default function App() {
       {unlocked && screen === "welcome" && <Welcome />}
       {unlocked && screen === "portal" && <PortalView />}
       {unlocked && screen === "settings" && <Settings />}
+      {/* Approval queue overlays everything else when a peer dial
+          on a require_approval port is waiting on the host. Lives at
+          the App level so it doesn't get unmounted when the user
+          flips between Welcome / Portal / Settings. */}
+      {unlocked && <ApprovalQueue />}
     </div>
   );
 }

@@ -53,6 +53,24 @@ export type ServiceView = {
   health?: "ok" | "down" | "unknown";
   healthError?: string;
   paused?: boolean;
+  // requireApproval: when true, every peer dial on this service
+  // pops a 'tasdiqlab yoqish' modal on the host side. Cached
+  // per (peerId, port, protocol) once the user has decided.
+  requireApproval?: boolean;
+};
+
+// Payload of the `service:approval-request` event. The frontend
+// shows a modal listing the peer + service, and the user clicks
+// Allow / Deny which calls back to the Go side via
+// app.ApproveServiceRequest / DenyServiceRequest with the
+// requestId.
+export type ApprovalRequest = {
+  requestId: string;
+  peerId: string;
+  nickname: string;
+  protocol: "tcp" | "udp";
+  port: number;
+  serviceName: string;
 };
 
 export type PeerView = {

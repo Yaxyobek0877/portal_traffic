@@ -201,6 +201,21 @@ type App struct {
 	// has to dial and find out the hard way.
 	healthMu      sync.Mutex
 	exposedHealth map[serviceHealthKey]serviceHealth
+
+	// approval state — see proxy.Approver. The Forwarder calls into
+	// this to decide whether an inbound open request gets dialed or
+	// rejected. The map caches per-(peer,port,protocol) decisions so
+	// the user isn't re-prompted every time a peer reconnects to the
+	// same service this session.
+	approvalMu      sync.Mutex
+	approvalDecided map[approvalKey]bool          // per-(peer,port,proto) sticky decision
+	approvalPending map[string]chan bool          // per-requestID waiter
+}
+
+type approvalKey struct {
+	peerID   string
+	port     int
+	protocol string
 }
 
 // serviceHealthKey identifies a single exposed service for the health
@@ -238,6 +253,12 @@ func (a *App) Startup(ctx context.Context) {
 	a.sessionsMu.Lock()
 	a.sessions = make(map[string]*portalSession)
 	a.sessionsMu.Unlock()
+
+	// Approval caches.
+	a.approvalMu.Lock()
+	a.approvalDecided = make(map[approvalKey]bool)
+	a.approvalPending = make(map[string]chan bool)
+	a.approvalMu.Unlock()
 
 	// Open SQLite. If it fails we proceed without persistence — the
 	// app still works, settings just don't survive restarts.
@@ -2074,6 +2095,11 @@ func (a *App) bringUpSession(nickname string, makeActive bool, isOwner bool) (*p
 	})
 	s.fwd = proxy.New(s.mesh, a.logger.With("session", s.localID))
 	s.mesh.SetProxyHandler(s.fwd)
+	// Plug the approval gate. The Forwarder calls back into App's
+	// Approve(...) for each peer dial; auto-allow ports return true
+	// immediately, gated ports emit an event to the UI and block on
+	// the Approve / DenyApproval RPC reply.
+	s.fwd.SetApprover(approverFunc(a.approvePeerOpen))
 
 	// Transfer engine — per-session so a download in portal A doesn't
 	// collide with one in portal B (xfer ids are local to each engine).
@@ -2362,6 +2388,218 @@ func progressWithSession(ev transfer.ProgressEvent, sid string) map[string]any {
 		"updatedAt": ev.UpdatedAt,
 		"savePath":  ev.SavePath,
 	}
+}
+
+// ----------------------------------------------------------------------------
+// Per-port approval gate
+// ----------------------------------------------------------------------------
+
+// approverFunc adapts a function literal to the proxy.Approver
+// interface so we don't have to declare a separate struct just to
+// hold one method.
+type approverFunc func(ctx context.Context, peerID, protocol string, port int) bool
+
+func (f approverFunc) Approve(ctx context.Context, peerID, protocol string, port int) bool {
+	return f(ctx, peerID, protocol, port)
+}
+
+// approvePeerOpen is the central decision point for "should this
+// peer be allowed to open this exposed port?". The Forwarder calls
+// it from onOpenTCP / onOpenUDP after the port has been verified as
+// exposed. Returning true → dial proceeds; false → frameOpenErr.
+//
+// Decision tree:
+//
+//   1. Look up the persisted exposed_services row. If require_approval
+//      is false (auto-allow), return true immediately. This is the
+//      historical behaviour and the one most users expect.
+//   2. If we've already approved or denied this exact (peer, port,
+//      protocol) tuple this session, replay the cached decision.
+//      Avoids re-prompting the user for the same camera dial five
+//      seconds after they already clicked Allow.
+//   3. Otherwise emit a `service:approval-request` event to the UI
+//      with a unique requestID, then block on a channel until the
+//      frontend calls ApproveServiceRequest / DenyServiceRequest.
+//      Context deadline (5s TCP / 3s UDP) → deny so the peer's
+//      open call doesn't hang forever.
+func (a *App) approvePeerOpen(ctx context.Context, peerID, protocol string, port int) bool {
+	// Step 1: storage lookup.
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		// Without storage we can't tell whether the port is gated;
+		// fail open (auto-allow) so the lack of persistence doesn't
+		// break a working session.
+		return true
+	}
+	saved, err := store.ListExposedServices()
+	if err != nil {
+		a.logger.Warn("approval: list exposed services failed", "err", err)
+		return true
+	}
+	gated := false
+	for _, svc := range saved {
+		if svc.Port == port && svc.Protocol == protocol {
+			gated = svc.RequireApproval
+			break
+		}
+	}
+	if !gated {
+		return true
+	}
+
+	// Step 2: cached decision.
+	key := approvalKey{peerID: peerID, port: port, protocol: protocol}
+	a.approvalMu.Lock()
+	if decided, ok := a.approvalDecided[key]; ok {
+		a.approvalMu.Unlock()
+		return decided
+	}
+
+	// Step 3: ask the UI.
+	requestID := newApprovalID()
+	wait := make(chan bool, 1)
+	a.approvalPending[requestID] = wait
+	a.approvalMu.Unlock()
+
+	// Look up peer nickname for the prompt — falls back to the raw id.
+	nickname := a.nicknameForPeer(peerID)
+	serviceName := a.serviceNameFor(saved, port, protocol)
+
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "service:approval-request", map[string]any{
+			"requestId":   requestID,
+			"peerId":      peerID,
+			"nickname":    nickname,
+			"protocol":    protocol,
+			"port":        port,
+			"serviceName": serviceName,
+		})
+	}
+	a.logger.Info("approval: prompting host",
+		"peer", peerID, "protocol", protocol, "port", port, "request_id", requestID)
+
+	defer func() {
+		a.approvalMu.Lock()
+		delete(a.approvalPending, requestID)
+		a.approvalMu.Unlock()
+	}()
+
+	select {
+	case decision := <-wait:
+		a.approvalMu.Lock()
+		a.approvalDecided[key] = decision
+		a.approvalMu.Unlock()
+		a.logger.Info("approval: decided",
+			"peer", peerID, "protocol", protocol, "port", port,
+			"allow", decision)
+		return decision
+	case <-ctx.Done():
+		// Timeout. We log but DON'T cache the deny — the user might
+		// have just been afk and we want them to see the next prompt.
+		a.logger.Warn("approval: timeout",
+			"peer", peerID, "protocol", protocol, "port", port)
+		// Also emit a 'cancelled' event so the UI can dismiss its
+		// modal if it's still open.
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "service:approval-cancelled",
+				map[string]string{"requestId": requestID})
+		}
+		return false
+	}
+}
+
+// ApproveServiceRequest / DenyServiceRequest are bound to the JS
+// frontend and called when the user clicks Allow / Deny in the
+// approval modal. The requestID matches the one emitted with the
+// `service:approval-request` event.
+func (a *App) ApproveServiceRequest(requestID string) {
+	a.resolveApproval(requestID, true)
+}
+
+func (a *App) DenyServiceRequest(requestID string) {
+	a.resolveApproval(requestID, false)
+}
+
+func (a *App) resolveApproval(requestID string, allow bool) {
+	a.approvalMu.Lock()
+	wait, ok := a.approvalPending[requestID]
+	if ok {
+		delete(a.approvalPending, requestID)
+	}
+	a.approvalMu.Unlock()
+	if !ok {
+		return
+	}
+	select {
+	case wait <- allow:
+	default:
+	}
+}
+
+// ResetApprovalCache clears the per-(peer,port,protocol) sticky
+// decisions so the user is re-prompted on the next dial. Useful
+// after the host wants to revoke a previously-allowed peer.
+func (a *App) ResetApprovalCache() {
+	a.approvalMu.Lock()
+	a.approvalDecided = make(map[approvalKey]bool)
+	a.approvalMu.Unlock()
+}
+
+// SetServiceApproval flips the require_approval flag on an
+// existing exposed_services row. Lets the user toggle 'tasdiqlab
+// yoqish' from the UI without recreating the row.
+func (a *App) SetServiceApproval(port int, protocol string, require bool) error {
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return errors.New("storage mavjud emas")
+	}
+	saved, err := store.ListExposedServices()
+	if err != nil {
+		return err
+	}
+	for _, svc := range saved {
+		if svc.Port == port && svc.Protocol == protocol {
+			svc.RequireApproval = require
+			return store.SaveExposedService(svc)
+		}
+	}
+	return fmt.Errorf("servis topilmadi: %s:%d", protocol, port)
+}
+
+// nicknameForPeer walks every active session looking for a peer
+// matching peerID. Returns the peer's nickname if found, otherwise
+// the empty string (the UI falls back to a shortened id).
+func (a *App) nicknameForPeer(peerID string) string {
+	for _, s := range a.allSessions() {
+		if s.mesh == nil {
+			continue
+		}
+		for _, p := range s.mesh.Peers() {
+			if p.ID == peerID {
+				return p.Nickname
+			}
+		}
+	}
+	return ""
+}
+
+func (a *App) serviceNameFor(saved []storage.ExposedService, port int, protocol string) string {
+	for _, svc := range saved {
+		if svc.Port == port && svc.Protocol == protocol {
+			return svc.Name
+		}
+	}
+	return fmt.Sprintf("%s:%d", protocol, port)
+}
+
+// newApprovalID returns a short, collision-resistant id for an
+// approval round-trip. Reuses the same shape as session ids.
+func newApprovalID() string {
+	return "ap-" + newSessionID()[2:]
 }
 
 // ----------------------------------------------------------------------------

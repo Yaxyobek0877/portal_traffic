@@ -253,6 +253,8 @@ export function Welcome() {
       return t("welcome.error.wrong_code");
     if (/portal_full/i.test(raw)) return t("welcome.error.full");
     if (/portal_locked/i.test(raw)) return t("welcome.error.locked");
+    if (/nickname[_\s]?taken|name[_\s]?taken/i.test(raw))
+      return t("welcome.error.nickname_taken");
     return raw;
   };
 

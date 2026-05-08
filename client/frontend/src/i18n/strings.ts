@@ -50,6 +50,7 @@ export type StringKey =
   | "welcome.error.wrong_code"
   | "welcome.error.full"
   | "welcome.error.locked"
+  | "welcome.error.nickname_taken"
   | "welcome.create_new_link"
   | "welcome.symmetric_nat_warning"
 

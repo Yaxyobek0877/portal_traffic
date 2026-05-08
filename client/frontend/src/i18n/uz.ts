@@ -44,6 +44,7 @@ export const uz: Dict = {
   "welcome.error.wrong_code": "Kod noto'g'ri. Qaytadan tekshiring yoki egasidan so'rang.",
   "welcome.error.full": "Portal to'lib qolgan (16 ta peer max).",
   "welcome.error.locked": "Egasi portalni qulflagan. Ochilishini kuting.",
+  "welcome.error.nickname_taken": "Bu taxallus portalda allaqachon ishlatilmoqda. Boshqa nom tanlang.",
   "welcome.create_new_link": "Yangi portal yaratish →",
   "welcome.symmetric_nat_warning":
     "Simmetrik NAT aniqlandi. To'g'ridan-to'g'ri ulanish ishlamasligi mumkin. Bepul TURN serveri orqali avtomatik o'tib ulanadi — hech narsa qilish kerak emas. Ulanish sekinroq bo'lishi mumkin.",

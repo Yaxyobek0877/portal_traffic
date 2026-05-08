@@ -15,7 +15,17 @@
 
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Globe, Pause, Play, Trash2, Pencil, Check, X } from "lucide-react";
+import {
+  Globe,
+  Pause,
+  Play,
+  Trash2,
+  Pencil,
+  Check,
+  X,
+  ShieldCheck,
+  ShieldQuestion,
+} from "lucide-react";
 import type { ServiceView } from "../types";
 
 export type ExposedServiceRowProps = {
@@ -23,6 +33,10 @@ export type ExposedServiceRowProps = {
   onTogglePause: () => void;
   onRemove: () => void;
   onRetarget: (target: string) => Promise<boolean>;
+  // Optional approval-flag toggle. When supplied, a small shield
+  // icon shows the current mode (auto-allow vs. ask-host) and
+  // clicking it flips the persisted require_approval flag.
+  onToggleApproval?: () => void;
 };
 
 export function ExposedServiceRow({
@@ -30,6 +44,7 @@ export function ExposedServiceRow({
   onTogglePause,
   onRemove,
   onRetarget,
+  onToggleApproval,
 }: ExposedServiceRowProps) {
   const paused = !!s.paused;
   const health = s.health || "unknown";
@@ -175,6 +190,32 @@ export function ExposedServiceRow({
         {s.protocol.toUpperCase()}
       </span>
       <span className="font-mono text-xs text-zinc-500 shrink-0">:{s.port}</span>
+      {/* Approval mode toggle — shield icon. Locked-shield (cyan) =
+          auto-allow (the default); question-shield (amber) = the
+          host gets a popup on every peer dial and decides per
+          (peer, port) tuple. Sticky for the session via the Go-side
+          approvalDecided cache. */}
+      {onToggleApproval && (
+        <button
+          onClick={onToggleApproval}
+          className={`p-1 rounded hover:bg-white/5 shrink-0 ${
+            s.requireApproval
+              ? "text-amber-300 hover:text-amber-200"
+              : "text-zinc-500 hover:text-cyan-300"
+          }`}
+          title={
+            s.requireApproval
+              ? "Tasdiqlab yoqish — har peer ulanishida sizdan so'raladi. O'chirish uchun bosing."
+              : "Avtomatik ruxsat — peerlar ulanaverishi mumkin. Tasdiqlab yoqishga o'tkazish uchun bosing."
+          }
+        >
+          {s.requireApproval ? (
+            <ShieldQuestion className="w-3.5 h-3.5" strokeWidth={2} />
+          ) : (
+            <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2} />
+          )}
+        </button>
+      )}
       <button
         onClick={() => setEditing(true)}
         className="p-1 rounded hover:bg-white/5 text-zinc-400 hover:text-violet-300 shrink-0"

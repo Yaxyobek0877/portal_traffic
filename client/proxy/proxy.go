@@ -64,6 +64,41 @@ type Mesh interface {
 	SendProxyFrame(peerID string, payload []byte) error
 }
 
+// Approver decides whether a remote peer is allowed to open one of
+// our exposed services. Called once per onOpen{TCP,UDP} after the
+// port has been verified as exposed but before we dial the target.
+//
+// Implementations are expected to:
+//   - return true synchronously when the port is configured
+//     auto-allow (no approval flag),
+//   - return true after the host clicks 'Allow' in the UI when the
+//     port is gated,
+//   - return false on 'Deny' or on UI timeout, with denial being
+//     translated to a frameOpenErr by the caller.
+//
+// The Forwarder always passes a context whose deadline matches the
+// dial-timeout budget (5s TCP / 3s UDP); approvers blocking past it
+// must return false.
+type Approver interface {
+	Approve(ctx context.Context, peerID, protocol string, port int) bool
+}
+
+// SetApprover wires up the approval gate. nil disables gating
+// entirely (every dial passes through, the historical behaviour).
+func (f *Forwarder) SetApprover(a Approver) {
+	f.mu.Lock()
+	f.approver = a
+	f.mu.Unlock()
+}
+
+// approver returns the configured Approver under the lock so the
+// onOpen handlers don't have to know about the synchronisation.
+func (f *Forwarder) approverSnapshot() Approver {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.approver
+}
+
 // Logger is the log surface; defaults to slog.Default.
 type Logger = *slog.Logger
 
@@ -101,6 +136,13 @@ type Forwarder struct {
 	// 192.168.1.100:554, an NVR on the LAN, or any reachable target on
 	// the host's network.
 	exposed map[int]string
+
+	// approver is the per-port "ask the host before dialing" gate.
+	// When set, onOpenTCP/UDP defers to it before dialing the target.
+	// The Forwarder itself doesn't decide policy or talk to a UI;
+	// app.go wires up an approver that checks the exposed_services
+	// row's RequireApproval flag and prompts the frontend when needed.
+	approver Approver
 
 	// activity is a ring buffer of recent peer dial attempts on
 	// services we're hosting. Used by the Settings → Activity panel
@@ -680,6 +722,23 @@ func (f *Forwarder) onOpenTCP(peerID string, id uint32, portStr string) {
 		_ = f.send(peerID, frameOpenErr, id, []byte("port not exposed"))
 		return
 	}
+	// Approval gate: when the host has marked this port require-approval,
+	// the Approver implementation in app.go pops a UI prompt and waits
+	// for an Allow/Deny click before returning. Auto-allowed ports
+	// short-circuit the call (the approver's ShouldGate is false).
+	if app := f.approverSnapshot(); app != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ok := app.Approve(ctx, peerID, "tcp", port)
+		cancel()
+		if !ok {
+			f.recordActivity(ActivityEntry{
+				Time: time.Now(), PeerID: peerID, Protocol: "tcp",
+				Port: port, Target: target, Result: "error: rad etildi (approval)",
+			})
+			_ = f.send(peerID, frameOpenErr, id, []byte("ruxsat berilmadi"))
+			return
+		}
+	}
 	f.logger.Info("proxy: tcp open from peer",
 		"peer", peerID, "stream", id, "port", port, "target", target)
 	conn, err := net.DialTimeout("tcp", target, 5*time.Second)
@@ -747,6 +806,23 @@ func (f *Forwarder) onOpenUDP(peerID string, id uint32, portStr string) {
 		})
 		_ = f.send(peerID, frameOpenErr, id, []byte("port not exposed"))
 		return
+	}
+	// Approval gate — same shape as the TCP path. UDP gets a tighter
+	// 3s budget to match the dial timeout below; if the user hasn't
+	// reacted by then we deny so the peer's open call doesn't hang
+	// past the protocol's expectation.
+	if app := f.approverSnapshot(); app != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ok := app.Approve(ctx, peerID, "udp", port)
+		cancel()
+		if !ok {
+			f.recordActivity(ActivityEntry{
+				Time: time.Now(), PeerID: peerID, Protocol: "udp",
+				Port: port, Target: target, Result: "error: rad etildi (approval)",
+			})
+			_ = f.send(peerID, frameOpenErr, id, []byte("ruxsat berilmadi"))
+			return
+		}
 	}
 	f.logger.Info("proxy: udp open from peer",
 		"peer", peerID, "stream", id, "port", port, "target", target)
