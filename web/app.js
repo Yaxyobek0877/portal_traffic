@@ -518,21 +518,29 @@
   // ---------------------------------------------------------------
   // 11. Web admin login + signup form (homepage hero)
   // ---------------------------------------------------------------
-  // Real auth flow: same-origin fetch to /api/auth/{signin,signup}
-  // (the signaling binary serves this from --web-dir along with the
-  // landing page). Server sets a __Host- session cookie; on success
-  // we redirect to /admin/dashboard. Errors come back as JSON
-  // {error, lockoutSeconds} and we map them to friendly Uzbek text.
+  // Real auth flow: same-origin fetch to /api/auth/{signin,signup}.
+  // Server sets a __Host- session cookie; on success we redirect to
+  // /admin/dashboard. Errors come back as JSON {error, lockoutSeconds}
+  // and we map them to friendly Uzbek text. Plus: password reveal
+  // toggle, live strength meter (signup mode), spinner during fetch,
+  // and an already-signed-in shortcut so a returning visitor goes
+  // straight to the dashboard.
   const loginForm = document.getElementById('webAdminForm');
   if (loginForm) {
-    const userEl = document.getElementById('loginUsername');
-    const passEl = document.getElementById('loginPassword');
-    const btnEl = document.getElementById('loginSubmit');
-    const statusEl = document.getElementById('loginStatus');
-    const tabSignin = document.getElementById('tabSignin');
-    const tabSignup = document.getElementById('tabSignup');
+    const $ = (id) => document.getElementById(id);
+    const userEl = $('loginUsername');
+    const passEl = $('loginPassword');
+    const btnEl = $('loginSubmit');
+    const btnText = $('loginSubmitText');
+    const statusEl = $('loginStatus');
+    const tabSignin = $('tabSignin');
+    const tabSignup = $('tabSignup');
+    const toggleLine = $('loginToggleLine');
+    const passToggle = $('loginPasswordToggle');
+    const strengthEl = $('strength');
 
     let mode = 'signin'; // toggled by the two tabs
+    let pwVisible = false;
 
     const setStatus = (kind, msg) => {
       if (!statusEl) return;
@@ -549,48 +557,107 @@
       switch (code) {
         case 'username_taken':      return "Bu nom band — boshqa nom tanlang.";
         case 'username_invalid':    return "Nom 3-24 belgi, faqat harf/raqam/_/- bo'lishi kerak.";
-        case 'password_too_short':  return "Parol kamida 8 ta belgi.";
-        case 'password_weak':       return "Parol kuchsiz: kichik+katta harf, raqam va maxsus belgi kerak.";
+        case 'password_too_short':  return "Parol kamida 8 ta belgi bo'lsin.";
+        case 'password_weak':       return "Parol kuchsiz — pastdagi mezonlarni bajaring.";
         case 'invalid_credentials': return "Foydalanuvchi nomi yoki parol noto'g'ri.";
         case 'locked_out':          return `Juda ko'p urinish. ${lockoutSeconds || 30} soniyadan so'ng qayta urining.`;
         case 'no_session':          return "Sessiya tugagan, qaytadan kiring.";
-        case 'network':             return "Server bilan ulanish bo'lmadi.";
+        case 'network':             return "Server bilan ulanish bo'lmadi. Internet aloqangizni tekshiring.";
         default:                    return "Server xatosi: " + code;
       }
+    };
+
+    const checks = (p) => ({
+      length:  p.length >= 8,
+      lower:   /\p{Ll}/u.test(p),
+      upper:   /\p{Lu}/u.test(p),
+      digit:   /[0-9]/.test(p),
+      special: /[^\p{L}\p{N}\s]/u.test(p),
+    });
+    const renderStrength = () => {
+      if (!strengthEl) return;
+      const c = checks(passEl.value || '');
+      strengthEl.querySelectorAll('li[data-r]').forEach((li) => {
+        li.classList.toggle('ok', !!c[li.dataset.r]);
+      });
     };
 
     const setMode = (m) => {
       mode = m;
       if (tabSignin) tabSignin.classList.toggle('active', m === 'signin');
       if (tabSignup) tabSignup.classList.toggle('active', m === 'signup');
-      btnEl.textContent = m === 'signup' ? 'Akkaunt yaratish' : 'Kirish';
+      btnText.textContent = m === 'signup' ? "Ro'yxatdan o'tish" : 'Kirish';
       passEl.autocomplete = m === 'signup' ? 'new-password' : 'current-password';
       passEl.placeholder = m === 'signup' ? '8+ belgi, kuchli parol' : '••••••••';
+      strengthEl?.classList.toggle('show', m === 'signup');
+      if (toggleLine) {
+        toggleLine.innerHTML = m === 'signup'
+          ? `Hisobingiz bormi? <a href="#" id="goSignin">Kirish →</a>`
+          : `Hisobingiz yo'qmi? <a href="#" id="goSignup">Ro'yxatdan o'ting →</a>`;
+        // Re-bind because innerHTML rebuild dropped the listener.
+        const linkEl = $('goSignup') || $('goSignin');
+        if (linkEl) linkEl.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          setMode(m === 'signup' ? 'signin' : 'signup');
+          userEl.focus();
+        });
+      }
       clearStatus();
+      renderStrength();
     };
     if (tabSignin) tabSignin.addEventListener('click', () => setMode('signin'));
     if (tabSignup) tabSignup.addEventListener('click', () => setMode('signup'));
-    const goSignup = document.getElementById('goSignup');
-    if (goSignup) goSignup.addEventListener('click', (ev) => { ev.preventDefault(); setMode('signup'); userEl.focus(); });
+    // Initial bind for the "go signup" link rendered in the HTML.
+    const goSignupInitial = $('goSignup');
+    if (goSignupInitial) goSignupInitial.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      setMode('signup');
+      userEl.focus();
+    });
+
+    if (passToggle) {
+      passToggle.addEventListener('click', () => {
+        pwVisible = !pwVisible;
+        passEl.type = pwVisible ? 'text' : 'password';
+        passToggle.setAttribute('aria-label', pwVisible ? "Parolni yashirish" : "Parolni ko'rsatish");
+        passToggle.parentElement.classList.toggle('revealed', pwVisible);
+      });
+    }
+    if (passEl) passEl.addEventListener('input', () => {
+      renderStrength();
+      // Clear stale errors as the user types.
+      if (statusEl?.classList.contains('error')) clearStatus();
+    });
+    if (userEl) userEl.addEventListener('input', () => {
+      if (statusEl?.classList.contains('error')) clearStatus();
+    });
 
     // If the user already has a session, jump straight to the dashboard.
+    // Wrapped so any network blip doesn't keep the form hidden.
     fetch('/api/me', { credentials: 'same-origin' })
       .then((r) => { if (r.ok) location.href = '/admin/dashboard'; })
       .catch(() => {});
 
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      e.stopPropagation();
       const u = (userEl.value || '').trim();
       const p = passEl.value || '';
       clearStatus();
 
+      // Client-side guards (same rules the server enforces) — fail fast
+      // so a typo shows immediately and we don't burn the rate limit.
       if (!u) { setStatus('error', "Foydalanuvchi nomini kiriting."); userEl.focus(); return; }
+      if (u.length < 3 || u.length > 24 || !/^[a-zA-Z0-9_-]+$/.test(u)) {
+        setStatus('error', "Nom 3–24 belgi · faqat harf, raqam, _, -");
+        userEl.focus();
+        return;
+      }
       if (mode === 'signup') {
-        if (p.length < 8) { setStatus('error', "Parol kamida 8 ta belgi bo'lsin."); passEl.focus(); return; }
-        const hasLower = /\p{Ll}/u.test(p), hasUpper = /\p{Lu}/u.test(p),
-              hasDigit = /[0-9]/.test(p), hasSpecial = /[^\p{L}\p{N}\s]/u.test(p);
-        if (!(hasLower && hasUpper && hasDigit && hasSpecial)) {
-          setStatus('error', "Parol kuchsiz: kichik+katta harf, raqam va maxsus belgi kerak.");
+        const c = checks(p);
+        if (!c.length) { setStatus('error', "Parol kamida 8 ta belgi bo'lsin."); passEl.focus(); return; }
+        if (!(c.lower && c.upper && c.digit && c.special)) {
+          setStatus('error', "Parolni kuchaytiring — pastdagi mezonlar yoq turishi kerak.");
           passEl.focus();
           return;
         }
@@ -600,7 +667,8 @@
 
       const path = mode === 'signup' ? '/api/auth/signup' : '/api/auth/signin';
       btnEl.disabled = true;
-      btnEl.textContent = mode === 'signup' ? 'Yaratilmoqda…' : 'Kirilmoqda…';
+      loginForm.classList.add('busy');
+      btnText.textContent = mode === 'signup' ? 'Yaratilmoqda…' : 'Kirilmoqda…';
 
       let res, body;
       try {
@@ -616,18 +684,23 @@
       } catch (_) {
         setStatus('error', errMessage('network'));
         btnEl.disabled = false;
-        btnEl.textContent = mode === 'signup' ? 'Akkaunt yaratish' : 'Kirish';
+        loginForm.classList.remove('busy');
+        btnText.textContent = mode === 'signup' ? "Ro'yxatdan o'tish" : 'Kirish';
         return;
       }
 
       if (res.ok) {
-        // Cookie set by the server; head to the dashboard.
-        location.href = '/admin/dashboard';
+        setStatus('info', mode === 'signup'
+          ? "Hisob yaratildi — dashboard'ga o'tkazyapman…"
+          : "Muvaffaqiyatli — dashboard'ga o'tkazyapman…");
+        // Tiny pause so the user sees the success ack before redirect.
+        setTimeout(() => { location.href = '/admin/dashboard'; }, 350);
         return;
       }
       setStatus('error', errMessage(body?.error || `http_${res.status}`, body?.lockoutSeconds));
       btnEl.disabled = false;
-      btnEl.textContent = mode === 'signup' ? 'Akkaunt yaratish' : 'Kirish';
+      loginForm.classList.remove('busy');
+      btnText.textContent = mode === 'signup' ? "Ro'yxatdan o'tish" : 'Kirish';
     });
   }
 })();
