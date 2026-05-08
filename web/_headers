@@ -1,0 +1,28 @@
+# Cloudflare Pages headers — security + caching for the static site.
+# https://developers.cloudflare.com/pages/configuration/headers/
+
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+
+# Long cache for static assets, with revalidation. The HTML files
+# stay short-cached so deploys propagate immediately.
+/*.svg
+  Cache-Control: public, max-age=86400, must-revalidate
+/*.js
+  Cache-Control: public, max-age=86400, must-revalidate
+/*.css
+  Cache-Control: public, max-age=86400, must-revalidate
+/admin/admin.css
+  Cache-Control: public, max-age=86400, must-revalidate
+/admin/admin.js
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=300, must-revalidate
+/admin/login.html
+  Cache-Control: public, max-age=300, must-revalidate
+/admin/dashboard.html
+  Cache-Control: public, max-age=300, must-revalidate

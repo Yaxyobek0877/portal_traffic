@@ -514,4 +514,59 @@
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
   }
+
+  // ---------------------------------------------------------------
+  // 11. Web admin login form (homepage hero)
+  // ---------------------------------------------------------------
+  // The signaling server's /api/auth/login endpoint exists in code
+  // (server/auth_handlers.go) but isn't deployed to signaling.1pro.uz
+  // yet — see docs/ROOM-CONTROLS-GAPS.md "Web admin paneli". Until
+  // it lands we intercept the submit, validate the inputs locally,
+  // and surface a friendly "tez orada (v0.6.0)" notice. When the
+  // endpoint deploys, swap the soonNotice block for an actual
+  // fetch('/api/auth/login') call and a redirect to /admin/dashboard
+  // on success.
+  const loginForm = document.getElementById('webAdminForm');
+  if (loginForm) {
+    const userEl = document.getElementById('loginUsername');
+    const passEl = document.getElementById('loginPassword');
+    const btnEl = document.getElementById('loginSubmit');
+    const statusEl = document.getElementById('loginStatus');
+
+    const setStatus = (kind, msg) => {
+      statusEl.className = 'login-status ' + kind + ' show';
+      statusEl.textContent = msg;
+    };
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const u = (userEl.value || '').trim();
+      const p = passEl.value || '';
+      if (!u) {
+        setStatus('error', 'Foydalanuvchi nomini kiriting.');
+        userEl.focus();
+        return;
+      }
+      if (p.length < 8) {
+        setStatus('error', 'Parol kamida 8 belgili bo‘lishi kerak.');
+        passEl.focus();
+        return;
+      }
+
+      btnEl.disabled = true;
+      btnEl.textContent = 'Tekshirilmoqda…';
+      try {
+        // Real endpoint not yet live — see comment above. When it
+        // deploys, replace this short-circuit with the fetch call.
+        await new Promise((r) => setTimeout(r, 600));
+        setStatus(
+          'info',
+          'Web admin paneli v0.6.0 da ishga tushadi. Hozircha desktop dasturda hisob yarating va portal ochib turing — keyingi reliz brauzerdan ko‘rish va boshqarishni ochadi.'
+        );
+      } finally {
+        btnEl.disabled = false;
+        btnEl.textContent = 'Kirish';
+      }
+    });
+  }
 })();

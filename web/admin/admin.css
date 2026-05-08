@@ -1,0 +1,392 @@
+/* Admin shared styles. Lifted from web/index.html's design tokens
+   so login + dashboard look like part of the same product as the
+   landing page. Self-contained — admin pages don't pull anything
+   from index.html. */
+
+:root {
+  --bg:        #0a0e1a;
+  --bg-2:      #0d1322;
+  --surface:   rgba(255,255,255,0.04);
+  --surface-2: rgba(255,255,255,0.06);
+  --border:    rgba(255,255,255,0.08);
+  --border-2:  rgba(255,255,255,0.14);
+  --text:      #e6e9ef;
+  --text-dim:  #98a2b3;
+  --text-faint:#5b6479;
+  --accent:    #8b5cf6;
+  --accent-2:  #6366f1;
+  --accent-3:  #22d3ee;
+  --gradient:  linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #22d3ee 100%);
+  --rose:      #f87171;
+  --emerald:   #34d399;
+  --amber:     #fbbf24;
+  --radius:    12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; min-height: 100vh; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Ambient gradient backdrop — softer than the landing page so the
+   admin UI doesn't feel "loud". */
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 50% -10%, rgba(139,92,246,.14), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 90% 30%, rgba(34,211,238,.08), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 10% 90%, rgba(99,102,241,.10), transparent 60%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+a { color: var(--accent-3); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---------- form chrome ---------- */
+.field { display: block; margin-top: 12px; }
+.field label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+  margin-left: 2px;
+}
+.field input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+  outline: none;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.field input:focus {
+  border-color: var(--accent);
+  background: var(--surface-2);
+  box-shadow: 0 0 0 3px rgba(139,92,246,.18);
+}
+.field input::placeholder { color: var(--text-faint); }
+
+.field.with-icon { position: relative; }
+.field.with-icon input { padding-left: 38px; }
+.field.with-icon .icon {
+  position: absolute;
+  left: 12px;
+  top: 32px;
+  width: 16px; height: 16px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s, background .15s, border-color .15s;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary {
+  background: var(--gradient);
+  color: white;
+  box-shadow: 0 8px 28px -8px rgba(139,92,246,.55);
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 40px -10px rgba(139,92,246,.7);
+}
+.btn-ghost {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border-2);
+}
+.btn-block { width: 100%; padding-top: 12px; padding-bottom: 12px; }
+
+/* ---------- panel ---------- */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ---------- gradient text ---------- */
+.gradient-text {
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ---------- alerts ---------- */
+.alert {
+  padding: 10px 12px;
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  border: 1px solid transparent;
+  margin-top: 12px;
+}
+.alert.error { color: var(--rose); border-color: rgba(248,113,113,.3); background: rgba(248,113,113,.06); }
+.alert.warning { color: var(--amber); border-color: rgba(251,191,36,.3); background: rgba(251,191,36,.06); }
+.alert.info { color: var(--text-dim); border-color: var(--border); background: var(--surface); }
+
+/* ---------- strength checklist ---------- */
+.strength {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(0,0,0,.25);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+}
+.strength .title {
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+.strength ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.strength li {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+  transition: color .15s;
+}
+.strength li.ok { color: var(--emerald); }
+.strength li .mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px;
+  font-size: 10px; font-weight: 700;
+}
+.strength li.ok .mark::before { content: "✓"; }
+.strength li:not(.ok) .mark::before { content: "·"; color: var(--text-faint); }
+
+/* ---------- remember me ---------- */
+.remember {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-top: 12px;
+  cursor: pointer;
+  font-size: 12px;
+  user-select: none;
+}
+.remember input[type=checkbox] {
+  margin: 2px 0 0;
+  width: 14px; height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.remember span { color: var(--text-dim); line-height: 1.4; }
+.remember .hint { display: block; color: var(--text-faint); font-size: 11px; margin-top: 2px; }
+
+/* ---------- nav top ---------- */
+.topbar {
+  position: sticky; top: 0;
+  z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px;
+  background: rgba(10,14,26,.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar .brand {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  text-decoration: none;
+  color: var(--text);
+}
+.topbar .brand .logo {
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  background: var(--gradient);
+  display: inline-block;
+}
+.topbar .right { display: flex; align-items: center; gap: 8px; }
+.user-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 10px 4px 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+.user-chip .avatar {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--gradient);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800;
+  color: white;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+/* ---------- icon button (small) ---------- */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.icon-btn:hover { background: var(--surface); color: var(--text); border-color: var(--border); }
+.icon-btn.danger:hover { color: var(--rose); border-color: rgba(248,113,113,.25); background: rgba(248,113,113,.06); }
+
+/* ---------- tabs ---------- */
+.tabs {
+  display: flex; gap: 4px;
+  padding: 4px;
+  background: rgba(0,0,0,.3);
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+}
+.tabs button {
+  flex: 1;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-dim);
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.tabs button.active { background: rgba(139,92,246,.30); color: white; }
+.tabs button:hover:not(.active) { background: rgba(255,255,255,.04); }
+
+/* ---------- card list (dashboard) ---------- */
+.list { display: grid; gap: 8px; margin-top: 12px; }
+.list-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  text-align: left;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+  font-family: inherit; color: inherit; font-size: inherit;
+}
+.list-item:hover { background: var(--surface-2); border-color: var(--border-2); }
+.list-item .pid { font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--accent); }
+.list-item .meta { color: var(--text-faint); font-size: 12px; }
+.empty {
+  padding: 32px 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-xs);
+  color: var(--text-faint);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ---------- centered auth shell ----------
+   Pattern note: we want the auth card centered when the viewport
+   has slack but want the page to scroll naturally when the card
+   (Sign-Up + 5-row strength checklist + remember-me) is taller
+   than the viewport. `align-items: center` on the wrap fails for
+   tall cards because the card's top edge ends up off-screen with
+   no way to scroll up to it. The fix: drop the flex centering
+   and use `margin: auto` on the card itself — this auto-centres
+   when there's room and falls back to top-aligned-with-padding
+   when there isn't. The page (auth-shell, min-height: 100vh) grows
+   to fit the content, and the window scrollbar handles the rest. */
+.auth-shell {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+}
+.auth-card-wrap {
+  /* flex: 1 0 auto — grow to fill any slack, but use auto basis so
+     a tall card can push the wrap larger than its flex share. With
+     `flex: 1` (= 1 1 0%) the wrap caps at the parent's slack and the
+     card overflows invisibly. */
+  flex: 1 0 auto;
+  display: flex;
+  padding: 32px 24px;
+}
+.auth-card {
+  width: 100%; max-width: 420px;
+  margin: auto;
+  padding: 28px;
+}
+.auth-header { text-align: center; margin-bottom: 8px; }
+.auth-header .logo {
+  width: 56px; height: 56px;
+  margin: 0 auto;
+  border-radius: 14px;
+  background: var(--gradient);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 12px 32px -8px rgba(139,92,246,.4);
+}
+.auth-header h1 { margin: 12px 0 4px; font-size: 22px; font-weight: 800; }
+.auth-header p { margin: 0; color: var(--text-dim); font-size: 13px; }
+
+/* ---------- dashboard layout ---------- */
+.dash-shell { min-height: 100vh; display: flex; flex-direction: column; }
+.dash-main {
+  /* same growth-with-content fix as auth-card-wrap so a long portal
+     list doesn't get hidden below the fold without a scrollbar. */
+  flex: 1 0 auto;
+  max-width: 880px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 28px 24px 48px;
+}
+.dash-greet { margin: 0 0 4px; font-size: 24px; font-weight: 800; }
+.dash-sub { color: var(--text-dim); margin: 0 0 24px; font-size: 14px; }
+.section-title {
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 24px 0 8px;
+}
+
+/* ---------- helpers ---------- */
+.lang-toggle {
+  display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px;
+}
+.lang-toggle button {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.lang-toggle button.active { background: rgba(139,92,246,.30); color: white; }
+.divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+
+footer.foot {
+  text-align: center;
+  padding: 16px;
+  color: var(--text-faint);
+  font-size: 11px;
+}

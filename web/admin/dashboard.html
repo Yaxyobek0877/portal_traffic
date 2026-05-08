@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Portal — Dashboard</title>
+<meta name="robots" content="noindex" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+
+<div class="dash-shell">
+  <div class="topbar">
+    <a class="brand" href="/"><span class="logo"></span><span>Portal</span></a>
+    <div class="right" id="topRight">
+      <!-- lang toggle injected here -->
+      <span id="langSlot"></span>
+      <span class="divider"></span>
+      <button class="icon-btn danger" id="signoutBtn" title="Sign out">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>
+      <span class="divider"></span>
+      <span class="user-chip" id="userChip">
+        <span class="avatar" id="avatar">?</span>
+        <span id="usernameLbl">…</span>
+      </span>
+    </div>
+  </div>
+
+  <main class="dash-main">
+    <h1 class="dash-greet"><span id="greetTxt">—</span>, <span class="gradient-text" id="greetName">—</span></h1>
+    <p class="dash-sub" id="dashSub">—</p>
+
+    <div class="section-title" id="portalsTitle">—</div>
+    <div id="portalsBody">
+      <div class="empty" id="portalsEmpty">…</div>
+    </div>
+
+    <div class="alert info" id="note" style="display:none"></div>
+  </main>
+
+  <footer class="foot">
+    <a href="/">portal.1pro.uz</a>
+  </footer>
+</div>
+
+<script src="/admin/admin.js"></script>
+<script>
+(() => {
+  const A = window.PortalAdmin;
+  const $ = (id) => document.getElementById(id);
+
+  let me = null;
+  let portals = [];
+  let serverNote = "";
+
+  // Lang toggle in the top bar.
+  A.buildLangToggle($("langSlot"));
+
+  function paint() {
+    document.title = A.t("title.dashboard");
+    $("greetTxt").textContent  = A.t("dash.greeting");
+    $("dashSub").textContent   = A.t("dash.subtitle");
+    $("portalsTitle").textContent = A.t("dash.portals.title");
+    $("signoutBtn").title      = A.t("btn.signout");
+
+    if (me) {
+      $("greetName").textContent = me.username;
+      $("usernameLbl").textContent = me.username;
+      $("avatar").textContent = (me.username[0] || "?").toUpperCase();
+    } else {
+      $("greetName").textContent = "—";
+      $("usernameLbl").textContent = "—";
+      $("avatar").textContent = "?";
+    }
+
+    renderPortals();
+  }
+  A.onPaint(paint);
+
+  function renderPortals() {
+    const host = $("portalsBody");
+    if (!portals.length) {
+      host.innerHTML = `<div class="empty">${A.t("dash.portals.empty")}</div>`;
+    } else {
+      const items = portals.map((p) => {
+        const initial = (p.ownerNickname?.[0] || "?").toUpperCase();
+        const peerNote = p.peerCount > 0 ? `· ${p.peerCount} peer` : "";
+        return `
+          <div class="list-item">
+            <span class="avatar" style="width:28px;height:28px;border-radius:50%;background:var(--gradient);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;">${initial}</span>
+            <div style="flex:1;min-width:0">
+              <div><span class="pid">${p.portalId}</span> <span class="meta">${p.ownerNickname || ""}</span></div>
+              <div class="meta">${peerNote}</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+      host.innerHTML = `<div class="list">${items}</div>`;
+    }
+
+    if (serverNote) {
+      $("note").style.display = "";
+      $("note").textContent = `${A.t("dash.note")} ${serverNote}`;
+    } else {
+      $("note").style.display = "none";
+    }
+  }
+
+  // Sign-out: hit the API, then redirect to login. Keep the spinner
+  // simple — sign-out is fast and the redirect masks any blip.
+  $("signoutBtn").addEventListener("click", async () => {
+    try {
+      await A.api("/api/auth/signout", { method: "POST" });
+    } catch (_) { /* ignore — cookie expiry will catch it eventually */ }
+    location.href = "/admin/login";
+  });
+
+  // Bootstrap: load /me + /portals in parallel. If /me fails we're
+  // not signed in → bounce to login with a `next=` so the user
+  // returns here after sign-in.
+  (async () => {
+    try {
+      [me, ] = await Promise.all([A.api("/api/me")]);
+    } catch (_) {
+      const next = encodeURIComponent("/admin/dashboard");
+      location.href = `/admin/login?next=${next}`;
+      return;
+    }
+    try {
+      const data = await A.api("/api/portals");
+      portals = data?.portals || [];
+      serverNote = data?.note || "";
+    } catch (_) {
+      portals = [];
+    }
+    paint();
+  })();
+})();
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0a0e1a" />
 
 <title>Portal — to'g'ridan-to'g'ri ulanish, orada server yo'q</title>
-<meta name="description" content="Portal — peer-to-peer mesh tarmoq dasturi. 6 xonali kod ulashing, 16 tagacha qurilma to'g'ridan-to'g'ri ulanadi: chat, fayl, port tunnel. Signal serveri faqat handshake uchun." />
+<meta name="description" content="Portal — peer-to-peer mesh tarmoq dasturi. Mahalliy hisob, bir nechta portal bir vaqtda, avtomatik qayta ulanish. 16 tagacha qurilma to'g'ridan-to'g'ri ulanadi: chat, fayl, port tunnel (kamera/NVR/o'yin server). Signal serveri faqat handshake uchun." />
 
 <meta property="og:title" content="Portal — P2P mesh tarmoq" />
 <meta property="og:description" content="To'g'ridan-to'g'ri ulanish. Orada hech qanday server yo'q." />
@@ -157,8 +157,22 @@
     transition: transform .15s ease, box-shadow .15s ease;
   }
   nav.top .cta:hover { transform: translateY(-1px); box-shadow: 0 8px 30px -6px rgba(139,92,246,.6); }
+  /* Secondary CTA for the navbar — same shape as .cta but outlined.
+     Used by the "Kirish" link so it sits alongside "Yuklab olish"
+     without competing for attention. */
+  nav.top .cta-outline {
+    background: var(--surface-2);
+    color: var(--text) !important; padding: 8px 14px; border-radius: var(--radius-sm);
+    font-size: 14px; font-weight: 600;
+    text-decoration: none;
+    border: 1px solid var(--border-2);
+    transition: border-color .15s ease, background .15s ease, transform .15s ease;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  nav.top .cta-outline:hover { border-color: var(--accent); background: rgba(139,92,246,.08); transform: translateY(-1px); }
+  nav.top .cta-outline svg { width: 14px; height: 14px; opacity: .85; }
   @media (max-width: 720px) {
-    nav.top .links a:not(.cta):not(.gh) { display: none; }
+    nav.top .links a:not(.cta):not(.cta-outline):not(.gh) { display: none; }
   }
 
   /* ---------- hero ---------- */
@@ -318,6 +332,151 @@
   .btn-ghost:hover { background: var(--surface-2); border-color: var(--border-2); transform: translateY(-2px); }
 
   .icon { width: 18px; height: 18px; stroke-width: 1.6; }
+
+  /* ---------- login section ---------- */
+  /* Sits directly under the hero so a returning user lands on it
+     without scrolling. Two-column on desktop (pitch + form), stacks
+     on mobile. The form posts to /admin/login with credentials, but
+     until the signaling server's /api/auth is deployed we intercept
+     submit in JS and surface a "tez orada" badge — see admin-form
+     handler below. */
+  section.login-section {
+    padding: 40px 0 80px;
+    position: relative;
+  }
+  .login-shell {
+    max-width: 980px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 40px;
+    align-items: center;
+    background: linear-gradient(180deg, rgba(139,92,246,.05), rgba(34,211,238,.025));
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 36px;
+    backdrop-filter: blur(8px);
+  }
+  .login-pitch h2 {
+    font-size: clamp(22px, 3vw, 30px);
+    margin: 0 0 12px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+  .login-pitch p {
+    color: var(--text-dim);
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0 0 18px;
+  }
+  .login-pitch ul {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 10px;
+    font-size: 14px; color: var(--text-dim);
+  }
+  .login-pitch li {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .login-pitch li::before {
+    content: "→";
+    color: var(--accent);
+    font-weight: 700;
+    flex: 0 0 auto;
+  }
+  .login-card {
+    background: rgba(10,14,26,.6);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
+    padding: 24px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .login-card label {
+    display: flex; flex-direction: column; gap: 6px;
+    font-size: 12px; color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .login-card input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-xs);
+    padding: 11px 12px;
+    font-size: 15px;
+    font-family: inherit;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .login-card input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--surface-2);
+  }
+  .login-card button {
+    margin-top: 4px;
+    background: var(--gradient);
+    color: white;
+    border: 0;
+    padding: 12px 18px;
+    font-size: 15px; font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    box-shadow: 0 6px 22px -6px rgba(139,92,246,.5);
+    transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+    font-family: inherit;
+  }
+  .login-card button:hover { transform: translateY(-1px); box-shadow: 0 10px 30px -8px rgba(139,92,246,.65); }
+  .login-card button:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+  .login-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .login-meta a { color: var(--accent); text-decoration: none; }
+  .login-meta a:hover { color: var(--accent-3); }
+  .login-status {
+    display: none;
+    padding: 10px 12px;
+    border-radius: var(--radius-xs);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .login-status.show { display: block; }
+  .login-status.info {
+    background: rgba(139,92,246,.10);
+    border: 1px solid rgba(139,92,246,.35);
+    color: #c7b8ff;
+  }
+  .login-status.error {
+    background: rgba(244,63,94,.08);
+    border: 1px solid rgba(244,63,94,.30);
+    color: #fda4af;
+  }
+  .login-soon-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid rgba(245,158,11,.4);
+    background: rgba(245,158,11,.08);
+    color: #fbbf24;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .login-soon-badge::before {
+    content: "";
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #fbbf24;
+    box-shadow: 0 0 0 0 rgba(251,191,36,.6);
+    animation: dotPulseAmber 1.8s infinite;
+  }
+  @media (max-width: 760px) {
+    .login-shell {
+      grid-template-columns: 1fr;
+      padding: 24px;
+      gap: 24px;
+    }
+  }
 
   /* ---------- sections ---------- */
   section { padding: 80px 0; position: relative; }
@@ -697,10 +856,24 @@
     </a>
     <div class="links">
       <a href="#imkoniyatlar">Imkoniyatlar</a>
+      <a href="#yangiliklar">v0.5.x da yangi</a>
       <a href="#mesh">Mesh</a>
       <a href="#qadamlar">Qanday ishlaydi</a>
       <a href="#roadmap">Roadmap</a>
       <a class="gh" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">GitHub</a>
+      <!-- Secondary CTA — sends the visitor straight to the login
+           form embedded in the homepage hero (#kirish), rather than
+           jumping to /admin/login (which 404s until the static admin
+           shell is deployed). Visible on every viewport via the
+           cta-outline class. -->
+      <a class="cta-outline" href="#kirish">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+          <polyline points="10 17 15 12 10 7"/>
+          <line x1="15" y1="12" x2="3" y2="12"/>
+        </svg>
+        Kirish
+      </a>
       <a class="cta" href="https://github.com/Yaxyobek0877/portal_traffic#install">Yuklab olish</a>
     </div>
   </div>
@@ -746,24 +919,71 @@
 
     <div class="pills">
       <span class="pill"><span class="dot"></span> signaling.1pro.uz · jonli</span>
-      <span class="pill"><span class="dot"></span> v0.4.0 · ommaviy reliz tayyorlanmoqda</span>
+      <span class="pill"><span class="dot"></span> v0.5.0 · jonli reliz</span>
       <span class="pill amber"><span class="dot"></span> PCP-1 shifrlash</span>
     </div>
 
     <h1>To'g'ridan-to'g'ri ulanish.<br/>Orada hech qanday <span class="gradient-text">server yo'q</span>.</h1>
     <p class="tagline">
       Portal — qurilmalar o'rtasida xususiy <strong>peer-to-peer mesh</strong> tarmoq quradigan
-      desktop dastur. 6 xonali kod ulashing — 16 tagacha qurilma to'g'ridan-to'g'ri ulanadi.
-      Chat, fayl, hatto LAN-style port tunneli — hammasi P2P.
+      desktop dastur. Mahalliy hisob, bir nechta xona bir vaqtda, avtomatik qayta ulanish.
+      Chat, fayl, kamera/NVR/o'yin serveri uchun port tunneli — hammasi P2P.
     </p>
+
+    <!-- Prominent download grid — moved above the CTA row per user
+         feedback ("ateparoqda tursa yaxshi edi"). Each tile is its own
+         link to the platform-specific asset on the latest GitHub
+         release; using the /releases/latest/download/<asset> path means
+         the URL stays stable across releases (GitHub rewrites it to the
+         current tag's asset). The mobile tile points at the README
+         since Android currently builds from source. -->
+    <h2 style="font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.18em;color:var(--text-faint);margin:24px 0 12px;text-align:center">
+      Yuklab olish · Download
+    </h2>
+    <div class="download-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;max-width:760px;margin:0 auto 28px;font-size:14px">
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-darwin-arm64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
+         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
+        <strong style="font-size:15px">macOS</strong>
+        <span style="color:var(--text-dim);font-size:12px">Apple Silicon (M1/M2/M3/M4)</span>
+        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.zip · darwin-arm64</span>
+      </a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-darwin-amd64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
+         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
+        <strong style="font-size:15px">macOS</strong>
+        <span style="color:var(--text-dim);font-size:12px">Intel (x86_64)</span>
+        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.zip · darwin-amd64</span>
+      </a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-windows-amd64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
+         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
+        <strong style="font-size:15px">Windows</strong>
+        <span style="color:var(--text-dim);font-size:12px">10 / 11 · 64-bit</span>
+        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.exe · windows-amd64</span>
+      </a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-linux-amd64.tar.gz" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
+         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
+        <strong style="font-size:15px">Linux</strong>
+        <span style="color:var(--text-dim);font-size:12px">Ubuntu 22.04+ · 64-bit</span>
+        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.tar.gz · linux-amd64</span>
+      </a>
+    </div>
+    <div style="text-align:center;margin-bottom:20px;font-size:12px;color:var(--text-faint)">
+      Barcha relizlar:
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases" rel="noreferrer" style="color:var(--accent);text-decoration:none">github.com/Yaxyobek0877/portal_traffic/releases</a>
+      · <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/mobile/README.md" rel="noreferrer" style="color:var(--text-dim);text-decoration:none">Android (manbadan)</a>
+    </div>
+
     <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/Yaxyobek0877/portal_traffic/releases" target="_blank" rel="noreferrer">
+      <a class="btn btn-primary" href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest" target="_blank" rel="noreferrer">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="7 10 12 15 17 10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
-        Yuklab olish
+        Reliz sahifasi
       </a>
       <a class="btn btn-ghost" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -773,25 +993,56 @@
       </a>
     </div>
 
-    <div class="download-grid" style="margin-top:32px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;font-size:13px">
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest" target="_blank" rel="noreferrer" style="color:var(--text-dim);text-decoration:none;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);transition:border-color .15s">
-        <strong style="color:var(--text)">macOS</strong> · Apple Silicon
-      </a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest" target="_blank" rel="noreferrer" style="color:var(--text-dim);text-decoration:none;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);transition:border-color .15s">
-        <strong style="color:var(--text)">macOS</strong> · Intel
-      </a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest" target="_blank" rel="noreferrer" style="color:var(--text-dim);text-decoration:none;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);transition:border-color .15s">
-        <strong style="color:var(--text)">Windows</strong> · 10/11
-      </a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest" target="_blank" rel="noreferrer" style="color:var(--text-dim);text-decoration:none;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);transition:border-color .15s">
-        <strong style="color:var(--text)">Linux</strong> · amd64
-      </a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/mobile/README.md" target="_blank" rel="noreferrer" style="color:var(--text-dim);text-decoration:none;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);transition:border-color .15s">
-        <strong style="color:var(--text-faint)">Android</strong> · beta (manbadan)
-      </a>
-    </div>
-
     <div class="typewriter-line"><span id="typewriter"></span></div>
+  </div>
+</section>
+
+<!-- =================== kirish (web admin) =================== -->
+<!-- Inline login section. Lives directly under the hero so a returning
+     user — typical visit pattern — sees the form on first paint. The
+     navbar "Kirish" anchors here (#kirish). The form posts to the
+     signaling server's /api/auth/login when deployed; while that
+     endpoint is still ahead of us in the roadmap, the submit handler
+     in app.js intercepts and surfaces a "tez orada (v0.6.0)" notice
+     instead of throwing a network error. -->
+<section id="kirish" class="login-section">
+  <div class="container">
+    <div class="login-shell">
+      <div class="login-pitch">
+        <span class="login-soon-badge">Tez orada · v0.6.0</span>
+        <h2 style="margin-top:14px">Brauzerdan boshqaring</h2>
+        <p>
+          Hisobingizga kirib portal'laringizni, ulangan qurilmalarni va
+          ochilgan portlarni <strong>brauzer orqali</strong> nazorat qiling.
+          Desktop dasturni ochmasdan ham — telefondan, ish kompyuteringizdan,
+          istalgan joydan.
+        </p>
+        <ul>
+          <li>Faol portallar va ularning ko'rinarli kodlari</li>
+          <li>Online/offline qurilmalar, RTT, ulanish turi (P2P / TURN)</li>
+          <li>Servislarni vaqtinchalik to'xtatish, qayta yoqish</li>
+          <li>Activity log — kim qachon qaysi servisga ulangan</li>
+        </ul>
+      </div>
+
+      <form class="login-card" id="webAdminForm" autocomplete="on" novalidate>
+        <label>
+          Foydalanuvchi
+          <input type="text" name="username" id="loginUsername" autocomplete="username" placeholder="texuz" />
+        </label>
+        <label>
+          Parol
+          <input type="password" name="password" id="loginPassword" autocomplete="current-password" placeholder="••••••••" />
+        </label>
+        <button type="submit" id="loginSubmit">
+          Kirish
+        </button>
+        <div class="login-meta">
+          <span>Hisobingiz yo'qmi? <a href="https://github.com/Yaxyobek0877/portal_traffic#install">Dasturni o'rnating</a></span>
+        </div>
+        <div class="login-status info" id="loginStatus" role="status"></div>
+      </form>
+    </div>
   </div>
 </section>
 
@@ -810,7 +1061,7 @@
           </svg>
         </div>
         <h3>2 dan 16 qurilmagacha</h3>
-        <p>6 xonali ID + kod ulashing, internetning istalgan joyidan kim xohlasa qo'shiladi. Router sozlash yo'q, VPN yo'q, port forwarding yo'q.</p>
+        <p>Portal ID + kod ulashing — do'stlaringiz internetning istalgan joyidan to'g'ridan-to'g'ri qo'shiladi. Router sozlash yo'q, VPN yo'q, port forwarding yo'q.</p>
       </div>
 
       <div class="card tilt reveal">
@@ -866,8 +1117,101 @@
             <rect x="18" y="18" width="3" height="3"/>
           </svg>
         </div>
-        <h3>QR + 6 xonali kod</h3>
-        <p>Yonidagi do'stga QR ni ko'rsating yoki masofadagi do'stga ID + kodni yuboring. Hisob qaydnomasi yoki email kerak emas.</p>
+        <h3>QR + portal kod</h3>
+        <p>Yonidagi do'stga QR ni ko'rsating yoki masofadagi do'stga ID + kodni yuboring. Email yoki tashqi ro'yxatdan o'tish yo'q — faqat mahalliy hisob.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== v0.5.x yangi imkoniyatlar =================== -->
+<section id="yangiliklar" style="background: linear-gradient(180deg, transparent, rgba(139,92,246,.04) 50%, transparent);">
+  <div class="container">
+    <p class="eyebrow reveal">v0.5.x da yangi</p>
+    <h2 class="reveal">Bir desktop, <span class="gradient-text">to'liq xona boshqaruvi</span>.</h2>
+    <p class="lede reveal">Oxirgi relizda hisob, multi-portal, avtomatik qayta ulanish va xavfsizlik gate'lari qo'shildi. Hammasi mahalliy — signaling server faqat handshake'da ishtirok etadi.</p>
+
+    <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:32px">
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <h3>Mahalliy hisob</h3>
+        <p>Username + bcrypt parol (8 ta belgi, kuchli). Akkaunt va portal tarixingiz hech qachon serverga jo'natilmaydi.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+            <circle cx="7" cy="9" r="1.5"/><circle cx="12" cy="9" r="1.5"/><circle cx="17" cy="9" r="1.5"/>
+          </svg>
+        </div>
+        <h3>Bir nechta xona bir vaqtda</h3>
+        <p>"Fonda ulash" bilan oilaviy + ishxona + o'yin xonalarini parallel oching. Header'dagi switcher bilan o'tib turing.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 10 15 10"/>
+          </svg>
+        </div>
+        <h3>Avtomatik qayta ulanish</h3>
+        <p>Tizim qayta yuklansa, oldingi sessiyalar va exposed servislar lock'dan chiqishi bilan avtomatik tiklanadi.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M12 8v4M12 16h.01"/>
+          </svg>
+        </div>
+        <h3>Tasdiqlab yoqish</h3>
+        <p>Har servisga "approval mode" toggle'i. Peer ulanmoqchi bo'lganda sizga modal chiqadi: <em>kim, qaysi servis</em>, ruxsat berasizmi?</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 2v4M16 2v4M2 10h20"/>
+          </svg>
+        </div>
+        <h3>Qurilma nomi</h3>
+        <p>Bir akkauntdan turli qurilmalardan kirsangiz, room'da <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">texuz · uy</code> ko'rinishida farqlanasiz.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <h3>LAN qurilmalar (NVR/kamera)</h3>
+        <p>Hikvision NVR'ni LAN'dagi <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">192.168.x.x:554</code> dan mesh orqali do'stga uzating. Mesh-port remap, smart-paste IP:port, health probe.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <h3>Tizim startup'i</h3>
+        <p>macOS LaunchAgent / Windows registry / Linux .desktop bilan boot keyin avtomatik ishga tushish — settings'dan toggle.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3h18v6H3zM3 15h18v6H3zM7 6h.01M11 6h.01M7 18h.01M11 18h.01"/>
+          </svg>
+        </div>
+        <h3>Bandwidth probe + path tagi</h3>
+        <p>Har peer kartasida 3-soniyalik bandwidth o'lchov, ICE selected-pair manzillari, LAN/Internet/TURN tagi.</p>
       </div>
     </div>
   </div>
@@ -917,13 +1261,21 @@
 <section id="qadamlar" style="background: linear-gradient(180deg, transparent, rgba(255,255,255,.015) 50%, transparent);">
   <div class="container">
     <p class="eyebrow reveal">Qanday ishlaydi</p>
-    <h2 class="reveal">Uch qadamda <span class="gradient-text">jonli mesh</span>.</h2>
-    <p class="lede reveal">Hisobga ro'yxatdan o'tish yo'q. Server tomonidan saqlangan ma'lumot yo'q. Faqat 6 xonali raqam.</p>
+    <h2 class="reveal">To'rt qadamda <span class="gradient-text">jonli mesh</span>.</h2>
+    <p class="lede reveal">Akkaunt mahalliy — bcrypt-himoyalangan parol bilan, qurilmangizdan tashqariga chiqmaydi. Email yoki tashqi serverda ro'yxatdan o'tish yo'q.</p>
 
     <div class="steps">
       <div class="step reveal">
+        <h3>Hisob yarating</h3>
+        <p>Birinchi ochishda <strong>username + parol</strong> tanlang (8 ta belgi, kuchli). Keyingi ochishlarda lock screen'dan kirasiz.</p>
+        <div class="demo">
+          <span class="label">user:</span> <span class="id">texuz</span><br/>
+          <span class="label">pwd:</span>  <span class="code">••••••••</span>
+        </div>
+      </div>
+      <div class="step reveal">
         <h3>Portalni oching</h3>
-        <p>Dasturni oching, taxallus yozing va <strong>"Portal yaratish"</strong> ni bosing.</p>
+        <p><strong>"Portal yaratish"</strong> bossangiz yangi xona ID va kod bilan tug'iladi.</p>
         <div class="demo">
           <span class="label">ID:</span>   <span class="id">428591</span><br/>
           <span class="label">KOD:</span>  <span class="code">739204</span>
@@ -945,9 +1297,9 @@
         <h3>Mesh tushadi</h3>
         <p>Har bir qurilma boshqa har biriga to'g'ridan-to'g'ri ulanadi. Server orqali emas.</p>
         <div class="demo">
-          <span class="label">peer-1</span> ↔ <span class="label">peer-2</span> · <span class="id">0.4ms</span><br/>
-          <span class="label">peer-1</span> ↔ <span class="label">peer-3</span> · <span class="id">0.6ms</span><br/>
-          <span class="label">peer-2</span> ↔ <span class="label">peer-3</span> · <span class="id">0.5ms</span>
+          <span class="label">texuz · uy</span> ↔ <span class="label">alice · ish</span> · <span class="id">0.4ms</span><br/>
+          <span class="label">texuz · uy</span> ↔ <span class="label">bob · mac</span> · <span class="id">0.6ms</span><br/>
+          <span class="label">alice · ish</span> ↔ <span class="label">bob · mac</span> · <span class="id">0.5ms</span>
         </div>
       </div>
     </div>
@@ -991,8 +1343,8 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
 <section id="roadmap">
   <div class="container">
     <p class="eyebrow reveal">Joriy holat</p>
-    <h2 class="reveal">Beshta bosqichda quriladi.</h2>
-    <p class="lede reveal">Beshta bosqich tugadi — Portal funksional jihatdan to'liq. Har bir bosqich ishlaydigan to'xtash nuqtasi: oldingisi tasdiqlangan tarzda ishlamasdan turib keyingisiga o'tilmaydi.</p>
+    <h2 class="reveal">Bosqichma-bosqich quriladi.</h2>
+    <p class="lede reveal">Birinchi sakkiz bosqich tugadi — Portal funksional jihatdan to'liq. Har bir bosqich ishlaydigan to'xtash nuqtasi: oldingisi tasdiqlangan tarzda ishlamasdan turib keyingisiga o'tilmaydi.</p>
 
     <div class="roadmap">
       <div class="roadmap-row reveal">
@@ -1017,27 +1369,42 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
       </div>
       <div class="roadmap-row reveal">
         <span class="num">05</span>
-        <span class="name">Kuchli imkoniyatlar<span class="desc">TCP/UDP proxy, secretbox shifrlash, auto-reconnect, bandwidth metrikasi</span></span>
+        <span class="name">Kuchli imkoniyatlar<span class="desc">TCP/UDP proxy, secretbox shifrlash, bandwidth metrikasi, peer table</span></span>
         <span class="status done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">06</span>
-        <span class="name">v0.4.0 launch<span class="desc">PCP-1, MIT litsenziya, GitHub Actions CI/CD, Privacy/Terms, README polish</span></span>
-        <span class="status wip">tayyorlanmoqda</span>
+        <span class="name">v0.4.0 launch<span class="desc">PCP-1 shifrlash, MIT litsenziya, GitHub Actions CI/CD, Privacy/Terms, mobile (Android) beta</span></span>
+        <span class="status done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">07</span>
+        <span class="name">v0.5.0 — meeting tajribasi<span class="desc">Mahalliy hisob (vault), multi-portal sessiyalar, background-connect, avtomatik qayta ulanish, per-port approval gate, persistent peers</span></span>
+        <span class="status done">tugadi</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">08</span>
+        <span class="name">v0.5.1 — desktop polish<span class="desc">App icons (mac/win/linux), qurilma nomi, system startup auto-run, stabil download URL'lari</span></span>
+        <span class="status done">tugadi</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">09</span>
+        <span class="name">Code signing<span class="desc">Apple Developer ID + Authenticode — Gatekeeper / SmartScreen ogohlantirishlarini olib tashlash</span></span>
+        <span class="status wip">jarayonda</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">10</span>
+        <span class="name">Cloud auth + xona boshqaruvi<span class="desc">Server-side /api/auth (multi-device login), kod regenerate, "ask admin" join mode, owner-offline portal-survival</span></span>
+        <span class="status next">keyin</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">11</span>
         <span class="name">Mobile (Android) reliz<span class="desc">Play Store internal track, PCP-1 portativ, signed APK</span></span>
         <span class="status next">keyin</span>
       </div>
       <div class="roadmap-row reveal">
-        <span class="num">08</span>
-        <span class="name">Auto-update + crash reporting<span class="desc">Sparkle / WinSparkle, opt-in telemetry, foydalanuvchi qadamlarsiz yangilanish</span></span>
-        <span class="status next">keyin</span>
-      </div>
-      <div class="roadmap-row reveal">
-        <span class="num">09</span>
-        <span class="name">Kelajak<span class="desc">Ovoz kanali (push-to-talk), iOS, plugin API</span></span>
+        <span class="num">12</span>
+        <span class="name">Kelajak<span class="desc">Ovoz/video kanali (WebRTC media), iOS, plugin API</span></span>
         <span class="status next">keyin</span>
       </div>
     </div>
