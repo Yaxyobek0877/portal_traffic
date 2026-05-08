@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
+import { useShallow } from "zustand/react/shallow";
 import type { PortalView } from "../types";
 import { usePortalStore } from "../stores/portalStore";
 import { useT } from "../i18n";
@@ -256,8 +257,11 @@ function Stat({
 // switches the foreground.
 function PortalSwitcher() {
   const { t } = useT();
-  const sessions = usePortalStore((s) =>
-    Object.values(s.sessions).map((sess) => sess.summary)
+  // useShallow — see Welcome.tsx for the rationale. Without it the
+  // Object.values/.map selector returns a fresh array on every store
+  // update and the dropdown infinite-loops.
+  const sessions = usePortalStore(
+    useShallow((s) => Object.values(s.sessions).map((sess) => sess.summary))
   );
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

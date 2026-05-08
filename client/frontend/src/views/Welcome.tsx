@@ -30,6 +30,7 @@ import {
   Radio,
   PlugZap,
 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { Logo } from "../components/Logo";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
@@ -52,9 +53,16 @@ export function Welcome() {
   const setHistory = usePortalStore((s) => s.setHistory);
   const nat = usePortalStore((s) => s.nat);
   const setSessionSummaries = usePortalStore((s) => s.setSessionSummaries);
-  // Active sessions, derived from the store's session map.
-  const sessions = usePortalStore((s) =>
-    Object.values(s.sessions).map((sess) => sess.summary)
+  // Active sessions, derived from the store's session map. We wrap
+  // the selector in useShallow because Object.values + .map allocates
+  // a fresh array every call; without a shallow-equality check zustand
+  // v5's useSyncExternalStore sees a new snapshot reference on every
+  // render and recurses through React's commit loop until the
+  // "Maximum update depth exceeded" guard fires. useShallow compares
+  // the array elementwise and only triggers a re-render when an actual
+  // summary changes.
+  const sessions = usePortalStore(
+    useShallow((s) => Object.values(s.sessions).map((sess) => sess.summary))
   );
 
   const [mode, setMode] = useState<Mode>("idle");
