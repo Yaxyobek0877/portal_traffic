@@ -171,7 +171,10 @@ export const uz: Dict = {
 
   // Updater
   "update.available": "Yangi versiya mavjud:",
-  "update.download": "Yuklab olish",
+  "update.download": "Sahifa",
+  "update.install": "Yangilash",
+  "update.installing": "Yangilanmoqda…",
+  "update.install_failed": "Yangilash muvaffaqiyatsiz tugadi: ",
   "update.dismiss": "Yopish",
 
   // Portal header

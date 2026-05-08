@@ -104,8 +104,15 @@ type Bridge = {
   MeasureBandwidth: (peerId: string) => Promise<BandwidthResult>;
 
   // Updater + crash reporting (added v0.4.0)
+  // InstallUpdate (v0.5.4) downloads the latest release for this OS,
+  // stages a swap script, and quits the running app so the script can
+  // replace the binary and relaunch. Returns "" on success or a short
+  // English error string. Caller should show "Yangilanmoqda…" while
+  // waiting since the renderer process will exit before the promise
+  // resolves on the happy path.
   AppVersion: () => Promise<string>;
   CheckForUpdate: (refresh: boolean) => Promise<UpdateResult>;
+  InstallUpdate: () => Promise<string>;
   OpenReleasePage: (url: string) => Promise<void>;
   CrashReports: () => Promise<CrashReport[]>;
   OpenCrashFolder: () => Promise<void>;
@@ -301,6 +308,7 @@ const stub: Bridge = {
     assetForOs: "",
     checkedAt: new Date().toISOString(),
   }),
+  InstallUpdate: async () => "preview",
   OpenReleasePage: async () => {},
   CrashReports: async () => [],
   OpenCrashFolder: async () => {},

@@ -184,3 +184,123 @@ ham yarating, **lekin device name boshqacha bo'lsin**).
 Kerak bo'lsa server `cmd/signaling/main.go` (loyihangizdagi server kodi)ga
 yuqoridagi protokol qo'shimchalarini yozish kerak. Client tomon shu
 xabarlarga subscribe qilib avtomatik ishlay boshlaydi.
+
+## Web admin paneli (online qurilma boshqaruvi) — roadmap
+
+Foydalanuvchi: "tola qonli sayt — roomarlni hamda qurilmalarni
+portlarini online bolsa boshqarish mumkun bolsin". Ya'ni
+`portal.1pro.uz/admin` ichida brauzerdan turib o'z faol portallari,
+peer'lari va expose qilingan portlarini ko'rib turish, hatto pause /
+remove qilish imkoniyati. Bu **butunlay server-side ish**, chunki:
+
+1. Brauzer client desktop process bilan bevosita gaplasha olmaydi
+   (NAT orqasida, protokol mos kelmaydi).
+2. Hozirgi signaling server faqat WebSocket session lifecycle bilan
+   ishlaydi — qaysi qurilmada qaysi servis yoqilgani haqida hech
+   nimani saqlamaydi (privacy bo'yicha to'g'ri qaror, lekin admin
+   panel uchun aggregator kerak).
+
+### Talab qilinadigan server qo'shimchalari
+
+#### Auth + per-user portal index
+- `/api/auth/login` (allaqachon `server/auth_handlers.go` da bor, lekin
+  prod'ga deploy qilinmagan — `memory_server_deployment_gap.md` ga qarang).
+  Hozircha cookie sessiyasi etarli; oxir-oqibat OAuth qo'shish kerak.
+- HTTP session cookie'lari TLS-only, SameSite=Strict.
+
+#### `/api/portals` (GET) — foydalanuvchi faol portallari
+Ro'yxat formati:
+```json
+[
+  {
+    "portal_id": "abc123",
+    "label": "Uy NVR",
+    "code_redacted": "***",
+    "is_owner": true,
+    "created_at": "2026-05-08T10:23:00Z",
+    "peer_count": 2,
+    "peers": [
+      { "peer_id": "p1", "nickname": "texuz.mac", "rtt_ms": 23, "online": true },
+      { "peer_id": "p2", "nickname": "guest.win", "rtt_ms": 89, "online": false }
+    ]
+  }
+]
+```
+**Manba**: signaling server allaqachon portallarni va peer ulanishlarini
+bilim sifatida saqlaydi (sessiya ichida). Ushbu state'ni HTTP'da
+read-only ko'rinishda chiqarish — yangi handler.
+
+#### `/api/portals/:id/services` (GET) — expose qilingan servislar
+Hozir client *o'zi* expose qilgan servislar haqida announce yubormaydi
+(privacy). Admin panel uchun ikki variant bor:
+
+**A.** Client opt-in: foydalanuvchi `Settings → Network → "Adminda
+ko'rinsin"` toggle yoqsa, client portal yaratganda servislar ro'yxatini
+mesh control channel'idan tashqari signaling server'ga ham yuboradi.
+Server uni in-memory store qiladi (relizga yozmaydi). Toggle o'chsa
+server yozuvni o'chiradi.
+
+**B.** Server WebRTC stats orqali surrogate sniffing — **rad etilgan**:
+texnik jihatdan murakkab, foydalanuvchi privacy'siga ham zid.
+
+A-yo'l afzal: foydalanuvchi nazoratida, opt-in.
+
+#### `/api/portals/:id/services/:port` (PATCH) — pause / unpause / disable
+Body: `{ "paused": true }` yoki `{ "deleted": true }`. Server o'z
+state'ini yangilaydi va clientga `service.pause_request` push event'i
+yuboradi. Client mesh forwarder'ni stop qiladi va `exposed_services`
+SQLite jadvalini yangilaydi.
+
+**Muhim**: bu ham opt-in toggle bilan bog'lanishi kerak — agar
+foydalanuvchi "Adminda boshqarish ruxsati" toggle'ini o'chirsa, server
+faqat **read** qila oladi, push event yubora olmaydi.
+
+### Client tomon — minimal ish
+
+Client opt-in toggle'i kerak (ikki shtat: ko'rsatish vs. boshqarish):
+- `Settings → Profile → "Web admin paneli"`:
+  - `[ ] Adminda portallarim ko'rinsin (read-only)`
+  - `[ ] Admin paneldan boshqarish ruxsat (pause/unpause)`
+
+Va ikki yangi WebSocket xabari signaling protokolida:
+- Client → Server: `service.announce` (ekspoz qilinganda)
+- Server → Client: `service.pause_request` (admin panel buyrug'i)
+
+### Hozirgi statik admin stub
+
+`web/admin/login.html` va `web/admin/dashboard.html` allaqachon yotibdi —
+lekin bular **statik mockup**. Real backend'ga ulanish uchun yuqoridagi
+endpointlar deploy qilinishi kerak.
+
+### Status
+
+| Komponent | Status |
+|-----------|--------|
+| Static admin login + dashboard mockup | ✅ DONE (`web/admin/`) |
+| `/api/auth/*` cookie sessions | ⚠️ kod bor, prod'ga deploy yo'q |
+| `/api/portals` (GET) | ❌ server kerak |
+| `/api/portals/:id/services` (GET) | ❌ server + client opt-in kerak |
+| `/api/portals/:id/services/:port` (PATCH) | ❌ server + client opt-in kerak |
+| Client `service.announce` / `service.pause_request` xabarlari | ❌ kerak |
+
+## Auto-update (v0.5.4 da yopildi)
+
+Foydalanuvchi: "auto update ham kerag menimcha". v0.5.4 da to'liq
+qo'shildi:
+
+- **Backend**: `client/updater/install.go` — `PrepareInstall` GitHub
+  Releases'dan asset yuklab oladi, `~/Library/Application Support/Portal`
+  o'rniga `os.TempDir()/portal-update-<ns>` ga staging qiladi, OS-specific
+  swap script (mac/linux: `/bin/bash`, windows: `.bat`) yozadi.
+- **Detach**: `setDetached()` per-OS — Unix'da `Setsid: true` (process
+  group'idan ajratish), Windows'da `cmd /c start /min` orqali.
+- **Frontend**: `App.tsx` — Update banner'ga ikkita tugma: **"Yangilash"**
+  (in-app installer kuchaytiradi) va **"↗"** (release sahifasini ochadi).
+- **Apply**: `pending.Apply()` script'ni spawn qiladi, keyin 500ms
+  kutib `runtime.Quit(ctx)` chaqiradi. Script process group'imizni
+  o'chgach `rm -rf old; mv new old; relaunch` qiladi.
+
+Sinov: `Settings → About → "Yangilashlarni tekshirish"` tugmasi
+`CheckForUpdate(refresh=true)` chaqiradi → 24h cache aylantirildi → yangi
+versiya ko'rinsa banner chiqadi → "Yangilash" tugmasi installer'ni
+ishga tushiradi.

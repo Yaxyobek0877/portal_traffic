@@ -160,6 +160,9 @@ export type StringKey =
   // Updater
   | "update.available"
   | "update.download"
+  | "update.install"
+  | "update.installing"
+  | "update.install_failed"
   | "update.dismiss"
 
   // Portal header (during session)

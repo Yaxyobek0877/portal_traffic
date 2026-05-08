@@ -15,6 +15,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	stdruntime "runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1281,6 +1282,60 @@ func splitTurnURLsForTest(s string) []string {
 // AppVersion returns the running Portal version (the const declared in
 // main.go). Surfaced in Settings → About.
 func (a *App) AppVersion() string { return Version }
+
+// InstallUpdate downloads the asset from the most recent
+// CheckForUpdate result, stages it next to a swap script, runs the
+// swap script in detached mode, and quits the running app so the
+// script can replace the binary cleanly. The user sees the dock
+// icon disappear for ~1 second and then the new version come up.
+//
+// Returns an error string when staging fails (network, archive
+// corrupt, no asset for the running OS); empty string on success
+// (the app will be terminated by the time the JS-side caller's
+// promise resolves, so seeing an empty error means 'we're going
+// down, restart imminent'.).
+func (a *App) InstallUpdate() string {
+	res := a.CheckForUpdate(false)
+	if !res.Available {
+		return "no update available"
+	}
+	if res.AssetForOS == "" {
+		return "no download URL for this platform"
+	}
+
+	// Determine the swap target. On macOS we replace the .app bundle
+	// (the inner Mach-O has parents we can't blow away while running);
+	// on Windows / Linux we replace the binary file directly.
+	exe, err := os.Executable()
+	if err != nil {
+		return "locate self: " + err.Error()
+	}
+	target := exe
+	if stdruntime.GOOS == "darwin" {
+		target = macAppPathFromExecutable(exe)
+	}
+
+	pending, err := updater.PrepareInstall(context.Background(), res.AssetForOS, target, nil)
+	if err != nil {
+		a.logger.Warn("update: prepare install failed", "err", err)
+		return err.Error()
+	}
+	a.logger.Info("update: applying",
+		"target", pending.CurrentPath, "staged", pending.StagedPath)
+
+	// Hand the swap script the goroutine it needs to outlive us, then
+	// quit the Wails app. The brief sleep before quit gives the JS
+	// side time to update its UI ('Restarting...').
+	if err := pending.Apply(); err != nil {
+		a.logger.Warn("update: apply failed", "err", err)
+		return err.Error()
+	}
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		runtime.Quit(a.ctx)
+	}()
+	return ""
+}
 
 // CheckForUpdate polls GitHub Releases for a newer version and returns
 // what it found. Result.Available is true only when a strictly newer

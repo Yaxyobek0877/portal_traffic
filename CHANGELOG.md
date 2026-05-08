@@ -7,7 +7,64 @@ ga rioya qiladi.
 
 ## [Unreleased]
 
-v0.5.3 dan keyingi ishlanma bu yerga yoziladi.
+v0.5.4 dan keyingi ishlanma bu yerga yoziladi.
+
+## [0.5.4] — 2026-05-08
+
+In-app auto-update va web admin paneli uchun server-side roadmap.
+v0.5.x serial yangilanishlarining yopilishi: foydalanuvchi endi
+relizlarni qo'lda yuklab olib, ikki marta bosib chiqarib qayta
+o'rnatishi shart emas — banner'dagi "Yangilash" tugmasi bir bosishda
+yangilab beradi.
+
+### Added — Yangi imkoniyatlar
+
+- **In-app auto-update (Yangilash tugmasi)** — Update banner'ga
+  ikkita yangi tugma qo'shildi:
+  - **Yangilash** — `App.InstallUpdate()` chaqiradi: GitHub Releases'dan
+    OS-specific asset'ni yuklab oladi (`client/updater/install.go`),
+    OS temp dir'ga staging qiladi (`portal-update-<unixns>`), swap
+    script (mac/linux: `/bin/bash`, windows: `.bat`) yozadi va detached
+    spawn qiladi (Unix `Setsid: true`, Windows `cmd /c start /min`).
+    500 ms keyin `runtime.Quit(ctx)` chaqirib o'zini o'chiradi; script
+    eski binary'ni `rm -rf` qilib, yangisini ko'chirib qayta ishga
+    tushiradi (macOS'da `open`, Linux'da bevosita exec, Windows'da
+    `start ""`).
+  - **↗** — release sahifasini brauzerda ochadi (avval bo'lgan oqim,
+    qoldirildi: foydalanuvchi notlarni o'qishi yoki qo'lda yuklab
+    olishi mumkin).
+  - Tugma `installing` paytida `Yangilanmoqda…` deb yoziladi va
+    `disabled` bo'ladi (Dismiss tugmasi ham bloklanadi). Xato bo'lsa
+    banner ostida `update.install_failed` matni ko'rinadi.
+  - Zip va tar.gz arxivlari qo'llab-quvvatlanadi (`unzip` + `untargz`),
+    zip-slip / tar-slip himoyasi bor.
+- **Web admin paneli — server-side roadmap** —
+  `docs/ROOM-CONTROLS-GAPS.md` da yangi bo'lim
+  **"Web admin paneli (online qurilma boshqaruvi)"**: foydalanuvchi
+  brauzerdan turib o'z portal/peer/servislarini ko'rish va boshqarish
+  uchun nima kerak — `/api/portals`, `/api/portals/:id/services`,
+  `service.announce` / `service.pause_request` xabarlari, opt-in
+  toggle'lari. Hozirgi `web/admin/login.html` + `dashboard.html`
+  static mockup, real backend deploy qilinishi kerak. Hech qaysi
+  client tomon o'zgarish ishlamaguncha avval server tomon qayta
+  yozilishi kerak — bu hujjatlash, kelajakda bosqichma-bosqich
+  amalga oshirish uchun.
+
+### Changed — O'zgartirilgan
+
+- **Update banner kengligi** — `max-w-[280px]` → `w-[320px]` (yangi
+  Yangilash tugmasini joylab olish uchun).
+- **Update banner tugmasi yorlig'i** — eski "Yuklab olish" tugmasi
+  endi kompakt "↗" (release sahifa link), `Yangilash` esa primary
+  CTA. i18n key'lari: `update.install`, `update.installing`,
+  `update.install_failed`.
+
+### Documentation
+
+- `docs/ROOM-CONTROLS-GAPS.md` — yangi bo'lim **"Auto-update
+  (v0.5.4 da yopildi)"**: backend / detach / frontend dizayni
+  qisqacha yozilgan; web admin uchun **uchta server endpoint'i**
+  va **ikkita yangi WebSocket xabari**ning shartlari.
 
 ## [0.5.3] — 2026-05-08
 
@@ -388,7 +445,12 @@ Client mesh dvigateli — Wails'siz CLI test harness.
 
 Signal serveri (xususiy repo'da) ishga tushdi: `signaling.1pro.uz/ws`.
 
-[Unreleased]: https://github.com/Yaxyobek0877/portal_traffic/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Yaxyobek0877/portal_traffic/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.5.4
+[0.5.3]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.5.3
+[0.5.2]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.5.2
+[0.5.1]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.5.1
+[0.5.0]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.5.0
 [0.4.1]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.3.0

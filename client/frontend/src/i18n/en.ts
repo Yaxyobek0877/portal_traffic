@@ -171,7 +171,10 @@ export const en: Dict = {
 
   // Updater
   "update.available": "New version available:",
-  "update.download": "Download",
+  "update.download": "Page",
+  "update.install": "Install",
+  "update.installing": "Installing…",
+  "update.install_failed": "Install failed: ",
   "update.dismiss": "Dismiss",
 
   // Portal header
