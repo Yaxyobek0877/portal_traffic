@@ -7,7 +7,48 @@ ga rioya qiladi.
 
 ## [Unreleased]
 
-v0.5.1 dan keyingi ishlanma bu yerga yoziladi.
+v0.5.2 dan keyingi ishlanma bu yerga yoziladi.
+
+## [0.5.2] — 2026-05-08
+
+Patch reliz: device-name bilan auto-resume bog'liq blokerni tuzatish
+va landing page'ni yangilash.
+
+### Fixed — Tuzatilgan xatolar
+
+- **Auto-reconnect server tomonidan bloklanardi** — v0.5.1'da
+  qo'shilgan device-name `'·'` (middle-dot) ni mesh nicknamesiga
+  qo'shardi (`'texuz · mac'`). Deployed signaling server'ning
+  nickname validator'i Unicode glyph'larni va whitespace'ni rad
+  qiladi → `NICKNAME_INVALID` xatosi → `ResumeActiveSessions` har
+  saqlangan owner sessiya uchun fail bo'lardi va yangi portal_id
+  ham olinmasdan rad etilardi. Endi separator `'@'` (server qabul
+  qiladigan ASCII char) va whitespace strip qilinadi: `'texuz@win64'`
+  → server qabul qiladi → auto-resume ishlaydi.
+- Frontend `splitNicknameAndDevice` helper'i wire-format'ni
+  vizual ko'rinishga aylantiradi: `'texuz@uy'` → "texuz · uy"
+  (PeerCard'da username + device'ni alohida pretty-print qiladi).
+
+### Documentation
+
+- `docs/ROOM-CONTROLS-GAPS.md` — yangi bo'lim **Owner-offline portal
+  survival**: foydalanuvchi shikoyatining server-side root cause'i
+  (server owner disconnect bo'lishi bilan portal'ni o'chiradi → yangi
+  portal_id → friends'ning eski code'i ishlamaydi). Server-side
+  yechim sxemasi yozildi: 5-10 daqiqa grace period, ownership
+  transfer fallback.
+
+### Changed — Landing page
+
+- `web/index.html`: eski "6 xonali kod" ga oid matnlar yangilandi.
+- Yangi bo'lim **"v0.5.x da yangi"** — 8 ta feature card (mahalliy
+  hisob, multi-portal, auto-reconnect, approval, device name,
+  LAN qurilmalar, system startup, bandwidth probe).
+- Roadmap to'liq qayta yozildi: 8-bosqich (v0.5.0 + v0.5.1) tugadi
+  belgilandi, 9-bosqich (code signing) jarayonda, 10-bosqich
+  (cloud auth + xona boshqaruvi) keyingi.
+- "Qadamlar" bo'limiga "Hisob yarating" qadami qo'shildi (v0.5.0
+  vault'i sababli).
 
 ## [0.5.1] — 2026-05-08
 

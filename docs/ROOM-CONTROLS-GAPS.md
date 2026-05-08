@@ -78,7 +78,69 @@ xona uchun "**every join asks admin**" rejimini xohladi.
   `ApprovalQueue` kabi)
 - Pending peerlar UI'da "Ulanish kutilmoqda" indicator
 
-### 4. Multi-device login (bir akkaunt — bir nechta qurilma)
+### 4. Owner-offline portal survival (eng katta server gap)
+
+**Foydalanuvchi shikoyati**: "room ni egasi offline bo'lsa qolgan qurilmalar
+room ga kira olmayabdi". Hozir signal server **owner disconnect** bo'lishi
+bilan portal'ni o'chiradi:
+
+- Owner Wi-Fi'dan uziladi yoki dasturni yopadi → server portal'ni `closed`
+  qiladi
+- Joiner peer'lar `EventPortalClosed` oladi va xona yopiladi
+- Owner qaytib kelganda **yangi portal_id** beriladi (eski o'lgan)
+- Friends'da saqlangan eski code endi ishlamaydi
+
+Client-side `ResumeActiveSessions` ishlayapti (logda
+`send portal.create → recv portal.created portal_id=393789` ko'rinadi),
+lekin yangi portal_id bilan. Friends'lar yangi ID + code'ni qaytadan
+olishlari kerak.
+
+**Server o'zgarish**:
+
+Eng minimal yechim — **grace period**:
+- Owner disconnect bo'lganda portal'ni darhol o'chirmasdan, 5-10 minut
+  saqlab turish
+- Bu vaqt ichida owner qaytib kelsa, **bir xil portal_id** bilan qayta
+  ulansin
+- Joiner peer'lar `signaling.reconnecting` event olishadi (yopilmaydi,
+  faqat "owner ulanmoqda" indikatori)
+- Grace period o'tsa, portal yopiladi (hozirgidek)
+
+Yanada to'liq yechim — **ownership transfer**:
+- Owner uzoq vaqtga uzilsa, ikkinchi peer (sort: birinchi qo'shilgan)
+  egasiga aylanadi
+- Original owner qaytsa, oddiy joiner sifatida ulanadi
+- "Co-host" / "moderator" tushunchasi ham mumkin
+
+Server kodida (loyihangizdagi `cmd/signaling/main.go` yoki tegishli
+fayl) `Portal.OnOwnerDisconnect` handler'ni:
+```go
+// Hozir:
+func (p *Portal) OnOwnerDisconnect() { p.Close() }
+
+// Kerak:
+func (p *Portal) OnOwnerDisconnect() {
+    p.state = "owner_offline"
+    p.gracePeriod = time.AfterFunc(5*time.Minute, p.Close)
+    p.broadcast(EventOwnerOffline)
+}
+
+func (p *Portal) OnOwnerReconnect(peerID string) error {
+    if p.gracePeriod != nil {
+        p.gracePeriod.Stop()
+        p.gracePeriod = nil
+    }
+    p.state = "active"
+    p.broadcast(EventOwnerOnline)
+    // … re-attach owner peerID
+}
+```
+
+Client tomondan qo'shimcha ish kerak emas — `EventPortalClosed`
+o'rniga `EventOwnerOffline` / `EventOwnerOnline` event'lari kelsa,
+UI'da "egasi qayta ulanmoqda" yorlig'i ko'rsatish foydali bo'ladi.
+
+### 5. Multi-device login (bir akkaunt — bir nechta qurilma)
 
 Hozir har Portal install **mahalliy** vault (username + parol) ushlaydi.
 Foydalanuvchi telefon + laptop + ishxonadan **bir xil akkaunt** bilan

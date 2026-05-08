@@ -882,18 +882,32 @@ func (a *App) ResumeActiveSessions() error {
 }
 
 // resumeOne handles a single active-session row. Best-effort —
-// failures get logged and the row is dropped so we don't loop on
-// it forever.
+// success rewrites the row with the freshly-issued portal_id,
+// failure leaves the row intact so the next launch can retry.
+//
+// Earlier versions dropped the row on any failure, which made a
+// transient server hiccup (e.g. a regex tightening that bumped
+// every owner-row to NICKNAME_INVALID once) wipe the user's whole
+// auto-reconnect set. Leaving rows in place on transient failure
+// is the safer default: a permanently-dead portal still self-heals
+// because BackgroundJoinPortal's mesh layer surfaces 'no such
+// portal' once the user manually retries, and persistEnter on a
+// successful re-create overwrites the stale row in place anyway.
 func (a *App) resumeOne(row storage.ActiveSessionRow) {
 	if row.IsOwner {
 		a.logger.Info("resume: re-creating owner session",
 			"old_portal_id", row.PortalID, "nickname", row.Nickname)
-		// Drop the stale row first — BackgroundCreatePortal's persist
-		// step will write a new one keyed on the freshly-issued id.
-		a.forgetActiveSession(row.PortalID)
-		if _, err := a.BackgroundCreatePortal(row.Nickname); err != nil {
-			a.logger.Warn("resume: owner re-create failed",
+		pv, err := a.BackgroundCreatePortal(row.Nickname)
+		if err != nil {
+			a.logger.Warn("resume: owner re-create failed; keeping row for retry",
 				"old_portal_id", row.PortalID, "err", err)
+			return
+		}
+		// Success: persistEnter has already inserted a row keyed on
+		// the new portal_id. Drop the stale row so we don't pile up
+		// dead pointers across reboots.
+		if pv.PortalID != row.PortalID {
+			a.forgetActiveSession(row.PortalID)
 		}
 		return
 	}
@@ -906,9 +920,27 @@ func (a *App) resumeOne(row storage.ActiveSessionRow) {
 	a.logger.Info("resume: rejoining session",
 		"portal_id", row.PortalID, "nickname", row.Nickname)
 	if _, err := a.BackgroundJoinPortal(row.Nickname, row.PortalID, row.Code); err != nil {
-		a.logger.Warn("resume: join failed; dropping row",
-			"portal_id", row.PortalID, "err", err)
-		a.forgetActiveSession(row.PortalID)
+		// Only drop the row when the portal is provably gone — keeping
+		// it on transient errors lets the next launch retry without
+		// the user having to remember their friend's id+code.
+		permanent := false
+		if errMsg := err.Error(); errMsg != "" {
+			lower := strings.ToLower(errMsg)
+			if strings.Contains(lower, "no such portal") ||
+				strings.Contains(lower, "portal_full") ||
+				strings.Contains(lower, "portal_locked") ||
+				strings.Contains(lower, "code does not match") {
+				permanent = true
+			}
+		}
+		if permanent {
+			a.logger.Warn("resume: portal permanently gone; dropping row",
+				"portal_id", row.PortalID, "err", err)
+			a.forgetActiveSession(row.PortalID)
+		} else {
+			a.logger.Warn("resume: join failed; keeping row for retry",
+				"portal_id", row.PortalID, "err", err)
+		}
 	}
 }
 

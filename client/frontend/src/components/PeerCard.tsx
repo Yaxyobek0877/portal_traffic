@@ -37,7 +37,7 @@ import {
 import type { PeerView, BandwidthResult } from "../types";
 import { app } from "../lib/wails";
 import { avatarColor, avatarInitial } from "../lib/avatar";
-import { rttLabel, shortId } from "../lib/format";
+import { rttLabel, shortId, splitNicknameAndDevice } from "../lib/format";
 
 type Props = {
   peer: PeerView;
@@ -182,9 +182,23 @@ export function PeerCard({ peer, highlighted, onForget }: Props) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <div className="font-medium truncate text-sm">
-              {peer.nickname || shortId(peer.peerId)}
-            </div>
+            {(() => {
+              // 'username@device' on the wire → 'username · device'
+              // in the UI. See lib/format.splitNicknameAndDevice.
+              const { nickname, device } = splitNicknameAndDevice(
+                peer.nickname || shortId(peer.peerId),
+              );
+              return (
+                <>
+                  <div className="font-medium truncate text-sm">{nickname}</div>
+                  {device && (
+                    <span className="text-[10px] text-zinc-500 font-mono shrink-0">
+                      · {device}
+                    </span>
+                  )}
+                </>
+              );
+            })()}
             {peer.isOwner && (
               <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2} />
             )}

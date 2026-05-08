@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0a0e1a" />
 
 <title>Portal — to'g'ridan-to'g'ri ulanish, orada server yo'q</title>
-<meta name="description" content="Portal — peer-to-peer mesh tarmoq dasturi. 6 xonali kod ulashing, 16 tagacha qurilma to'g'ridan-to'g'ri ulanadi: chat, fayl, port tunnel. Signal serveri faqat handshake uchun." />
+<meta name="description" content="Portal — peer-to-peer mesh tarmoq dasturi. Mahalliy hisob, bir nechta portal bir vaqtda, avtomatik qayta ulanish. 16 tagacha qurilma to'g'ridan-to'g'ri ulanadi: chat, fayl, port tunnel (kamera/NVR/o'yin server). Signal serveri faqat handshake uchun." />
 
 <meta property="og:title" content="Portal — P2P mesh tarmoq" />
 <meta property="og:description" content="To'g'ridan-to'g'ri ulanish. Orada hech qanday server yo'q." />
@@ -697,6 +697,7 @@
     </a>
     <div class="links">
       <a href="#imkoniyatlar">Imkoniyatlar</a>
+      <a href="#yangiliklar">v0.5.x da yangi</a>
       <a href="#mesh">Mesh</a>
       <a href="#qadamlar">Qanday ishlaydi</a>
       <a href="#roadmap">Roadmap</a>
@@ -760,8 +761,8 @@
     <h1>To'g'ridan-to'g'ri ulanish.<br/>Orada hech qanday <span class="gradient-text">server yo'q</span>.</h1>
     <p class="tagline">
       Portal — qurilmalar o'rtasida xususiy <strong>peer-to-peer mesh</strong> tarmoq quradigan
-      desktop dastur. 6 xonali kod ulashing — 16 tagacha qurilma to'g'ridan-to'g'ri ulanadi.
-      Chat, fayl, hatto LAN-style port tunneli — hammasi P2P.
+      desktop dastur. Mahalliy hisob, bir nechta xona bir vaqtda, avtomatik qayta ulanish.
+      Chat, fayl, kamera/NVR/o'yin serveri uchun port tunneli — hammasi P2P.
     </p>
 
     <!-- Prominent download grid — moved above the CTA row per user
@@ -846,7 +847,7 @@
           </svg>
         </div>
         <h3>2 dan 16 qurilmagacha</h3>
-        <p>6 xonali ID + kod ulashing, internetning istalgan joyidan kim xohlasa qo'shiladi. Router sozlash yo'q, VPN yo'q, port forwarding yo'q.</p>
+        <p>Portal ID + kod ulashing — do'stlaringiz internetning istalgan joyidan to'g'ridan-to'g'ri qo'shiladi. Router sozlash yo'q, VPN yo'q, port forwarding yo'q.</p>
       </div>
 
       <div class="card tilt reveal">
@@ -902,8 +903,101 @@
             <rect x="18" y="18" width="3" height="3"/>
           </svg>
         </div>
-        <h3>QR + 6 xonali kod</h3>
-        <p>Yonidagi do'stga QR ni ko'rsating yoki masofadagi do'stga ID + kodni yuboring. Hisob qaydnomasi yoki email kerak emas.</p>
+        <h3>QR + portal kod</h3>
+        <p>Yonidagi do'stga QR ni ko'rsating yoki masofadagi do'stga ID + kodni yuboring. Email yoki tashqi ro'yxatdan o'tish yo'q — faqat mahalliy hisob.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== v0.5.x yangi imkoniyatlar =================== -->
+<section id="yangiliklar" style="background: linear-gradient(180deg, transparent, rgba(139,92,246,.04) 50%, transparent);">
+  <div class="container">
+    <p class="eyebrow reveal">v0.5.x da yangi</p>
+    <h2 class="reveal">Bir desktop, <span class="gradient-text">to'liq xona boshqaruvi</span>.</h2>
+    <p class="lede reveal">Oxirgi relizda hisob, multi-portal, avtomatik qayta ulanish va xavfsizlik gate'lari qo'shildi. Hammasi mahalliy — signaling server faqat handshake'da ishtirok etadi.</p>
+
+    <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:32px">
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <h3>Mahalliy hisob</h3>
+        <p>Username + bcrypt parol (8 ta belgi, kuchli). Akkaunt va portal tarixingiz hech qachon serverga jo'natilmaydi.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+            <circle cx="7" cy="9" r="1.5"/><circle cx="12" cy="9" r="1.5"/><circle cx="17" cy="9" r="1.5"/>
+          </svg>
+        </div>
+        <h3>Bir nechta xona bir vaqtda</h3>
+        <p>"Fonda ulash" bilan oilaviy + ishxona + o'yin xonalarini parallel oching. Header'dagi switcher bilan o'tib turing.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 10 15 10"/>
+          </svg>
+        </div>
+        <h3>Avtomatik qayta ulanish</h3>
+        <p>Tizim qayta yuklansa, oldingi sessiyalar va exposed servislar lock'dan chiqishi bilan avtomatik tiklanadi.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M12 8v4M12 16h.01"/>
+          </svg>
+        </div>
+        <h3>Tasdiqlab yoqish</h3>
+        <p>Har servisga "approval mode" toggle'i. Peer ulanmoqchi bo'lganda sizga modal chiqadi: <em>kim, qaysi servis</em>, ruxsat berasizmi?</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 2v4M16 2v4M2 10h20"/>
+          </svg>
+        </div>
+        <h3>Qurilma nomi</h3>
+        <p>Bir akkauntdan turli qurilmalardan kirsangiz, room'da <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">texuz · uy</code> ko'rinishida farqlanasiz.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <h3>LAN qurilmalar (NVR/kamera)</h3>
+        <p>Hikvision NVR'ni LAN'dagi <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">192.168.x.x:554</code> dan mesh orqali do'stga uzating. Mesh-port remap, smart-paste IP:port, health probe.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <h3>Tizim startup'i</h3>
+        <p>macOS LaunchAgent / Windows registry / Linux .desktop bilan boot keyin avtomatik ishga tushish — settings'dan toggle.</p>
+      </div>
+
+      <div class="card reveal">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3h18v6H3zM3 15h18v6H3zM7 6h.01M11 6h.01M7 18h.01M11 18h.01"/>
+          </svg>
+        </div>
+        <h3>Bandwidth probe + path tagi</h3>
+        <p>Har peer kartasida 3-soniyalik bandwidth o'lchov, ICE selected-pair manzillari, LAN/Internet/TURN tagi.</p>
       </div>
     </div>
   </div>
@@ -953,13 +1047,21 @@
 <section id="qadamlar" style="background: linear-gradient(180deg, transparent, rgba(255,255,255,.015) 50%, transparent);">
   <div class="container">
     <p class="eyebrow reveal">Qanday ishlaydi</p>
-    <h2 class="reveal">Uch qadamda <span class="gradient-text">jonli mesh</span>.</h2>
-    <p class="lede reveal">Hisobga ro'yxatdan o'tish yo'q. Server tomonidan saqlangan ma'lumot yo'q. Faqat 6 xonali raqam.</p>
+    <h2 class="reveal">To'rt qadamda <span class="gradient-text">jonli mesh</span>.</h2>
+    <p class="lede reveal">Akkaunt mahalliy — bcrypt-himoyalangan parol bilan, qurilmangizdan tashqariga chiqmaydi. Email yoki tashqi serverda ro'yxatdan o'tish yo'q.</p>
 
     <div class="steps">
       <div class="step reveal">
+        <h3>Hisob yarating</h3>
+        <p>Birinchi ochishda <strong>username + parol</strong> tanlang (8 ta belgi, kuchli). Keyingi ochishlarda lock screen'dan kirasiz.</p>
+        <div class="demo">
+          <span class="label">user:</span> <span class="id">texuz</span><br/>
+          <span class="label">pwd:</span>  <span class="code">••••••••</span>
+        </div>
+      </div>
+      <div class="step reveal">
         <h3>Portalni oching</h3>
-        <p>Dasturni oching, taxallus yozing va <strong>"Portal yaratish"</strong> ni bosing.</p>
+        <p><strong>"Portal yaratish"</strong> bossangiz yangi xona ID va kod bilan tug'iladi.</p>
         <div class="demo">
           <span class="label">ID:</span>   <span class="id">428591</span><br/>
           <span class="label">KOD:</span>  <span class="code">739204</span>
@@ -981,9 +1083,9 @@
         <h3>Mesh tushadi</h3>
         <p>Har bir qurilma boshqa har biriga to'g'ridan-to'g'ri ulanadi. Server orqali emas.</p>
         <div class="demo">
-          <span class="label">peer-1</span> ↔ <span class="label">peer-2</span> · <span class="id">0.4ms</span><br/>
-          <span class="label">peer-1</span> ↔ <span class="label">peer-3</span> · <span class="id">0.6ms</span><br/>
-          <span class="label">peer-2</span> ↔ <span class="label">peer-3</span> · <span class="id">0.5ms</span>
+          <span class="label">texuz · uy</span> ↔ <span class="label">alice · ish</span> · <span class="id">0.4ms</span><br/>
+          <span class="label">texuz · uy</span> ↔ <span class="label">bob · mac</span> · <span class="id">0.6ms</span><br/>
+          <span class="label">alice · ish</span> ↔ <span class="label">bob · mac</span> · <span class="id">0.5ms</span>
         </div>
       </div>
     </div>
@@ -1027,8 +1129,8 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
 <section id="roadmap">
   <div class="container">
     <p class="eyebrow reveal">Joriy holat</p>
-    <h2 class="reveal">Beshta bosqichda quriladi.</h2>
-    <p class="lede reveal">Beshta bosqich tugadi — Portal funksional jihatdan to'liq. Har bir bosqich ishlaydigan to'xtash nuqtasi: oldingisi tasdiqlangan tarzda ishlamasdan turib keyingisiga o'tilmaydi.</p>
+    <h2 class="reveal">Bosqichma-bosqich quriladi.</h2>
+    <p class="lede reveal">Birinchi sakkiz bosqich tugadi — Portal funksional jihatdan to'liq. Har bir bosqich ishlaydigan to'xtash nuqtasi: oldingisi tasdiqlangan tarzda ishlamasdan turib keyingisiga o'tilmaydi.</p>
 
     <div class="roadmap">
       <div class="roadmap-row reveal">
@@ -1053,27 +1155,42 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
       </div>
       <div class="roadmap-row reveal">
         <span class="num">05</span>
-        <span class="name">Kuchli imkoniyatlar<span class="desc">TCP/UDP proxy, secretbox shifrlash, auto-reconnect, bandwidth metrikasi</span></span>
+        <span class="name">Kuchli imkoniyatlar<span class="desc">TCP/UDP proxy, secretbox shifrlash, bandwidth metrikasi, peer table</span></span>
         <span class="status done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">06</span>
-        <span class="name">v0.4.0 launch<span class="desc">PCP-1, MIT litsenziya, GitHub Actions CI/CD, Privacy/Terms, README polish</span></span>
-        <span class="status wip">tayyorlanmoqda</span>
+        <span class="name">v0.4.0 launch<span class="desc">PCP-1 shifrlash, MIT litsenziya, GitHub Actions CI/CD, Privacy/Terms, mobile (Android) beta</span></span>
+        <span class="status done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">07</span>
+        <span class="name">v0.5.0 — meeting tajribasi<span class="desc">Mahalliy hisob (vault), multi-portal sessiyalar, background-connect, avtomatik qayta ulanish, per-port approval gate, persistent peers</span></span>
+        <span class="status done">tugadi</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">08</span>
+        <span class="name">v0.5.1 — desktop polish<span class="desc">App icons (mac/win/linux), qurilma nomi, system startup auto-run, stabil download URL'lari</span></span>
+        <span class="status done">tugadi</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">09</span>
+        <span class="name">Code signing<span class="desc">Apple Developer ID + Authenticode — Gatekeeper / SmartScreen ogohlantirishlarini olib tashlash</span></span>
+        <span class="status wip">jarayonda</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">10</span>
+        <span class="name">Cloud auth + xona boshqaruvi<span class="desc">Server-side /api/auth (multi-device login), kod regenerate, "ask admin" join mode, owner-offline portal-survival</span></span>
+        <span class="status next">keyin</span>
+      </div>
+      <div class="roadmap-row reveal">
+        <span class="num">11</span>
         <span class="name">Mobile (Android) reliz<span class="desc">Play Store internal track, PCP-1 portativ, signed APK</span></span>
         <span class="status next">keyin</span>
       </div>
       <div class="roadmap-row reveal">
-        <span class="num">08</span>
-        <span class="name">Auto-update + crash reporting<span class="desc">Sparkle / WinSparkle, opt-in telemetry, foydalanuvchi qadamlarsiz yangilanish</span></span>
-        <span class="status next">keyin</span>
-      </div>
-      <div class="roadmap-row reveal">
-        <span class="num">09</span>
-        <span class="name">Kelajak<span class="desc">Ovoz kanali (push-to-talk), iOS, plugin API</span></span>
+        <span class="num">12</span>
+        <span class="name">Kelajak<span class="desc">Ovoz/video kanali (WebRTC media), iOS, plugin API</span></span>
         <span class="status next">keyin</span>
       </div>
     </div>

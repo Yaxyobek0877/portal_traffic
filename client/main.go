@@ -26,7 +26,7 @@ import (
 // Version is the canonical product version. Bump for each release;
 // embedded into Wails app metadata, the Settings → About tab, and
 // the User-Agent string sent to the GitHub Releases API.
-const Version = "0.5.1"
+const Version = "0.5.2"
 
 // keep slog import alive even if main.go shrinks
 var _ = slog.LevelInfo
