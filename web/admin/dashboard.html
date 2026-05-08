@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/admin/admin.css?v=0.5.4" />
+<link rel="stylesheet" href="/admin/admin.css?v=0.5.5" />
 </head>
 <body>
 
@@ -46,13 +46,9 @@
 
     <div class="alert info" id="note" style="display:none"></div>
   </main>
-
-  <footer class="foot">
-    <a href="/">portal.1pro.uz</a>
-  </footer>
 </div>
 
-<script src="/admin/admin.js?v=0.5.4"></script>
+<script src="/admin/admin.js?v=0.5.5"></script>
 <script>
 (() => {
   const A = window.PortalAdmin;
@@ -86,33 +82,72 @@
   }
   A.onPaint(paint);
 
+  // HTML escape helper — portal labels and nicknames are user input
+  // so we never render them via innerHTML without escaping.
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
   function renderPortals() {
     const host = $("portalsBody");
     if (!portals.length) {
       host.innerHTML = `<div class="empty">${A.t("dash.portals.empty")}</div>`;
     } else {
       const items = portals.map((p) => {
-        const initial = (p.ownerNickname?.[0] || "?").toUpperCase();
-        const peerNote = p.peerCount > 0 ? `· ${p.peerCount} peer` : "";
+        const ownerNick = p.ownerNickname || "—";
+        const initial = (ownerNick[0] || "?").toUpperCase();
+        const youOrThey = p.isOwner ? "Siz" : ownerNick;
+        const peerNote = `${p.peerCount} / ${p.capacity || 16} a'zo`;
+        const lockBadge = p.isLocked
+          ? `<span class="pill" style="background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.4);color:#fda4af;font-size:10px;padding:2px 7px;border-radius:999px;margin-left:6px">qulflangan</span>`
+          : "";
+        const ownerBadge = p.isOwner
+          ? `<span class="pill" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);color:#c7b8ff;font-size:10px;padding:2px 7px;border-radius:999px;margin-left:6px">egasi</span>`
+          : "";
+        const codeRow = p.isOwner && p.code
+          ? `<div class="meta" style="font-family:JetBrains Mono,monospace;font-size:11px;margin-top:2px">Kod: <span style="color:var(--accent-3);user-select:all">${esc(p.code)}</span></div>`
+          : "";
+        const labelLine = p.label
+          ? `<div style="font-weight:600">${esc(p.label)}</div>`
+          : "";
         return `
-          <div class="list-item">
-            <span class="avatar" style="width:28px;height:28px;border-radius:50%;background:var(--gradient);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;">${initial}</span>
+          <div class="list-item" style="display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)">
+            <span class="avatar" style="width:36px;height:36px;border-radius:50%;background:var(--gradient);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:white;flex:0 0 auto">${esc(initial)}</span>
             <div style="flex:1;min-width:0">
-              <div><span class="pid">${p.portalId}</span> <span class="meta">${p.ownerNickname || ""}</span></div>
-              <div class="meta">${peerNote}</div>
+              ${labelLine}
+              <div><span class="pid" style="font-family:JetBrains Mono,monospace;color:var(--text)">${esc(p.portalId)}</span>${ownerBadge}${lockBadge}</div>
+              <div class="meta">${esc(youOrThey)} · ${peerNote}</div>
+              ${codeRow}
             </div>
           </div>
         `;
       }).join("");
-      host.innerHTML = `<div class="list">${items}</div>`;
+      host.innerHTML = `<div class="list" style="display:flex;flex-direction:column;gap:10px">${items}</div>`;
     }
 
     if (serverNote) {
       $("note").style.display = "";
-      $("note").textContent = `${A.t("dash.note")} ${serverNote}`;
+      $("note").textContent = serverNote;
     } else {
       $("note").style.display = "none";
     }
+  }
+
+  // Auto-refresh portals list every 5 seconds so the dashboard reflects
+  // peers joining/leaving on other devices without a manual reload.
+  let pollTimer = null;
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(async () => {
+      try {
+        const data = await A.api("/api/portals");
+        portals = data?.portals || [];
+        serverNote = data?.note || "";
+        renderPortals();
+      } catch (_) { /* ignore — next tick will retry */ }
+    }, 5000);
   }
 
   // Sign-out: hit the API, then redirect to login. Keep the spinner
@@ -143,6 +178,7 @@
       portals = [];
     }
     paint();
+    startPolling();
   })();
 })();
 </script>

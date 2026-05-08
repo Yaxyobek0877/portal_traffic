@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/admin/admin.css?v=0.5.4" />
+<link rel="stylesheet" href="/admin/admin.css?v=0.5.5" />
 </head>
 <body>
 
@@ -55,11 +55,26 @@
             <path d="M9.5 13.5 19 4M14 9l3 3"/>
           </svg>
           <input type="password" id="password" name="password" maxlength="128" required />
+          <button type="button" class="reveal-btn" id="passwordToggle" tabindex="-1" aria-label="Parolni ko'rsatish">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
         </div>
 
-        <div class="field" id="confirmField" style="display:none">
+        <div class="field with-icon" id="confirmField" style="display:none">
           <label for="confirm" id="lblConfirm"></label>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5"/>
+          </svg>
           <input type="password" id="confirm" name="confirm" maxlength="128" autocomplete="new-password" />
+          <button type="button" class="reveal-btn" id="confirmToggle" tabindex="-1" aria-label="Parolni ko'rsatish">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
         </div>
 
         <div class="strength" id="strength" style="display:none">
@@ -88,12 +103,9 @@
     </div>
   </div>
 
-  <footer class="foot">
-    <a href="/">portal.1pro.uz</a>
-  </footer>
 </div>
 
-<script src="/admin/admin.js?v=0.5.4"></script>
+<script src="/admin/admin.js?v=0.5.5"></script>
 <script>
 (() => {
   const A = window.PortalAdmin;
@@ -201,6 +213,24 @@
   $("tabSignin").addEventListener("click", () => switchTab("signin"));
   $("tabSignup").addEventListener("click", () => switchTab("signup"));
   $("password").addEventListener("input", refreshStrength);
+
+  // Password reveal toggles. Both fields get an eye button whose
+  // click flips the input's type between password ↔ text. Tabindex
+  // is -1 so the toggle never steals focus from the form's tab order.
+  function bindReveal(btnId, inputId, hideLbl, showLbl) {
+    const btn = $(btnId);
+    const inp = $(inputId);
+    if (!btn || !inp) return;
+    let visible = false;
+    btn.addEventListener("click", () => {
+      visible = !visible;
+      inp.type = visible ? "text" : "password";
+      btn.setAttribute("aria-label", visible ? hideLbl : showLbl);
+      btn.classList.toggle("active", visible);
+    });
+  }
+  bindReveal("passwordToggle", "password", "Parolni yashirish", "Parolni ko'rsatish");
+  bindReveal("confirmToggle",  "confirm",  "Parolni yashirish", "Parolni ko'rsatish");
 
   // Submit
   $("form").addEventListener("submit", async (e) => {

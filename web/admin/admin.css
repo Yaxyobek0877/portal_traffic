@@ -83,7 +83,7 @@ a:hover { text-decoration: underline; }
 .field input::placeholder { color: var(--text-faint); }
 
 .field.with-icon { position: relative; }
-.field.with-icon input { padding-left: 38px; }
+.field.with-icon input { padding-left: 38px; padding-right: 44px; }
 .field.with-icon .icon {
   position: absolute;
   left: 12px;
@@ -92,6 +92,27 @@ a:hover { text-decoration: underline; }
   color: var(--text-faint);
   pointer-events: none;
 }
+
+/* Eye-icon reveal button for password fields. Sits inside the input
+   slot at the right edge; tabindex=-1 in HTML so it doesn't break
+   keyboard tab order. Click flips the input's type between password
+   and text. .active class is added when revealed for a subtle hint. */
+.reveal-btn {
+  position: absolute;
+  right: 6px;
+  top: 26px;
+  width: 30px; height: 30px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-faint);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: color .15s ease, background .15s ease;
+}
+.reveal-btn:hover { color: var(--text); background: var(--surface); }
+.reveal-btn.active { color: var(--accent); }
+.reveal-btn svg { width: 16px; height: 16px; }
 
 /* ---------- buttons ---------- */
 .btn {
