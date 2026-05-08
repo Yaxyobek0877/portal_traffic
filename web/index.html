@@ -389,6 +389,34 @@
     padding: 24px;
     display: flex; flex-direction: column; gap: 14px;
   }
+  .login-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    padding: 3px;
+    gap: 3px;
+    margin-bottom: 4px;
+  }
+  .login-tab {
+    background: transparent;
+    border: 0;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .login-tab:hover { color: var(--text); }
+  .login-tab.active {
+    background: var(--gradient);
+    color: white;
+    box-shadow: 0 4px 12px -4px rgba(139,92,246,.5);
+  }
   .login-card label {
     display: flex; flex-direction: column; gap: 6px;
     font-size: 12px; color: var(--text-dim);
@@ -941,28 +969,28 @@
       Yuklab olish · Download
     </h2>
     <div class="download-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;max-width:760px;margin:0 auto 28px;font-size:14px">
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-darwin-arm64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+      <a href="/download/Portal-darwin-arm64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
          onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
         <strong style="font-size:15px">macOS</strong>
         <span style="color:var(--text-dim);font-size:12px">Apple Silicon (M1/M2/M3/M4)</span>
         <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.zip · darwin-arm64</span>
       </a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-darwin-amd64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+      <a href="/download/Portal-darwin-amd64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
          onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
         <strong style="font-size:15px">macOS</strong>
         <span style="color:var(--text-dim);font-size:12px">Intel (x86_64)</span>
         <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.zip · darwin-amd64</span>
       </a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-windows-amd64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+      <a href="/download/Portal-windows-amd64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
          onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
         <strong style="font-size:15px">Windows</strong>
         <span style="color:var(--text-dim);font-size:12px">10 / 11 · 64-bit</span>
         <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.exe · windows-amd64</span>
       </a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-linux-amd64.tar.gz" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
+      <a href="/download/Portal-linux-amd64.tar.gz" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
          onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
         <strong style="font-size:15px">Linux</strong>
@@ -1026,21 +1054,25 @@
       </div>
 
       <form class="login-card" id="webAdminForm" autocomplete="on" novalidate>
+        <div class="login-tabs" role="tablist">
+          <button type="button" class="login-tab active" id="tabSignin" role="tab">Kirish</button>
+          <button type="button" class="login-tab" id="tabSignup" role="tab">Akkaunt yaratish</button>
+        </div>
         <label>
           Foydalanuvchi
-          <input type="text" name="username" id="loginUsername" autocomplete="username" placeholder="texuz" />
+          <input type="text" name="username" id="loginUsername" autocomplete="username" maxlength="24" placeholder="alice" />
         </label>
         <label>
           Parol
-          <input type="password" name="password" id="loginPassword" autocomplete="current-password" placeholder="••••••••" />
+          <input type="password" name="password" id="loginPassword" autocomplete="current-password" maxlength="128" placeholder="••••••••" />
         </label>
         <button type="submit" id="loginSubmit">
           Kirish
         </button>
         <div class="login-meta">
-          <span>Hisobingiz yo'qmi? <a href="https://github.com/Yaxyobek0877/portal_traffic#install">Dasturni o'rnating</a></span>
+          <span>Hisobingiz yo'qmi? <a href="#" id="goSignup">Akkaunt yarating</a></span>
         </div>
-        <div class="login-status info" id="loginStatus" role="status"></div>
+        <div class="login-status" id="loginStatus" role="status"></div>
       </form>
     </div>
   </div>

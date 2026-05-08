@@ -516,57 +516,118 @@
   }
 
   // ---------------------------------------------------------------
-  // 11. Web admin login form (homepage hero)
+  // 11. Web admin login + signup form (homepage hero)
   // ---------------------------------------------------------------
-  // The signaling server's /api/auth/login endpoint exists in code
-  // (server/auth_handlers.go) but isn't deployed to signaling.1pro.uz
-  // yet — see docs/ROOM-CONTROLS-GAPS.md "Web admin paneli". Until
-  // it lands we intercept the submit, validate the inputs locally,
-  // and surface a friendly "tez orada (v0.6.0)" notice. When the
-  // endpoint deploys, swap the soonNotice block for an actual
-  // fetch('/api/auth/login') call and a redirect to /admin/dashboard
-  // on success.
+  // Real auth flow: same-origin fetch to /api/auth/{signin,signup}
+  // (the signaling binary serves this from --web-dir along with the
+  // landing page). Server sets a __Host- session cookie; on success
+  // we redirect to /admin/dashboard. Errors come back as JSON
+  // {error, lockoutSeconds} and we map them to friendly Uzbek text.
   const loginForm = document.getElementById('webAdminForm');
   if (loginForm) {
     const userEl = document.getElementById('loginUsername');
     const passEl = document.getElementById('loginPassword');
     const btnEl = document.getElementById('loginSubmit');
     const statusEl = document.getElementById('loginStatus');
+    const tabSignin = document.getElementById('tabSignin');
+    const tabSignup = document.getElementById('tabSignup');
+
+    let mode = 'signin'; // toggled by the two tabs
 
     const setStatus = (kind, msg) => {
+      if (!statusEl) return;
       statusEl.className = 'login-status ' + kind + ' show';
       statusEl.textContent = msg;
     };
+    const clearStatus = () => {
+      if (!statusEl) return;
+      statusEl.className = 'login-status';
+      statusEl.textContent = '';
+    };
+
+    const errMessage = (code, lockoutSeconds) => {
+      switch (code) {
+        case 'username_taken':      return "Bu nom band — boshqa nom tanlang.";
+        case 'username_invalid':    return "Nom 3-24 belgi, faqat harf/raqam/_/- bo'lishi kerak.";
+        case 'password_too_short':  return "Parol kamida 8 ta belgi.";
+        case 'password_weak':       return "Parol kuchsiz: kichik+katta harf, raqam va maxsus belgi kerak.";
+        case 'invalid_credentials': return "Foydalanuvchi nomi yoki parol noto'g'ri.";
+        case 'locked_out':          return `Juda ko'p urinish. ${lockoutSeconds || 30} soniyadan so'ng qayta urining.`;
+        case 'no_session':          return "Sessiya tugagan, qaytadan kiring.";
+        case 'network':             return "Server bilan ulanish bo'lmadi.";
+        default:                    return "Server xatosi: " + code;
+      }
+    };
+
+    const setMode = (m) => {
+      mode = m;
+      if (tabSignin) tabSignin.classList.toggle('active', m === 'signin');
+      if (tabSignup) tabSignup.classList.toggle('active', m === 'signup');
+      btnEl.textContent = m === 'signup' ? 'Akkaunt yaratish' : 'Kirish';
+      passEl.autocomplete = m === 'signup' ? 'new-password' : 'current-password';
+      passEl.placeholder = m === 'signup' ? '8+ belgi, kuchli parol' : '••••••••';
+      clearStatus();
+    };
+    if (tabSignin) tabSignin.addEventListener('click', () => setMode('signin'));
+    if (tabSignup) tabSignup.addEventListener('click', () => setMode('signup'));
+    const goSignup = document.getElementById('goSignup');
+    if (goSignup) goSignup.addEventListener('click', (ev) => { ev.preventDefault(); setMode('signup'); userEl.focus(); });
+
+    // If the user already has a session, jump straight to the dashboard.
+    fetch('/api/me', { credentials: 'same-origin' })
+      .then((r) => { if (r.ok) location.href = '/admin/dashboard'; })
+      .catch(() => {});
 
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const u = (userEl.value || '').trim();
       const p = passEl.value || '';
-      if (!u) {
-        setStatus('error', 'Foydalanuvchi nomini kiriting.');
-        userEl.focus();
-        return;
+      clearStatus();
+
+      if (!u) { setStatus('error', "Foydalanuvchi nomini kiriting."); userEl.focus(); return; }
+      if (mode === 'signup') {
+        if (p.length < 8) { setStatus('error', "Parol kamida 8 ta belgi bo'lsin."); passEl.focus(); return; }
+        const hasLower = /\p{Ll}/u.test(p), hasUpper = /\p{Lu}/u.test(p),
+              hasDigit = /[0-9]/.test(p), hasSpecial = /[^\p{L}\p{N}\s]/u.test(p);
+        if (!(hasLower && hasUpper && hasDigit && hasSpecial)) {
+          setStatus('error', "Parol kuchsiz: kichik+katta harf, raqam va maxsus belgi kerak.");
+          passEl.focus();
+          return;
+        }
+      } else {
+        if (!p) { setStatus('error', "Parolni kiriting."); passEl.focus(); return; }
       }
-      if (p.length < 8) {
-        setStatus('error', 'Parol kamida 8 belgili bo‘lishi kerak.');
-        passEl.focus();
+
+      const path = mode === 'signup' ? '/api/auth/signup' : '/api/auth/signin';
+      btnEl.disabled = true;
+      btnEl.textContent = mode === 'signup' ? 'Yaratilmoqda…' : 'Kirilmoqda…';
+
+      let res, body;
+      try {
+        res = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ username: u, password: p }),
+        });
+        body = res.headers.get('content-type')?.includes('application/json')
+          ? await res.json().catch(() => null)
+          : null;
+      } catch (_) {
+        setStatus('error', errMessage('network'));
+        btnEl.disabled = false;
+        btnEl.textContent = mode === 'signup' ? 'Akkaunt yaratish' : 'Kirish';
         return;
       }
 
-      btnEl.disabled = true;
-      btnEl.textContent = 'Tekshirilmoqda…';
-      try {
-        // Real endpoint not yet live — see comment above. When it
-        // deploys, replace this short-circuit with the fetch call.
-        await new Promise((r) => setTimeout(r, 600));
-        setStatus(
-          'info',
-          'Web admin paneli v0.6.0 da ishga tushadi. Hozircha desktop dasturda hisob yarating va portal ochib turing — keyingi reliz brauzerdan ko‘rish va boshqarishni ochadi.'
-        );
-      } finally {
-        btnEl.disabled = false;
-        btnEl.textContent = 'Kirish';
+      if (res.ok) {
+        // Cookie set by the server; head to the dashboard.
+        location.href = '/admin/dashboard';
+        return;
       }
+      setStatus('error', errMessage(body?.error || `http_${res.status}`, body?.lockoutSeconds));
+      btnEl.disabled = false;
+      btnEl.textContent = mode === 'signup' ? 'Akkaunt yaratish' : 'Kirish';
     });
   }
 })();
