@@ -233,13 +233,20 @@ export const usePortalStore = create<Store>((set) => ({
           summary: { ...s.summary, isActive: id === sessionId },
         };
       }
+      // Don't blank the existing top-level projection if we're
+      // racing setPortal: a freshly created portal can hit this
+      // reducer before the session entry has its `portal` populated
+      // (the create response returns first; portal:ready / event-
+      // bus updates land microseconds later). Prefer the session's
+      // own data when present, else keep whatever the previous
+      // foreground had — the next event will reconcile.
       return {
         sessions,
         activeSessionId: sessionId,
-        portal: next?.portal ?? null,
-        peers: next?.peers ?? {},
-        messages: next?.messages ?? [],
-        transfers: next?.transfers ?? {},
+        portal: next?.portal ?? state.portal,
+        peers: next?.peers ?? state.peers,
+        messages: next?.messages ?? state.messages,
+        transfers: next?.transfers ?? state.transfers,
       };
     }),
 

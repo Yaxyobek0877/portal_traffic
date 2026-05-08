@@ -38,7 +38,16 @@ import (
 
 // PortalView is the JSON projection of the local portal context for
 // the frontend.
+//
+// SessionID is the local id of the session that owns this portal —
+// stable across the session's lifetime and used by the frontend
+// store to route the returned PortalView into the right per-session
+// slot. CurrentPortal can return a PortalView with empty SessionID
+// when no session is foreground; that's fine because the frontend
+// only reads PortalView.SessionID after a successful CreatePortal /
+// JoinPortal which always carries a session.
 type PortalView struct {
+	SessionID string `json:"sessionId,omitempty"`
 	PortalID  string `json:"portalId"`
 	Code      string `json:"code"`
 	OwnerID   string `json:"ownerId"`
@@ -600,6 +609,7 @@ func (a *App) createPortal(nickname string, makeActive bool) (PortalView, error)
 		a.dropSession(s)
 		return pv, err
 	}
+	pv.SessionID = s.localID
 	s.setView(pv)
 	a.persistEnter(pv, nickname, true)
 	if makeActive && a.ctx != nil {
@@ -647,6 +657,7 @@ func (a *App) joinPortal(nickname, portalID, code string, makeActive bool) (Port
 		a.dropSession(s)
 		return pv, err
 	}
+	pv.SessionID = s.localID
 	pv.Code = code
 	a.persistEnter(pv, nickname, false)
 	pv.Code = "" // don't surface the code on the joiner UI side
@@ -808,7 +819,9 @@ func (a *App) CurrentPortal() PortalView {
 	if s == nil || s.mesh == nil {
 		return PortalView{}
 	}
-	return portalToView(s.mesh.Portal())
+	v := portalToView(s.mesh.Portal())
+	v.SessionID = s.localID
+	return v
 }
 
 // BandwidthResult mirrors mesh.BandwidthResult for the JSON wire to
