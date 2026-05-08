@@ -630,8 +630,11 @@ func (a *App) BackgroundCreatePortal(nickname string) (PortalView, error) {
 func (a *App) createPortal(nickname string, makeActive bool) (PortalView, error) {
 	// Stamp the device label onto the mesh nickname so multi-device
 	// users (same account, several boxes) are distinguishable in the
-	// room. nicknameWithDevice is a no-op when the user hasn't given
-	// a device a custom label and the platform default is empty.
+	// room. The combined form ('texuz.uy') goes to the mesh layer;
+	// persistEnter receives the RAW form ('texuz') so resume calls
+	// re-stamp with the CURRENT device label rather than re-stamping
+	// an already-stamped input (which would land us at 'texuz.uy.uy').
+	rawNick := nickname
 	nickname = a.nicknameWithDevice(nickname)
 	s, err := a.bringUpSession(nickname, makeActive, true /*isOwner*/)
 	if err != nil {
@@ -648,7 +651,7 @@ func (a *App) createPortal(nickname string, makeActive bool) (PortalView, error)
 	}
 	pv.SessionID = s.localID
 	s.setView(pv)
-	a.persistEnter(pv, nickname, true)
+	a.persistEnter(pv, rawNick, true)
 	if makeActive && a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "portal:switched",
 			map[string]string{"sessionId": s.localID, "portalId": pv.PortalID})
@@ -674,6 +677,7 @@ func (a *App) joinPortal(nickname, portalID, code string, makeActive bool) (Port
 		return PortalView{}, errors.New("portal ID va kod bo'sh bo'lmasligi kerak")
 	}
 	// Same device-stamping as createPortal — see comment there.
+	rawNick := nickname
 	nickname = a.nicknameWithDevice(nickname)
 	s, err := a.bringUpSession(nickname, makeActive, false /*isOwner*/)
 	if err != nil {
@@ -698,7 +702,7 @@ func (a *App) joinPortal(nickname, portalID, code string, makeActive bool) (Port
 	}
 	pv.SessionID = s.localID
 	pv.Code = code
-	a.persistEnter(pv, nickname, false)
+	a.persistEnter(pv, rawNick, false)
 	pv.Code = "" // don't surface the code on the joiner UI side
 	if makeActive && a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "portal:switched",

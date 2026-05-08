@@ -12,20 +12,22 @@ export function shortId(id: string): string {
 
 // splitNicknameAndDevice un-flattens what the Go side packs into the
 // mesh nickname. createPortal / joinPortal stamp the device label
-// onto the auth nickname using '@' as the separator (server-side
-// regex rejects whitespace and Unicode glyphs like '·'); the
-// frontend cards prefer the prettier 'username · device' form, so
-// here we split on the LAST '@' so the username can itself contain
-// an '@' (extremely rare but cheap to handle). When the input
-// doesn't carry a separator we just return the whole string as
-// the nickname and an empty device tag — older clients without
+// onto the auth nickname using '.' as the separator (the deployed
+// signaling server's nickname validator rejects '@', whitespace,
+// Unicode, etc — '.' is the most readable of the three characters
+// the validator does allow: `_`, `-`, `.`).
+//
+// We split on the LAST '.' so a username that itself contains a
+// dot (e.g. 'john.doe') still works — only the trailing '.<device>'
+// is treated as the device tag. When the input has no dot we just
+// return the whole string as the nickname; older clients without
 // device-name support land here naturally.
 export function splitNicknameAndDevice(combined: string): {
   nickname: string;
   device: string;
 } {
   if (!combined) return { nickname: "", device: "" };
-  const i = combined.lastIndexOf("@");
+  const i = combined.lastIndexOf(".");
   if (i <= 0) return { nickname: combined, device: "" };
   return {
     nickname: combined.slice(0, i),

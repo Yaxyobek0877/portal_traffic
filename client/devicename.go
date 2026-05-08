@@ -77,36 +77,49 @@ func defaultDeviceName() string {
 }
 
 // deviceTagSeparator is the boundary between username and device
-// label in the combined mesh nickname. Originally a middle-dot ('·')
-// for visual distinction, but the deployed signaling server rejects
-// it (NICKNAME_INVALID) because its regex restricts nicknames to
-// ASCII alphanumeric + a small set of punctuation. The at-sign is
-// universally allowed in identifier-style validators and reads
-// cleanly: 'texuz@uy', 'texuz@win64'. The frontend's PeerCard /
-// PeerServicesGrid render the part before '@' as the username and
-// the part after as a small dimmed device tag, so visually it
-// still looks like 'texuz · uy'.
-const deviceTagSeparator = "@"
+// label in the combined mesh nickname. The deployed signaling
+// server's validator (server/nickname.go validNickname) only
+// allows `[a-zA-Z0-9_\-.]` and rejects the rest with
+// NICKNAME_INVALID. We use '.' because it's the most readable of
+// the three (`texuz.uy` reads clearly as a hierarchical handle)
+// and the period is unlikely to be ambiguous with mid-username
+// punctuation.
+const deviceTagSeparator = "."
+
+// deviceTagSanitize strips characters the signaling server
+// rejects from a free-form device label: whitespace, punctuation,
+// Unicode glyphs. A user typing 'uy mac' or 'work — main' should
+// still get something on the wire that won't be bounced as
+// NICKNAME_INVALID; we keep ASCII letters, digits, underscores
+// and hyphens, drop the rest.
+func deviceTagSanitize(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '_', r == '-':
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
 
 // nicknameWithDevice combines the auth nickname with the device
-// label using deviceTagSeparator. Used by createPortal / joinPortal
-// so the mesh peer announcement carries both. Empty device name
-// falls through unchanged. Whitespace inside the device label is
-// stripped because some servers reject it; the rendered UI restores
-// readability via splitNicknameAndDevice (see frontend's format
-// helpers).
+// label using deviceTagSeparator. Used by createPortal /
+// joinPortal so the mesh peer announcement carries both. Empty
+// device name falls through unchanged. Idempotency note: this
+// helper does NOT try to detect 'already stamped' input — the
+// caller is expected to pass the RAW nickname (just the username,
+// no separator) every time. createPortal does this by holding the
+// raw form locally and only computing the combined form for the
+// mesh layer; persistEnter saves the raw form too, so resume calls
+// land here with the right input again.
 func (a *App) nicknameWithDevice(nick string) string {
-	dev := strings.TrimSpace(a.CurrentDeviceName())
+	dev := deviceTagSanitize(a.CurrentDeviceName())
 	if dev == "" {
 		return nick
 	}
-	if strings.Contains(nick, deviceTagSeparator) {
-		// Caller already added a device tag; don't double up.
-		return nick
-	}
-	// Strip whitespace from the device tag so 'win 64' becomes
-	// 'win64' on the wire — matches the server's typical ident
-	// regex without losing meaning.
-	dev = strings.ReplaceAll(dev, " ", "")
 	return nick + deviceTagSeparator + dev
 }

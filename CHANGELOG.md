@@ -7,7 +7,41 @@ ga rioya qiladi.
 
 ## [Unreleased]
 
-v0.5.2 dan keyingi ishlanma bu yerga yoziladi.
+v0.5.3 dan keyingi ishlanma bu yerga yoziladi.
+
+## [0.5.3] — 2026-05-08
+
+Patch reliz: device-name separator'ni server tomonidan ruxsat
+etilgan belgiga to'g'rilash va resume paytida nicknamasi
+ikki marta stamp bo'lishidan saqlash.
+
+### Fixed — Tuzatilgan xatolar
+
+- **NICKNAME_INVALID hali ham qaytayotgan edi** — v0.5.2'dagi `'@'`
+  separator ham server validator regex'iga (`server/nickname.go
+  validNickname`: `[a-zA-Z0-9_\-.]`) tushmadi. Test qildim:
+  ```
+  send portal.create  nick=texuz@mac → recv NICKNAME_INVALID
+  ```
+  Endi separator `'.'` (period) — server qabul qiladigan uchta
+  belgidan biri (`_`, `-`, `.`); o'qilishi eng tabiiy: `texuz.uy`,
+  `texuz.win64`. Device label sanitize qilinadi: faqat
+  `[a-zA-Z0-9_\-]` qoladi.
+- **Raw nickname'ni storage'ga saqlash** — avval `persistEnter`
+  combined nicknamesini (`texuz.mac`) saqlardi. Resume paytida
+  `BackgroundCreatePortal('texuz.mac')` chaqirilardi va
+  `nicknameWithDevice` yana stamp qilardi → `texuz.mac.mac`. Fix:
+  `createPortal` / `joinPortal` raw nickname'ni (`texuz`) saqlaydi,
+  mesh layer'ga combined formni yuboradi. Device label har create'da
+  joriy qiymatdan olinadi — agar foydalanuvchi `mac` → `uy` ga
+  o'zgartirsa keyingi sessiyalar `texuz.uy` bilan announce qilinadi.
+
+### Changed — O'zgartirilgan
+
+- **Frontend `splitNicknameAndDevice`** — endi `'.'` da (avval `'@'`)
+  bo'linadi va oxirgi `'.'` ni topadi, shuning uchun
+  `'john.doe.mac'` to'g'ri parsed: nickname=`'john.doe'`,
+  device=`'mac'`.
 
 ## [0.5.2] — 2026-05-08
 
