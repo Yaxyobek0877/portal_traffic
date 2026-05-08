@@ -512,6 +512,38 @@ func (a *App) ClearHistory() error {
 	return store.ClearHistory()
 }
 
+// RenamePortal sets a user-friendly label on a portal_history row.
+// Empty label clears the existing one (the UI then falls back to the
+// portal ID). Returns an error if the row doesn't exist so the caller
+// can refresh — likely the user removed it from another window.
+func (a *App) RenamePortal(historyID int64, label string) error {
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return errors.New("storage mavjud emas")
+	}
+	label = strings.TrimSpace(label)
+	if len([]rune(label)) > 60 {
+		// 60 chars is plenty for a friendly room name and prevents
+		// pathological inputs from breaking the recent-portals layout.
+		return errors.New("nom juda uzun (max 60 ta belgi)")
+	}
+	return store.SetHistoryLabel(historyID, label)
+}
+
+// RemoveRecentPortal deletes a single history row. Used by the X
+// button on a recent-portals entry. No error if the id is gone.
+func (a *App) RemoveRecentPortal(historyID int64) error {
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
+	if store == nil {
+		return nil
+	}
+	return store.DeleteHistory(historyID)
+}
+
 // CreatePortal dials signaling and creates a new portal. Returns the
 // new portal info synchronously once the server has confirmed.
 func (a *App) CreatePortal(nickname string, publicNick bool) (PortalView, error) {

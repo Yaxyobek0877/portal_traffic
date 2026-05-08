@@ -24,12 +24,16 @@ import {
   LogOut,
   ArrowRight,
   Crown,
+  Pencil,
+  X,
+  Check,
 } from "lucide-react";
 import { Logo } from "../components/Logo";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
 import { useT } from "../i18n";
 import { parseInvite } from "../lib/deeplink";
+import type { HistoryEntry } from "../types";
 
 type Mode = "idle" | "create" | "join";
 
@@ -302,45 +306,24 @@ export function Welcome() {
                 {t("welcome.recent")}
               </div>
               <div className="space-y-1.5">
-                {history.slice(0, 6).map((h) => {
-                  const peerInitial = (h.nickname?.trim()[0] || "?").toUpperCase();
-                  // Owner rows are rejoinable even without a saved code
-                  // (the rejoin spawns a fresh portal anyway). Joiner
-                  // rows need a code to attempt the join.
-                  const canRejoin = h.isOwner || !!h.code;
-                  const isThisRowBusy = rejoiningId === h.id;
-                  return (
-                    <button
-                      key={h.id}
-                      onClick={() => canRejoin && rejoinRow(h)}
-                      disabled={!canRejoin || (busy && !isThisRowBusy)}
-                      className="w-full panel rounded-input px-3 py-2.5 flex items-center gap-3 text-sm hover:bg-white/[0.07] disabled:opacity-50 disabled:cursor-not-allowed text-left transition group"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/30 to-indigo-500/20 flex items-center justify-center text-[11px] font-bold shrink-0">
-                        {peerInitial}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-violet-300 text-sm">{h.portalId}</span>
-                          {h.isOwner && (
-                            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">
-                              <Crown className="w-2.5 h-2.5" />
-                              {t("common.owner")}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-zinc-500 truncate">
-                          {h.nickname}
-                        </div>
-                      </div>
-                      {isThisRowBusy ? (
-                        <div className="w-4 h-4 border-2 border-violet-300/30 border-t-violet-300 rounded-full animate-spin shrink-0" />
-                      ) : (
-                        <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 group-hover:translate-x-0.5 transition shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
+                {history.slice(0, 6).map((h) => (
+                  <RecentRow
+                    key={h.id}
+                    h={h}
+                    busy={busy}
+                    rejoining={rejoiningId === h.id}
+                    onRejoin={() => rejoinRow(h)}
+                    onRenamed={async () => {
+                      // Pull a fresh list so the row's label updates
+                      // in place without forcing the parent to track
+                      // edits manually.
+                      setHistory(await app.RecentPortals(8));
+                    }}
+                    onRemoved={async () => {
+                      setHistory(await app.RecentPortals(8));
+                    }}
+                  />
+                ))}
               </div>
             </section>
           )}
@@ -546,6 +529,194 @@ export function Welcome() {
           </footer>
         </div>
       </main>
+    </div>
+  );
+}
+
+// RecentRow — one entry on the dashboard's "Recent portals" list.
+//
+// Three modes share one row:
+//
+//   1. Display — clicking the row body rejoins, the pencil reveals
+//      the rename input, the X removes the entry.
+//   2. Rename  — text input + check / cancel. Enter submits, Escape
+//      cancels. The check is disabled while the value matches the
+//      current label so accidental no-op saves don't blip the UI.
+//   3. Busy    — spinner replacing the chevron while a rejoin call
+//      is in flight; the controls stay clickable so the user can
+//      still cancel if they meant a different row.
+function RecentRow({
+  h,
+  busy,
+  rejoining,
+  onRejoin,
+  onRenamed,
+  onRemoved,
+}: {
+  h: HistoryEntry;
+  busy: boolean;
+  rejoining: boolean;
+  onRejoin: () => void;
+  onRenamed: () => void | Promise<void>;
+  onRemoved: () => void | Promise<void>;
+}) {
+  const { t } = useT();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(h.label || "");
+  const [saving, setSaving] = useState(false);
+
+  // When the underlying row's label changes (e.g. another window
+  // edited it) reflect that in the draft as long as the user isn't
+  // mid-edit. We don't want to clobber unsaved input.
+  useEffect(() => {
+    if (!editing) setDraft(h.label || "");
+  }, [h.label, editing]);
+
+  const peerInitial = (h.label || h.nickname || "?").trim()[0]?.toUpperCase() || "?";
+  const canRejoin = h.isOwner || !!h.code;
+  const displayLabel = h.label?.trim() || "";
+
+  const submitRename = async () => {
+    const next = draft.trim();
+    if (next === (h.label || "")) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await app.RenamePortal(h.id, next);
+      await onRenamed();
+      setEditing(false);
+    } catch {
+      // Leave editing open so the user can retry. Errors are usually
+      // length-validation; the input keeps the offending text so they
+      // can shorten it.
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelRename = () => {
+    setDraft(h.label || "");
+    setEditing(false);
+  };
+
+  // Container is a div, not a button, while editing — nesting buttons
+  // breaks click handling and bubbling pencil/X clicks up to a row-
+  // level rejoin would be hostile.
+  if (editing) {
+    return (
+      <div className="w-full panel rounded-input px-3 py-2.5 flex items-center gap-3 text-sm">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/30 to-indigo-500/20 flex items-center justify-center text-[11px] font-bold shrink-0">
+          {peerInitial}
+        </div>
+        <div className="min-w-0 flex-1 flex items-center gap-2">
+          <input
+            type="text"
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value.slice(0, 60))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submitRename();
+              if (e.key === "Escape") cancelRename();
+            }}
+            placeholder={t("welcome.rename.placeholder")}
+            className="input-base flex-1 text-sm py-1.5"
+            maxLength={60}
+            disabled={saving}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={submitRename}
+          disabled={saving}
+          title={t("welcome.rename.save")}
+          className="p-1.5 rounded-md text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"
+        >
+          <Check className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={cancelRename}
+          disabled={saving}
+          title={t("welcome.rename.cancel")}
+          className="p-1.5 rounded-md text-zinc-400 hover:bg-white/[0.07] disabled:opacity-50"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full panel rounded-input pl-3 pr-1.5 py-2.5 flex items-center gap-3 text-sm hover:bg-white/[0.07] group">
+      <button
+        type="button"
+        onClick={() => canRejoin && onRejoin()}
+        disabled={!canRejoin || (busy && !rejoining)}
+        className="flex items-center gap-3 min-w-0 flex-1 text-left disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/30 to-indigo-500/20 flex items-center justify-center text-[11px] font-bold shrink-0">
+          {peerInitial}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            {/* If the user labelled this portal we lead with the label
+                and demote the numeric id to a small monospace tail.
+                Unlabelled rows still show the id prominently — labels
+                are optional, the row should never feel empty. */}
+            {displayLabel ? (
+              <>
+                <span className="font-medium truncate">{displayLabel}</span>
+                <span className="font-mono text-[10px] text-zinc-500 shrink-0">
+                  #{h.portalId}
+                </span>
+              </>
+            ) : (
+              <span className="font-mono text-violet-300 text-sm">{h.portalId}</span>
+            )}
+            {h.isOwner && (
+              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5 shrink-0">
+                <Crown className="w-2.5 h-2.5" />
+                {t("common.owner")}
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] text-zinc-500 truncate">{h.nickname}</div>
+        </div>
+      </button>
+      {/* Inline tools — only visible on hover/focus to keep the row
+          quiet at rest. Pencil opens rename, X drops the entry. */}
+      <div className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition shrink-0">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditing(true);
+          }}
+          title={t("welcome.rename.title")}
+          className="p-1.5 rounded-md text-zinc-400 hover:text-violet-300 hover:bg-white/[0.07]"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={async (e) => {
+            e.stopPropagation();
+            await app.RemoveRecentPortal(h.id);
+            await onRemoved();
+          }}
+          title={t("welcome.recent.remove")}
+          className="p-1.5 rounded-md text-zinc-400 hover:text-rose-300 hover:bg-rose-500/10"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      {rejoining ? (
+        <div className="w-4 h-4 border-2 border-violet-300/30 border-t-violet-300 rounded-full animate-spin shrink-0 mr-2" />
+      ) : (
+        <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 transition shrink-0 mr-2" />
+      )}
     </div>
   );
 }

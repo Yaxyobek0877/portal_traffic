@@ -101,6 +101,7 @@ func (s *Store) migrate() error {
 		code        TEXT NOT NULL,
 		nickname    TEXT NOT NULL,
 		is_owner    INTEGER NOT NULL,
+		label       TEXT NOT NULL DEFAULT '',
 		joined_at   INTEGER NOT NULL,
 		last_seen   INTEGER NOT NULL
 	);
@@ -131,9 +132,38 @@ func (s *Store) migrate() error {
 	if err != nil {
 		return fmt.Errorf("storage: migrate: %w", err)
 	}
+
+	// Migration v2: add `label` column to portal_history. ALTER TABLE
+	// ADD COLUMN is idempotent in SQLite if you check first — we ignore
+	// "duplicate column" errors via the column-name probe below so the
+	// migration is safe to re-run on every startup.
+	if !s.columnExists("portal_history", "label") {
+		if _, err := s.db.Exec(
+			`ALTER TABLE portal_history ADD COLUMN label TEXT NOT NULL DEFAULT ''`,
+		); err != nil {
+			return fmt.Errorf("storage: migrate v2 (label): %w", err)
+		}
+	}
+
 	// Stamp the current version (idempotent).
-	_, _ = s.db.Exec(`INSERT OR REPLACE INTO schema_version(version) VALUES(1)`)
+	_, _ = s.db.Exec(`INSERT OR REPLACE INTO schema_version(version) VALUES(2)`)
 	return nil
+}
+
+// columnExists reports whether `column` is already present on `table`,
+// using SQLite's pragma_table_info virtual table. Cheaper than catching
+// the duplicate-column error from ALTER TABLE and means migrations stay
+// declarative.
+func (s *Store) columnExists(table, column string) bool {
+	rows, err := s.db.Query(
+		`SELECT 1 FROM pragma_table_info(?) WHERE name = ?`,
+		table, column,
+	)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	return rows.Next()
 }
 
 // Now is broken out so tests can substitute a frozen clock.

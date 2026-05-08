@@ -91,6 +91,9 @@ export type HistoryEntry = {
   code: string;
   nickname: string;
   isOwner: boolean;
+  // Optional user-given name. When empty the UI falls back to the
+  // portal id. Set via app.RenamePortal(historyId, label).
+  label: string;
   joinedAt: string;
   lastSeen: string;
 };

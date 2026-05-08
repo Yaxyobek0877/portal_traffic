@@ -37,15 +37,18 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Activity,
+  Check,
   Copy,
   FileText,
   Folder,
   Globe,
   History,
   Info,
+  Pencil,
   RefreshCcw,
   Trash2,
   User,
+  X,
   Zap,
   LogOut,
   ShieldCheck,
@@ -621,9 +624,12 @@ function HistoryTab() {
   const history = usePortalStore((s) => s.history);
   const setHistory = usePortalStore((s) => s.setHistory);
 
+  const refresh = async () => setHistory(await app.RecentPortals(20));
+
   useEffect(() => {
-    app.RecentPortals(20).then(setHistory);
-  }, [setHistory]);
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Section icon={<History className="w-4 h-4" />} title={t("settings.history.title")}>
@@ -634,7 +640,7 @@ function HistoryTab() {
       ) : (
         <div className="space-y-1.5">
           {history.map((h) => (
-            <HistoryRow key={h.id} h={h} />
+            <HistoryRow key={h.id} h={h} onChanged={refresh} />
           ))}
         </div>
       )}
@@ -654,13 +660,90 @@ function HistoryTab() {
   );
 }
 
-function HistoryRow({ h }: { h: HistoryEntry }) {
+// HistoryRow renders one portal_history row, with an inline rename
+// affordance that mirrors the Welcome dashboard's. Settings is the
+// "settle in" surface for editing labels, so the pencil is visible
+// at all times here (not hover-only).
+function HistoryRow({
+  h,
+  onChanged,
+}: {
+  h: HistoryEntry;
+  onChanged: () => void | Promise<void>;
+}) {
   const { t } = useT();
   const dt = new Date(h.lastSeen).toLocaleString();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(h.label || "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!editing) setDraft(h.label || "");
+  }, [h.label, editing]);
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      await app.RenamePortal(h.id, draft.trim());
+      await onChanged();
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="panel rounded-input px-3 py-2 flex items-center gap-2 text-sm">
+        <span className="font-mono text-[10px] text-zinc-500 shrink-0">#{h.portalId}</span>
+        <input
+          type="text"
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.slice(0, 60))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+            if (e.key === "Escape") setEditing(false);
+          }}
+          placeholder={t("welcome.rename.placeholder")}
+          className="input-base flex-1 text-sm py-1"
+          maxLength={60}
+          disabled={saving}
+        />
+        <button
+          onClick={submit}
+          disabled={saving}
+          className="p-1 text-emerald-300 hover:bg-emerald-500/15 rounded"
+          title={t("welcome.rename.save")}
+        >
+          <Check className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => setEditing(false)}
+          disabled={saving}
+          className="p-1 text-zinc-400 hover:bg-white/[0.07] rounded"
+          title={t("welcome.rename.cancel")}
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
+  const label = h.label?.trim();
   return (
-    <div className="panel rounded-input px-3 py-2 flex items-center justify-between text-sm">
-      <div className="flex items-center gap-3 min-w-0">
-        <span className="font-mono text-violet-300">{h.portalId}</span>
+    <div className="panel rounded-input px-3 py-2 flex items-center justify-between text-sm group">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        {label ? (
+          <>
+            <span className="font-medium truncate">{label}</span>
+            <span className="font-mono text-[10px] text-zinc-500 shrink-0">
+              #{h.portalId}
+            </span>
+          </>
+        ) : (
+          <span className="font-mono text-violet-300">{h.portalId}</span>
+        )}
         <span className="text-zinc-500">·</span>
         <span className="truncate">{h.nickname}</span>
         {h.isOwner && (
@@ -669,7 +752,26 @@ function HistoryRow({ h }: { h: HistoryEntry }) {
           </span>
         )}
       </div>
-      <span className="text-xs text-zinc-500 shrink-0 ml-3">{dt}</span>
+      <div className="flex items-center gap-1 shrink-0 ml-3">
+        <span className="text-xs text-zinc-500">{dt}</span>
+        <button
+          onClick={() => setEditing(true)}
+          className="p-1 text-zinc-500 hover:text-violet-300 hover:bg-white/[0.07] rounded opacity-0 group-hover:opacity-100 transition"
+          title={t("welcome.rename.title")}
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={async () => {
+            await app.RemoveRecentPortal(h.id);
+            await onChanged();
+          }}
+          className="p-1 text-zinc-500 hover:text-rose-300 hover:bg-rose-500/10 rounded opacity-0 group-hover:opacity-100 transition"
+          title={t("welcome.recent.remove")}
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
     </div>
   );
 }
