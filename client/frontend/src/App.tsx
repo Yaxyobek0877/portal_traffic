@@ -10,8 +10,9 @@ import { useT } from "./i18n";
 import type {
   ChatMessage,
   NATResult,
-  PeerView,
-  PortalView as PortalT,
+  PeerEvent,
+  PortalReadyEvent,
+  PortalSummary,
   TransferProgress,
 } from "./types";
 
@@ -20,7 +21,10 @@ export default function App() {
   const unlocked = usePortalStore((s) => s.unlocked);
   const screen = usePortalStore((s) => s.screen);
   const setScreen = usePortalStore((s) => s.setScreen);
-  const setPortal = usePortalStore((s) => s.setPortal);
+  const upsertSession = usePortalStore((s) => s.upsertSession);
+  const removeSession = usePortalStore((s) => s.removeSession);
+  const setActiveSession = usePortalStore((s) => s.setActiveSession);
+  const setSessionSummaries = usePortalStore((s) => s.setSessionSummaries);
   const upsertPeer = usePortalStore((s) => s.upsertPeer);
   const removePeer = usePortalStore((s) => s.removePeer);
   const clearPeers = usePortalStore((s) => s.clearPeers);
@@ -67,45 +71,134 @@ export default function App() {
     // One-shot bootstrap calls.
     app.NATInfo().then((r) => r && setNat(r));
     app.SaveDir().then(setSaveDir);
+    // Hydrate the sessions map up front so a hot reload (or a
+    // launch with sessions already running) shows the active-portals
+    // strip immediately instead of waiting for the next event.
+    app.ActivePortals().then((list) => {
+      if (Array.isArray(list)) setSessionSummaries(list);
+    });
+    app.ActiveSessionID().then((id) => {
+      if (id) setActiveSession(id);
+    });
+
+    // refreshSummaries pulls a fresh ActivePortals list. Cheap (one
+    // map walk on the Go side) and ensures any race between event
+    // arrival and an out-of-band session change is reconciled.
+    const refreshSummaries = () => {
+      app.ActivePortals().then((list) => {
+        if (Array.isArray(list)) setSessionSummaries(list);
+      });
+    };
 
     const offs: Array<() => void> = [];
 
     offs.push(
-      subscribe<PortalT>("portal:ready", (p) => {
-        // Defensive: an older backend (or a backend with the legacy
-        // bug where *ev.Portal was emitted directly) sends payloads
-        // shaped like {PortalID:…, Code:…} — capitalised Go field
-        // names instead of our lowerCamel JSON tags. Ignore those
-        // rather than letting them overwrite the good data Welcome
-        // already put in the store from app.CreatePortal()'s return.
-        if (!p || !p.portalId) {
-          return;
+      subscribe<PortalReadyEvent>("portal:ready", (p) => {
+        if (!p || !p.sessionId) return;
+        upsertSession({
+          sessionId: p.sessionId,
+          portal: {
+            portalId: p.portalId,
+            code: p.code,
+            ownerId: p.ownerId,
+            ownPeerId: p.ownPeerId,
+            ownVip: p.ownVip,
+            isOwner: p.isOwner,
+            sessionId: p.sessionId,
+          },
+        });
+        // Background sessions don't take the screen — the UI stays
+        // wherever it was. Foreground sessions land on the portal
+        // screen. portal:switched fires alongside for foreground
+        // sessions; we use either signal.
+        if (!p.background) {
+          setActiveSession(p.sessionId);
+          setScreen("portal");
         }
-        setPortal(p);
-        setScreen("portal");
+        refreshSummaries();
       })
     );
     offs.push(
-      subscribe<PeerView>("peer:joining", (p) => upsertPeer({ ...p, state: "connecting" }))
+      subscribe<{ sessionId: string; portalId: string }>("portal:switched", (p) => {
+        if (!p || !p.sessionId) return;
+        setActiveSession(p.sessionId);
+      })
     );
     offs.push(
-      subscribe<PeerView>("peer:ready", (p) => upsertPeer({ ...p, state: "connected" }))
+      subscribe<PeerEvent>("peer:joining", (e) => {
+        if (!e || !e.peer) return;
+        upsertPeer({ ...e.peer, sessionId: e.sessionId, state: "connecting" });
+        refreshSummaries();
+      })
     );
-    offs.push(subscribe<PeerView>("peer:rtt", (p) => upsertPeer(p)));
-    offs.push(subscribe<PeerView>("peer:transport", (p) => upsertPeer(p)));
-    offs.push(subscribe<PeerView>("peer:left", (p) => removePeer(p.peerId)));
     offs.push(
-      subscribe("portal:closed", () => {
-        setBanner(t("banner.portal_closed"));
-        setPortal(null);
-        clearPeers();
-        clearMessages();
-        setScreen("welcome");
+      subscribe<PeerEvent>("peer:ready", (e) => {
+        if (!e || !e.peer) return;
+        upsertPeer({ ...e.peer, sessionId: e.sessionId, state: "connected" });
+      })
+    );
+    offs.push(
+      subscribe<PeerEvent>("peer:rtt", (e) => {
+        if (!e || !e.peer) return;
+        upsertPeer({ ...e.peer, sessionId: e.sessionId });
+      })
+    );
+    offs.push(
+      subscribe<PeerEvent>("peer:transport", (e) => {
+        if (!e || !e.peer) return;
+        upsertPeer({ ...e.peer, sessionId: e.sessionId });
+      })
+    );
+    offs.push(
+      subscribe<PeerEvent>("peer:left", (e) => {
+        if (!e || !e.peer) return;
+        removePeer(e.peer.peerId, e.sessionId);
+        refreshSummaries();
+      })
+    );
+    offs.push(
+      subscribe<{ sessionId?: string }>("portal:closed", (p) => {
+        const sid = p?.sessionId;
+        if (sid) {
+          // Specific session ended — drop just that one.
+          removeSession(sid);
+          // If it was the active one, the store already cleared the
+          // top-level peers/messages/portal as part of removeSession.
+          // Send the user back to Welcome only when no sessions are
+          // left, so a single-portal close doesn't yank them from a
+          // background-connected session they're actively using.
+          const remaining = usePortalStore.getState().sessions;
+          if (Object.keys(remaining).length === 0) {
+            clearPeers();
+            clearMessages();
+            setScreen("welcome");
+          }
+          setBanner(t("banner.portal_closed"));
+        } else {
+          // Older event shape (no sessionId) — treat as "everything
+          // is gone" for backwards compatibility.
+          setBanner(t("banner.portal_closed"));
+          clearPeers();
+          clearMessages();
+          setScreen("welcome");
+        }
+        refreshSummaries();
       })
     );
     offs.push(subscribe<ChatMessage>("chat", (m) => addMessage(m)));
-    offs.push(subscribe<PeerView>("peer:services", (p) => upsertPeer(p)));
-    offs.push(subscribe<string>("error", (msg) => msg && setBanner(msg)));
+    offs.push(
+      subscribe<PeerEvent>("peer:services", (e) => {
+        if (!e || !e.peer) return;
+        upsertPeer({ ...e.peer, sessionId: e.sessionId });
+      })
+    );
+    offs.push(
+      subscribe<string | { sessionId?: string; message?: string }>("error", (msg) => {
+        if (!msg) return;
+        if (typeof msg === "string") setBanner(msg);
+        else if (msg.message) setBanner(msg.message);
+      })
+    );
     offs.push(subscribe<NATResult>("nat:result", (r) => setNat(r)));
     offs.push(subscribe<TransferProgress>("transfer:progress", (t) => upsertTransfer(t)));
     offs.push(
@@ -120,7 +213,10 @@ export default function App() {
 
     return () => offs.forEach((off) => off());
   }, [
-    setPortal,
+    upsertSession,
+    removeSession,
+    setActiveSession,
+    setSessionSummaries,
     upsertPeer,
     removePeer,
     clearPeers,

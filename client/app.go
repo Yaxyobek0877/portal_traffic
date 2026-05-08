@@ -49,6 +49,12 @@ type PortalView struct {
 
 // PeerView is the JSON projection of a remote peer.
 type PeerView struct {
+	// SessionID is the local id of the portal this peer belongs to.
+	// Always set on peer:* events; empty when an older code path
+	// constructs a PeerView without context (kept optional for
+	// backwards compatibility with the JSON shape).
+	SessionID string `json:"sessionId,omitempty"`
+
 	PeerID    string         `json:"peerId"`
 	Nickname  string         `json:"nickname"`
 	VirtualIP string         `json:"virtualIp"`
@@ -91,11 +97,12 @@ type ServiceView struct {
 
 // ChatMessage is what the frontend logs in the chat panel.
 type ChatMessage struct {
-	From     string    `json:"from"`     // peer id
-	Nickname string    `json:"nickname"`
-	Text     string    `json:"text"`
-	At       time.Time `json:"at"`
-	IsLocal  bool      `json:"isLocal"`
+	SessionID string    `json:"sessionId,omitempty"`
+	From      string    `json:"from"` // peer id
+	Nickname  string    `json:"nickname"`
+	Text      string    `json:"text"`
+	At        time.Time `json:"at"`
+	IsLocal   bool      `json:"isLocal"`
 }
 
 // SignalingStatus reports the current connectivity state.
@@ -130,16 +137,27 @@ type App struct {
 	ctx    context.Context
 	logger *slog.Logger
 
-	mu       sync.RWMutex
-	mesh     *mesh.Manager
-	fwd      *proxy.Forwarder
-	xfer     *transfer.Engine
-	nick     string
-	url      string
+	mu  sync.RWMutex
+	url string
 
-	// connectingTo is set when CreatePortal/JoinPortal is in flight, so
-	// the UI can surface a "connecting" state without polling.
-	connectingTo string
+	// Multi-portal session state. Replaces the old single
+	// mesh/fwd/xfer/nick fields — see client/sessions.go for the full
+	// shape and protocol.
+	//
+	// sessions is keyed by portalSession.localID. activeID is the
+	// localID of the foreground session (the one whose Peers/services
+	// the UI screen reflects). "" when the user is on Welcome / has
+	// no active session. Locking: sessionsMu guards both the map and
+	// activeID — never take the session's own mu while holding
+	// sessionsMu (the session's pump goroutines try to grab the
+	// reverse order on every event).
+	sessionsMu sync.RWMutex
+	sessions   map[string]*portalSession
+	activeID   string
+
+	// nick is the last nickname the user signed up / signed in with.
+	// New sessions default to it (CreatePortal/JoinPortal can override).
+	nick string
 
 	// store persists settings, portal history, contacts.
 	store *storage.Store
@@ -194,6 +212,12 @@ func NewApp(logger *slog.Logger) *App {
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	a.logger.Info("portal app starting")
+
+	// Initialise the session map up front so every read path can rely
+	// on it being non-nil even before the first portal is dialed.
+	a.sessionsMu.Lock()
+	a.sessions = make(map[string]*portalSession)
+	a.sessionsMu.Unlock()
 
 	// Open SQLite. If it fails we proceed without persistence — the
 	// app still works, settings just don't survive restarts.
@@ -275,16 +299,12 @@ func (a *App) startLogSink() {
 	a.mu.Unlock()
 }
 
-// Shutdown cleans up the mesh, proxy, transfer engine, and SQLite.
+// Shutdown cleans up every session, the SQLite store, and the
+// log-uploader.
 func (a *App) Shutdown(ctx context.Context) {
 	a.mu.Lock()
-	m := a.mesh
-	f := a.fwd
 	store := a.store
 	sink := a.logSink
-	a.mesh = nil
-	a.fwd = nil
-	a.xfer = nil
 	a.store = nil
 	a.logSink = nil
 	a.mu.Unlock()
@@ -293,13 +313,19 @@ func (a *App) Shutdown(ctx context.Context) {
 		// "shutdown" record itself once it lands) get uploaded.
 		sink.Stop()
 	}
-	if f != nil {
-		_ = f.Close()
+
+	// Snapshot every session under the sessions lock, then close
+	// outside the lock so a slow mesh.Leave doesn't stall the
+	// shutdown of unrelated subsystems.
+	a.sessionsMu.Lock()
+	all := a.sessions
+	a.sessions = make(map[string]*portalSession)
+	a.activeID = ""
+	a.sessionsMu.Unlock()
+	for _, s := range all {
+		a.closeSession(s)
 	}
-	if m != nil {
-		_ = m.Leave()
-		m.Close()
-	}
+
 	if store != nil {
 		_ = store.Close()
 	}
@@ -330,17 +356,21 @@ func (a *App) NATInfo() nat.Result {
 }
 
 // SaveDir reports where received files land. UI displays it next to
-// the file-transfer affordance.
+// the file-transfer affordance. Every session shares the same save
+// dir (transfer.NewEngine defaults to it), so the active session's
+// engine — or the default — is fine to read from.
 func (a *App) SaveDir() string {
-	a.mu.RLock()
-	x := a.xfer
-	a.mu.RUnlock()
-	if x == nil {
-		// Fallback so the UI can show something pre-portal.
-		fallback, _ := os.UserHomeDir()
-		return filepath.Join(fallback, "Downloads", "Portal")
+	if s := a.activeSession(); s != nil && s.xfer != nil {
+		return s.xfer.SaveDir()
 	}
-	return x.SaveDir()
+	for _, s := range a.allSessions() {
+		if s.xfer != nil {
+			return s.xfer.SaveDir()
+		}
+	}
+	// Fallback so the UI can show something pre-portal.
+	fallback, _ := os.UserHomeDir()
+	return filepath.Join(fallback, "Downloads", "Portal")
 }
 
 // SetSignalingURL changes the URL we'll connect to on next create/join.
@@ -427,12 +457,10 @@ func (a *App) SetTurnConfig(c TurnConfig) error {
 
 // SendFile asks the OS to pick a file via Wails dialog and starts a
 // transfer to peerID. Returns the assigned xfer_id (string for the JS
-// boundary). Progress is reported via the "transfer:progress" event.
+// boundary). Routes to whichever portal contains the peer.
 func (a *App) SendFile(peerID string) (string, error) {
-	a.mu.RLock()
-	x := a.xfer
-	a.mu.RUnlock()
-	if x == nil {
+	s := a.sessionWithPeer(peerID)
+	if s == nil || s.xfer == nil {
 		return "", errors.New("portal yo'q")
 	}
 	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
@@ -441,7 +469,7 @@ func (a *App) SendFile(peerID string) (string, error) {
 	if err != nil || path == "" {
 		return "", err
 	}
-	xferID, err := x.SendFile(peerID, path)
+	xferID, err := s.xfer.SendFile(peerID, path)
 	if err != nil {
 		return "", err
 	}
@@ -451,16 +479,14 @@ func (a *App) SendFile(peerID string) (string, error) {
 // SendFilePath sends a file by absolute path (used by drag-and-drop;
 // the UI gets the path from Wails' OnFileDrop event).
 func (a *App) SendFilePath(peerID, path string) (string, error) {
-	a.mu.RLock()
-	x := a.xfer
-	a.mu.RUnlock()
-	if x == nil {
+	s := a.sessionWithPeer(peerID)
+	if s == nil || s.xfer == nil {
 		return "", errors.New("portal yo'q")
 	}
 	if path == "" {
 		return "", errors.New("fayl yo'li bo'sh")
 	}
-	xferID, err := x.SendFile(peerID, path)
+	xferID, err := s.xfer.SendFile(peerID, path)
 	if err != nil {
 		return "", err
 	}
@@ -544,60 +570,116 @@ func (a *App) RemoveRecentPortal(historyID int64) error {
 	return store.DeleteHistory(historyID)
 }
 
-// CreatePortal dials signaling and creates a new portal. Returns the
-// new portal info synchronously once the server has confirmed.
+// CreatePortal dials signaling and creates a new portal in the
+// foreground (becomes the active session). Returns the new portal
+// info once the server has confirmed.
 func (a *App) CreatePortal(nickname string, publicNick bool) (PortalView, error) {
-	if err := a.bringUpMesh(nickname); err != nil {
-		return PortalView{}, err
-	}
-	a.setConnecting(nickname)
-	defer a.setConnecting("")
+	return a.createPortal(nickname, true /*makeActive*/)
+}
 
-	if err := a.mesh.CreatePortal(a.ctx); err != nil {
-		a.tearDown()
+// BackgroundCreatePortal creates a new portal but leaves the
+// foreground UI on whatever it was on. Used by the dashboard's
+// "Fonda ulash" affordance — the user gets a portal connection up
+// and running for someone to join, while staying on Welcome (or in
+// a different portal they're already foregrounded into).
+func (a *App) BackgroundCreatePortal(nickname string) (PortalView, error) {
+	return a.createPortal(nickname, false /*makeActive*/)
+}
+
+func (a *App) createPortal(nickname string, makeActive bool) (PortalView, error) {
+	s, err := a.bringUpSession(nickname, makeActive, true /*isOwner*/)
+	if err != nil {
 		return PortalView{}, err
 	}
-	pv, err := a.waitPortalReady(8 * time.Second)
+	if err := s.mesh.CreatePortal(a.ctx); err != nil {
+		a.dropSession(s)
+		return PortalView{}, err
+	}
+	pv, err := a.waitPortalReady(s, 8*time.Second)
 	if err != nil {
+		a.dropSession(s)
 		return pv, err
 	}
+	s.setView(pv)
 	a.persistEnter(pv, nickname, true)
+	if makeActive && a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "portal:switched",
+			map[string]string{"sessionId": s.localID, "portalId": pv.PortalID})
+	}
 	return pv, nil
 }
 
-// JoinPortal dials signaling and joins by ID + code.
+// JoinPortal dials signaling and joins by ID + code in the
+// foreground.
 func (a *App) JoinPortal(nickname, portalID, code string) (PortalView, error) {
+	return a.joinPortal(nickname, portalID, code, true /*makeActive*/)
+}
+
+// BackgroundJoinPortal joins without taking foreground. The session
+// runs alongside whichever portal the user is currently in (or the
+// Welcome dashboard).
+func (a *App) BackgroundJoinPortal(nickname, portalID, code string) (PortalView, error) {
+	return a.joinPortal(nickname, portalID, code, false /*makeActive*/)
+}
+
+func (a *App) joinPortal(nickname, portalID, code string, makeActive bool) (PortalView, error) {
 	if portalID == "" || code == "" {
 		return PortalView{}, errors.New("portal ID va kod bo'sh bo'lmasligi kerak")
 	}
-	if err := a.bringUpMesh(nickname); err != nil {
-		return PortalView{}, err
-	}
-	a.setConnecting(nickname)
-	defer a.setConnecting("")
-
-	if err := a.mesh.JoinPortal(a.ctx, portalID, code); err != nil {
-		a.tearDown()
-		return PortalView{}, err
-	}
-	pv, err := a.waitPortalReady(8 * time.Second)
+	s, err := a.bringUpSession(nickname, makeActive, false /*isOwner*/)
 	if err != nil {
+		return PortalView{}, err
+	}
+	// Stash the typed code into the session view up front. The mesh
+	// won't echo it back from the server, so we need to remember it
+	// for the eventual EventPortalReady so the cached view (used by
+	// CurrentPortal / persisted history) carries it. relayEvent's
+	// PortalReady branch preserves a non-empty code if already set.
+	s.mu.Lock()
+	s.view.Code = code
+	s.mu.Unlock()
+	if err := s.mesh.JoinPortal(a.ctx, portalID, code); err != nil {
+		a.dropSession(s)
+		return PortalView{}, err
+	}
+	pv, err := a.waitPortalReady(s, 8*time.Second)
+	if err != nil {
+		a.dropSession(s)
 		return pv, err
 	}
-	// JoinPortal doesn't echo the code back from the server, so we
-	// persist what the user typed.
 	pv.Code = code
 	a.persistEnter(pv, nickname, false)
 	pv.Code = "" // don't surface the code on the joiner UI side
+	if makeActive && a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "portal:switched",
+			map[string]string{"sessionId": s.localID, "portalId": pv.PortalID})
+	}
 	return pv, nil
+}
+
+// dropSession deletes a session from the map and tears it down.
+// Used when create/join fails so a stillborn session doesn't linger
+// in the active-portals strip.
+func (a *App) dropSession(s *portalSession) {
+	if s == nil {
+		return
+	}
+	a.sessionsMu.Lock()
+	delete(a.sessions, s.localID)
+	if a.activeID == s.localID {
+		a.activeID = ""
+	}
+	a.sessionsMu.Unlock()
+	a.closeSession(s)
 }
 
 // persistEnter records this portal in history and saves the nickname
 // for next launch. Best-effort; failures are logged at debug level.
 func (a *App) persistEnter(pv PortalView, nickname string, isOwner bool) {
-	a.mu.RLock()
+	a.mu.Lock()
+	a.nick = nickname
 	store := a.store
-	a.mu.RUnlock()
+	a.mu.Unlock()
 	if store == nil {
 		return
 	}
@@ -610,28 +692,123 @@ func (a *App) persistEnter(pv PortalView, nickname string, isOwner bool) {
 	})
 }
 
-// Leave detaches from the current portal but keeps the app running.
+// Leave detaches from the active portal. Other background sessions
+// keep running. Returns nil if there's nothing active.
 func (a *App) Leave() error {
-	a.mu.RLock()
-	m := a.mesh
-	a.mu.RUnlock()
-	if m == nil {
+	s := a.activeSession()
+	if s == nil {
 		return nil
 	}
-	a.tearDown()
+	return a.LeavePortal(s.localID)
+}
+
+// LeavePortal tears down a specific session by its localID. Emits
+// portal:closed so the UI can drop it from its map. Used by the
+// active-connections strip's X button.
+func (a *App) LeavePortal(sessionID string) error {
+	a.sessionsMu.Lock()
+	s := a.sessions[sessionID]
+	delete(a.sessions, sessionID)
+	if a.activeID == sessionID {
+		a.activeID = ""
+	}
+	a.sessionsMu.Unlock()
+	if s == nil {
+		return nil
+	}
+	a.closeSession(s)
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "portal:closed", map[string]string{"sessionId": sessionID})
+	}
 	return nil
 }
 
-// CurrentPortal returns the current portal info, or zero-value if
-// not in a portal.
+// LeaveAllPortals tears down every active session. Useful for sign-
+// out flows where we don't want the meshes hanging around after the
+// user vaults the app.
+func (a *App) LeaveAllPortals() error {
+	a.sessionsMu.Lock()
+	all := a.sessions
+	a.sessions = make(map[string]*portalSession)
+	a.activeID = ""
+	a.sessionsMu.Unlock()
+	for _, s := range all {
+		a.closeSession(s)
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "portal:closed",
+				map[string]string{"sessionId": s.localID})
+		}
+	}
+	return nil
+}
+
+// SwitchPortal makes a different session foreground. The frontend's
+// store re-reads peers / chat / services from the new session and
+// re-renders the Portal screen. Returns ErrNotFound if the
+// sessionID isn't in the map.
+func (a *App) SwitchPortal(sessionID string) error {
+	a.sessionsMu.Lock()
+	s, ok := a.sessions[sessionID]
+	if !ok {
+		a.sessionsMu.Unlock()
+		return errors.New("session topilmadi")
+	}
+	a.activeID = sessionID
+	view := s.view
+	a.sessionsMu.Unlock()
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "portal:switched",
+			map[string]string{"sessionId": sessionID, "portalId": view.PortalID})
+	}
+	return nil
+}
+
+// ActivePortals returns a summary of every live session so the
+// Welcome dashboard can render its "Faol ulanishlar" strip without
+// having to subscribe to N events.
+func (a *App) ActivePortals() []PortalSummary {
+	a.sessionsMu.RLock()
+	all := make([]*portalSession, 0, len(a.sessions))
+	for _, s := range a.sessions {
+		all = append(all, s)
+	}
+	active := a.activeID
+	a.sessionsMu.RUnlock()
+	out := make([]PortalSummary, 0, len(all))
+	for _, s := range all {
+		out = append(out, s.summarize(s.localID == active))
+	}
+	// Stable order: active first, then by nickname so the strip
+	// doesn't reshuffle every render.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].IsActive != out[j].IsActive {
+			return out[i].IsActive
+		}
+		if out[i].Nickname != out[j].Nickname {
+			return out[i].Nickname < out[j].Nickname
+		}
+		return out[i].SessionID < out[j].SessionID
+	})
+	return out
+}
+
+// ActiveSessionID returns the foreground session's localID, or ""
+// when none. Lets the frontend store decide which session's data
+// to render right after a refresh / cold restart.
+func (a *App) ActiveSessionID() string {
+	a.sessionsMu.RLock()
+	defer a.sessionsMu.RUnlock()
+	return a.activeID
+}
+
+// CurrentPortal returns the active session's portal info, or zero-
+// value if none.
 func (a *App) CurrentPortal() PortalView {
-	a.mu.RLock()
-	m := a.mesh
-	a.mu.RUnlock()
-	if m == nil {
+	s := a.activeSession()
+	if s == nil || s.mesh == nil {
 		return PortalView{}
 	}
-	return portalToView(m.Portal())
+	return portalToView(s.mesh.Portal())
 }
 
 // BandwidthResult mirrors mesh.BandwidthResult for the JSON wire to
@@ -644,16 +821,14 @@ type BandwidthResult struct {
 }
 
 // MeasureBandwidth runs a 3s active probe with the named peer and
-// returns the receiver-measured throughput. Blocks; the UI should
-// call this from a worker context (Wails handles that automatically).
+// returns the receiver-measured throughput. Probes whichever portal
+// the peer belongs to, picking the active session by default.
 func (a *App) MeasureBandwidth(peerID string) (BandwidthResult, error) {
-	a.mu.RLock()
-	m := a.mesh
-	a.mu.RUnlock()
-	if m == nil {
+	s := a.sessionWithPeer(peerID)
+	if s == nil {
 		return BandwidthResult{}, errors.New("portal yo'q")
 	}
-	r, err := m.MeasureBandwidth(peerID)
+	r, err := s.mesh.MeasureBandwidth(peerID)
 	if err != nil {
 		return BandwidthResult{}, err
 	}
@@ -665,43 +840,87 @@ func (a *App) MeasureBandwidth(peerID string) (BandwidthResult, error) {
 	}, nil
 }
 
-// Peers returns a snapshot of currently tracked peers.
+// Peers returns a snapshot of the active portal's peers. Older UI
+// code calls this on every tick; new multi-portal-aware code should
+// prefer SessionPeers(localID).
 func (a *App) Peers() []PeerView {
-	a.mu.RLock()
-	m := a.mesh
-	a.mu.RUnlock()
-	if m == nil {
+	s := a.activeSession()
+	if s == nil || s.mesh == nil {
 		return []PeerView{}
 	}
-	peers := m.Peers()
+	return peersForSession(s)
+}
+
+// SessionPeers returns the peers of a specific session by localID.
+// Empty slice if the session doesn't exist or has no mesh yet.
+func (a *App) SessionPeers(sessionID string) []PeerView {
+	s := a.sessionByLocalID(sessionID)
+	if s == nil || s.mesh == nil {
+		return []PeerView{}
+	}
+	return peersForSession(s)
+}
+
+func peersForSession(s *portalSession) []PeerView {
+	peers := s.mesh.Peers()
 	out := make([]PeerView, 0, len(peers))
 	for _, p := range peers {
-		out = append(out, peerToView(p))
+		v := peerToView(p)
+		v.SessionID = s.localID
+		out = append(out, v)
 	}
 	return out
 }
 
+// sessionWithPeer returns the session that currently has a peer
+// with the given peerID. Used by methods that take a peer-id from
+// the UI but don't get a session-id (DialService, MeasureBandwidth,
+// SendFile). Falls back to the active session if no match — older
+// callers don't always carry a session-id argument.
+func (a *App) sessionWithPeer(peerID string) *portalSession {
+	for _, s := range a.allSessions() {
+		if s.mesh == nil {
+			continue
+		}
+		for _, p := range s.mesh.Peers() {
+			if p.ID == peerID {
+				return s
+			}
+		}
+	}
+	return a.activeSession()
+}
+
 // SendChat broadcasts a chat message to every peer. Returns peer count.
 func (a *App) SendChat(text string) int {
+	return a.SendChatTo(a.ActiveSessionID(), text)
+}
+
+// SendChatTo broadcasts a chat message to a specific session's
+// peers. Returns peer count. Called by the new multi-portal aware
+// UI when the user types in a chat panel attached to a specific
+// session.
+func (a *App) SendChatTo(sessionID, text string) int {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return 0
 	}
-	a.mu.RLock()
-	m := a.mesh
-	a.mu.RUnlock()
-	if m == nil {
+	if sessionID == "" {
+		sessionID = a.ActiveSessionID()
+	}
+	s := a.sessionByLocalID(sessionID)
+	if s == nil || s.mesh == nil {
 		return 0
 	}
-	n := m.SendChat(text)
-	// Echo locally so the sender sees their own message immediately.
+	n := s.mesh.SendChat(text)
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "chat", ChatMessage{
-			From:     m.MyPeerID(),
-			Nickname: a.nickname(),
-			Text:     text,
-			At:       time.Now(),
-			IsLocal:  true,
+			SessionID: s.localID,
+			From:      s.mesh.MyPeerID(),
+			Nickname:  s.nickname,
+			Text:      text,
+			At:        time.Now(),
+			IsLocal:   true,
 		})
 	}
 	return n
@@ -1091,33 +1310,43 @@ type ActivityEntry struct {
 	Result   string    `json:"result"`
 }
 
-// ProxyActivity returns recent peer-dial events on services we host.
-// Newest entries last. Used by Settings → Faollik so the user can see
-// "kim qachon kameramga ulandi". Best-effort enrichment of the peer
-// nickname from the current portal roster — entries from peers who've
-// since left come back with nickname empty.
+// ProxyActivity returns recent peer-dial events on services we host
+// across every active session — Settings → Faollik should show
+// activity in any portal you're connected to, not just the one
+// currently foregrounded. Newest entries last, sorted by time.
 func (a *App) ProxyActivity() []ActivityEntry {
-	a.mu.RLock()
-	f := a.fwd
-	m := a.mesh
-	a.mu.RUnlock()
-	if f == nil {
+	sessions := a.allSessions()
+	if len(sessions) == 0 {
 		return []ActivityEntry{}
 	}
-	raw := f.Activity()
+	// Build one shared nickname map by walking every session's peers.
+	// Same peer-id can't appear in two sessions at once (the server
+	// minted it for one portal), so the merge is collision-free.
 	nicks := map[string]string{}
-	if m != nil {
-		for _, p := range m.Peers() {
+	for _, s := range sessions {
+		if s.mesh == nil {
+			continue
+		}
+		for _, p := range s.mesh.Peers() {
 			nicks[p.ID] = p.Nickname
 		}
 	}
-	out := make([]ActivityEntry, 0, len(raw))
-	for _, e := range raw {
-		out = append(out, ActivityEntry{
-			Time: e.Time, PeerID: e.PeerID, Nickname: nicks[e.PeerID],
-			Protocol: e.Protocol, Port: e.Port, Target: e.Target,
-			Result: e.Result,
-		})
+	var out []ActivityEntry
+	for _, s := range sessions {
+		if s.fwd == nil {
+			continue
+		}
+		for _, e := range s.fwd.Activity() {
+			out = append(out, ActivityEntry{
+				Time: e.Time, PeerID: e.PeerID, Nickname: nicks[e.PeerID],
+				Protocol: e.Protocol, Port: e.Port, Target: e.Target,
+				Result: e.Result,
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
+	if out == nil {
+		out = []ActivityEntry{}
 	}
 	return out
 }
@@ -1200,19 +1429,34 @@ func (a *App) LocalListeners() []LocalListener {
 }
 
 // LocalServices returns the services we are currently exposing.
+//
+// We treat exposes as global — a service the user opens via the UI
+// is announced into every active session's mesh, so peers in any
+// portal can dial it. The list returned here therefore reflects the
+// persisted exposed_services rows (the source of truth) decorated
+// with health from the background prober. The active session's mesh
+// snapshot is used as a sanity-check that a row really is currently
+// announced; differences are extremely rare (announce ack vs
+// persisted row) but the UI handles them gracefully.
 func (a *App) LocalServices() []ServiceView {
 	a.mu.RLock()
-	m := a.mesh
-	f := a.fwd
 	store := a.store
 	a.mu.RUnlock()
-	if m == nil {
-		return []ServiceView{}
-	}
+
+	// Targets come from any session's forwarder — they all share the
+	// same target table because ExposeService walks every session.
+	// Pick the first non-nil one; fall back to empty.
 	var targets map[int]string
-	if f != nil {
-		targets = f.ExposedSnapshot()
+	for _, s := range a.allSessions() {
+		if s.fwd != nil {
+			targets = s.fwd.ExposedSnapshot()
+			break
+		}
 	}
+	if targets == nil {
+		targets = map[int]string{}
+	}
+
 	a.healthMu.Lock()
 	healthCopy := make(map[int]serviceHealth, len(a.exposedHealth))
 	for k, v := range a.exposedHealth {
@@ -1221,43 +1465,30 @@ func (a *App) LocalServices() []ServiceView {
 	a.healthMu.Unlock()
 
 	out := []ServiceView{}
-	seen := map[string]bool{}
-	for _, s := range m.LocalServices() {
-		v := ServiceView{Name: s.Name, Protocol: s.Protocol, Port: s.Port}
+	if store == nil {
+		return out
+	}
+	saved, _ := store.ListExposedServices()
+	for _, s := range saved {
+		v := ServiceView{
+			Name:     s.Name,
+			Protocol: s.Protocol,
+			Port:     s.Port,
+		}
 		if t, ok := targets[s.Port]; ok {
 			v.Target = t
+		} else {
+			v.Target = s.Target
 		}
-		if h, ok := healthCopy[s.Port]; ok {
+		if !s.Enabled {
+			v.Paused = true
+		} else if h, ok := healthCopy[s.Port]; ok {
 			v.Health = h.status
 			v.HealthError = h.err
 		} else {
 			v.Health = "unknown"
 		}
 		out = append(out, v)
-		seen[fmt.Sprintf("%s:%d", s.Protocol, s.Port)] = true
-	}
-	// Paused entries — remembered in storage but currently not
-	// announced. Surface them so the user can resume from the UI.
-	if store != nil {
-		saved, _ := store.ListExposedServices()
-		for _, s := range saved {
-			if s.Enabled {
-				continue
-			}
-			key := fmt.Sprintf("%s:%d", s.Protocol, s.Port)
-			if seen[key] {
-				continue
-			}
-			out = append(out, ServiceView{
-				Name:     s.Name,
-				Protocol: s.Protocol,
-				Port:     s.Port,
-				Target:   s.Target,
-				Paused:   true,
-				// Health doesn't make sense for paused entries; UI
-				// renders them as a different state anyway.
-			})
-		}
 	}
 	return out
 }
@@ -1282,9 +1513,16 @@ func (a *App) runHealthLoop() {
 }
 
 func (a *App) runHealthOnce() {
-	a.mu.RLock()
-	f := a.fwd
-	a.mu.RUnlock()
+	// Health is per-target, not per-session — every session's
+	// forwarder shares the same target table, so reading from the
+	// active session (or any other) returns the same answer.
+	var f *proxy.Forwarder
+	for _, s := range a.allSessions() {
+		if s.fwd != nil {
+			f = s.fwd
+			break
+		}
+	}
 	if f == nil {
 		return
 	}
@@ -1337,13 +1575,6 @@ func (a *App) runHealthOnce() {
 // tickrate on UDP, exposing them as TCP-only would silently fail at
 // dial time.
 func (a *App) ExposeService(name string, protocol string, port int, target string) error {
-	a.mu.RLock()
-	m := a.mesh
-	f := a.fwd
-	a.mu.RUnlock()
-	if m == nil || f == nil {
-		return errors.New("portal yo'q")
-	}
 	if protocol == "" {
 		protocol = "tcp"
 	}
@@ -1361,14 +1592,9 @@ func (a *App) ExposeService(name string, protocol string, port int, target strin
 	if name == "" {
 		name = fmt.Sprintf("%s:%d", protocol, port)
 	}
-	f.ExposeTarget(port, target)
-	a.logger.Info("expose service",
-		"name", name, "protocol", protocol, "port", port,
-		"target", target,
-	)
-	// Persist so the user comes back to the same set of shared
-	// services next session. Best-effort — failure shouldn't block
-	// the actual expose.
+
+	// Persist first so a missing-portal error doesn't lose the user's
+	// intent. Best-effort.
 	a.mu.RLock()
 	store := a.store
 	a.mu.RUnlock()
@@ -1379,7 +1605,37 @@ func (a *App) ExposeService(name string, protocol string, port int, target strin
 			a.logger.Debug("save exposed service", "err", err)
 		}
 	}
-	return m.AnnounceService(name, protocol, port)
+
+	// Broadcast to every active session — a service the user wants
+	// shared should reach peers in any portal they're connected to.
+	// If there's no active session yet (user pre-exposed before
+	// dialing) we still keep the persisted row, and bringUpSession
+	// will replay it via restoreExposedServicesFor.
+	sessions := a.allSessions()
+	if len(sessions) == 0 {
+		a.logger.Info("expose service (no portal yet — persisted only)",
+			"name", name, "protocol", protocol, "port", port, "target", target)
+		return nil
+	}
+	var firstErr error
+	for _, s := range sessions {
+		if s.fwd == nil || s.mesh == nil {
+			continue
+		}
+		s.fwd.ExposeTarget(port, target)
+		if err := s.mesh.AnnounceService(name, protocol, port); err != nil {
+			a.logger.Warn("expose: announce failed",
+				"session", s.localID, "port", port, "err", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	a.logger.Info("expose service",
+		"name", name, "protocol", protocol, "port", port,
+		"target", target, "sessions", len(sessions),
+	)
+	return firstErr
 }
 
 // SetExposeEnabled toggles a service between "actively shared" and
@@ -1390,17 +1646,12 @@ func (a *App) ExposeService(name string, protocol string, port int, target strin
 // Lets users park their cameras / NVRs without re-typing IPs every
 // time they want to stop sharing for a bit.
 func (a *App) SetExposeEnabled(port int, protocol string, enabled bool) error {
-	a.mu.RLock()
-	m := a.mesh
-	f := a.fwd
-	store := a.store
-	a.mu.RUnlock()
-	if m == nil || f == nil {
-		return errors.New("portal yo'q")
-	}
 	if protocol == "" {
 		protocol = "tcp"
 	}
+	a.mu.RLock()
+	store := a.store
+	a.mu.RUnlock()
 	if store == nil {
 		return errors.New("storage mavjud emas — pauza saqlanmaydi")
 	}
@@ -1424,36 +1675,56 @@ func (a *App) SetExposeEnabled(port int, protocol string, enabled bool) error {
 		return err
 	}
 
+	sessions := a.allSessions()
 	if !enabled {
-		// Pause: stop sharing now but keep the row.
-		f.Unexpose(port)
-		_ = m.UnannounceService(port)
+		// Pause: stop sharing now but keep the row. Apply to every
+		// session so the pause is global.
+		for _, s := range sessions {
+			if s.fwd != nil {
+				s.fwd.Unexpose(port)
+			}
+			if s.mesh != nil {
+				_ = s.mesh.UnannounceService(port)
+			}
+		}
 		a.logger.Info("expose paused", "port", port, "protocol", protocol)
 		return nil
 	}
-	// Resume: re-apply to the running mesh.
-	f.ExposeTarget(port, match.Target)
-	if err := m.AnnounceService(match.Name, match.Protocol, match.Port); err != nil {
-		return err
+	// Resume: re-apply to every running mesh.
+	var firstErr error
+	for _, s := range sessions {
+		if s.fwd == nil || s.mesh == nil {
+			continue
+		}
+		s.fwd.ExposeTarget(port, match.Target)
+		if err := s.mesh.AnnounceService(match.Name, match.Protocol, match.Port); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
 	}
 	a.logger.Info("expose resumed",
-		"port", port, "protocol", protocol, "target", match.Target)
-	return nil
+		"port", port, "protocol", protocol, "target", match.Target,
+		"sessions", len(sessions))
+	return firstErr
 }
 
 // UnexposeService removes a previously exposed port. Also wipes the
 // persisted preference for that port so it doesn't auto-restore on
 // the next session — if the user clicks the trash icon they mean it.
+// Removes from every active session.
 func (a *App) UnexposeService(port int) error {
 	a.mu.RLock()
-	m := a.mesh
-	f := a.fwd
 	store := a.store
 	a.mu.RUnlock()
-	if m == nil || f == nil {
-		return errors.New("portal yo'q")
+	for _, s := range a.allSessions() {
+		if s.fwd != nil {
+			s.fwd.Unexpose(port)
+		}
+		if s.mesh != nil {
+			_ = s.mesh.UnannounceService(port)
+		}
 	}
-	f.Unexpose(port)
 	if store != nil {
 		// Delete both tcp and udp rows — the front-end models it as
 		// "one entry per port" and we never want a stale persisted
@@ -1461,14 +1732,17 @@ func (a *App) UnexposeService(port int) error {
 		_ = store.DeleteExposedService(port, "tcp")
 		_ = store.DeleteExposedService(port, "udp")
 	}
-	return m.UnannounceService(port)
+	return nil
 }
 
-// restoreExposedServices reapplies every saved-and-enabled
-// ExposedService row when a new mesh comes online. Cheap (just
-// re-runs the same code path the UI does for "Och") so we can fire
-// it from EventPortalReady and forget.
-func (a *App) restoreExposedServices() {
+// restoreExposedServicesFor reapplies every saved-and-enabled
+// ExposedService row to a single session's mesh + forwarder. Called
+// from relayEvent on EventPortalReady so each fresh portal picks up
+// the user's exposure set without them having to re-Och anything.
+func (a *App) restoreExposedServicesFor(s *portalSession) {
+	if s == nil || s.fwd == nil || s.mesh == nil {
+		return
+	}
 	a.mu.RLock()
 	store := a.store
 	a.mu.RUnlock()
@@ -1480,20 +1754,18 @@ func (a *App) restoreExposedServices() {
 		a.logger.Debug("restore exposed: list", "err", err)
 		return
 	}
-	if len(saved) == 0 {
-		return
-	}
 	for _, svc := range saved {
 		if !svc.Enabled {
 			continue
 		}
-		if err := a.ExposeService(svc.Name, svc.Protocol, svc.Port, svc.Target); err != nil {
-			a.logger.Warn("restore exposed: re-expose failed",
-				"name", svc.Name, "port", svc.Port, "err", err)
+		s.fwd.ExposeTarget(svc.Port, svc.Target)
+		if err := s.mesh.AnnounceService(svc.Name, svc.Protocol, svc.Port); err != nil {
+			a.logger.Warn("restore exposed: re-announce failed",
+				"session", s.localID, "name", svc.Name, "port", svc.Port, "err", err)
 			continue
 		}
 		a.logger.Info("restore exposed: ok",
-			"name", svc.Name, "protocol", svc.Protocol,
+			"session", s.localID, "name", svc.Name, "protocol", svc.Protocol,
 			"port", svc.Port, "target", svc.Target)
 	}
 }
@@ -1508,12 +1780,11 @@ func (a *App) restoreExposedServices() {
 // Returns the resolved local addr ("127.0.0.1:27015") so the UI
 // shows it.
 func (a *App) DialService(peerID string, protocol string, remotePort, localPort int) (string, error) {
-	a.mu.RLock()
-	f := a.fwd
-	a.mu.RUnlock()
-	if f == nil {
+	s := a.sessionWithPeer(peerID)
+	if s == nil || s.fwd == nil {
 		return "", errors.New("portal yo'q")
 	}
+	f := s.fwd
 	if protocol == "" {
 		protocol = "tcp"
 	}
@@ -1558,70 +1829,135 @@ func (a *App) DialService(peerID string, protocol string, remotePort, localPort 
 // bringUpMesh allocates a fresh mesh.Manager + proxy.Forwarder and
 // starts the event-pump goroutine. Idempotent: tearing down first if
 // a previous session existed.
-func (a *App) bringUpMesh(nickname string) error {
+// bringUpSession spins up a fresh portalSession with its own
+// mesh.Manager / proxy.Forwarder / transfer.Engine. The new session
+// is registered under its localID immediately so concurrent reads
+// (e.g. another ExposeService call) can find it. If makeActive is
+// true, it also becomes the foreground (App.activeID); otherwise the
+// session runs in the background and the UI stays where it is.
+//
+// Returns the session pointer for the caller to drive
+// CreatePortal / JoinPortal on its mesh.
+func (a *App) bringUpSession(nickname string, makeActive bool, isOwner bool) (*portalSession, error) {
 	nickname = strings.TrimSpace(nickname)
 	if nickname == "" {
-		return errors.New("taxallus bo'sh bo'lmasligi kerak")
+		return nil, errors.New("taxallus bo'sh bo'lmasligi kerak")
 	}
-	a.tearDown()
 
 	url := a.SignalingURL()
 	turn := a.GetTurnConfig()
-	// Try Cloudflare TURN first; if creds work the call returns ICE
-	// servers (STUN defaults + Cloudflare relay) and we use them
-	// directly. nil means "fall back to mesh defaults plus the manual
-	// TurnURL field if any".
+	// Cloudflare TURN: kept for backwards-compat with existing user
+	// installs that have a token configured. New users only get the
+	// signaling-server-issued credentials applied via
+	// mesh.applyServerICE on PortalReady; the UI no longer surfaces
+	// the form so this falls through to nil for them.
 	cfICE := a.resolveICEServers()
-	a.mu.Lock()
-	a.nick = nickname
-	a.mesh = mesh.New(mesh.Config{
+
+	s := &portalSession{
+		localID:    newSessionID(),
+		nickname:   nickname,
+		isOwner:    isOwner,
+		background: !makeActive,
+		state:      "connecting",
+		pumpDone:   make(chan struct{}),
+	}
+	s.mesh = mesh.New(mesh.Config{
 		SignalingURL:      url,
 		Nickname:          nickname,
 		HeartbeatInterval: 3 * time.Second,
-		Logger:            a.logger,
+		Logger:            a.logger.With("session", s.localID),
 		ICEServers:        cfICE, // nil → mesh.DefaultICEServers
 		TurnURL:           turn.URL,
 		TurnUsername:      turn.Username,
 		TurnCredential:    turn.Credential,
 	})
-	a.fwd = proxy.New(a.mesh, a.logger)
-	a.mesh.SetProxyHandler(a.fwd)
+	s.fwd = proxy.New(s.mesh, a.logger.With("session", s.localID))
+	s.mesh.SetProxyHandler(s.fwd)
 
-	// Transfer engine — emits ProgressEvents straight to the frontend
-	// via Wails events. Uses ~/Downloads/Portal as save dir by default.
+	// Transfer engine — per-session so a download in portal A doesn't
+	// collide with one in portal B (xfer ids are local to each engine).
 	ctx := a.ctx
-	a.xfer = transfer.NewEngine(a.mesh, "", a.logger, func(ev transfer.ProgressEvent) {
-		if ctx != nil {
-			runtime.EventsEmit(ctx, "transfer:progress", ev)
+	sid := s.localID
+	s.xfer = transfer.NewEngine(s.mesh, "", a.logger.With("session", sid),
+		func(ev transfer.ProgressEvent) {
+			if ctx == nil {
+				return
+			}
+			// Tag transfer events with the session id so a UI showing
+			// portal A doesn't mistakenly render progress that belongs
+			// to portal B.
+			runtime.EventsEmit(ctx, "transfer:progress",
+				progressWithSession(ev, sid))
+		})
+	s.mesh.SetTransferHandler(s.xfer)
+
+	a.sessionsMu.Lock()
+	a.sessions[s.localID] = s
+	if makeActive {
+		a.activeID = s.localID
+	}
+	a.sessionsMu.Unlock()
+
+	go a.pumpSession(s)
+	return s, nil
+}
+
+// closeSession tears down a single session: leaves the mesh, closes
+// the forwarder, and waits briefly for the event-pump goroutine to
+// drain. Idempotent — calling it twice on the same session is a
+// no-op for the second call.
+func (a *App) closeSession(s *portalSession) {
+	if s == nil {
+		return
+	}
+	if s.fwd != nil {
+		_ = s.fwd.Close()
+	}
+	if s.mesh != nil {
+		_ = s.mesh.Leave()
+		s.mesh.Close()
+	}
+	// Pump goroutine ends when mesh.Done is closed; wait briefly so
+	// callers know it's drained before we drop the session pointer.
+	if s.pumpDone != nil {
+		select {
+		case <-s.pumpDone:
+		case <-time.After(2 * time.Second):
 		}
-	})
-	a.mesh.SetTransferHandler(a.xfer)
-	a.mu.Unlock()
-
-	go a.pumpEvents()
-	return nil
-}
-
-func (a *App) tearDown() {
-	a.mu.Lock()
-	m := a.mesh
-	f := a.fwd
-	a.mesh = nil
-	a.fwd = nil
-	a.mu.Unlock()
-	if f != nil {
-		_ = f.Close()
-	}
-	if m != nil {
-		_ = m.Leave()
-		m.Close()
 	}
 }
 
-func (a *App) setConnecting(s string) {
-	a.mu.Lock()
-	a.connectingTo = s
-	a.mu.Unlock()
+// activeSession returns the foreground session, or nil if none.
+// Read-only callers should grab this once and check for nil.
+func (a *App) activeSession() *portalSession {
+	a.sessionsMu.RLock()
+	defer a.sessionsMu.RUnlock()
+	if a.activeID == "" {
+		return nil
+	}
+	return a.sessions[a.activeID]
+}
+
+// sessionByLocalID looks up a session by its localID. Returns nil if
+// not found. Used by the new multi-portal API methods.
+func (a *App) sessionByLocalID(id string) *portalSession {
+	a.sessionsMu.RLock()
+	defer a.sessionsMu.RUnlock()
+	return a.sessions[id]
+}
+
+// allSessions returns a slice copy of every live session. Caller can
+// iterate without holding the lock, which matters for ExposeService /
+// UnexposeService where we want to call into each session's mesh
+// without serialising on the global session lock.
+func (a *App) allSessions() []*portalSession {
+	a.sessionsMu.RLock()
+	defer a.sessionsMu.RUnlock()
+	out := make([]*portalSession, 0, len(a.sessions))
+	for _, s := range a.sessions {
+		out = append(out, s)
+	}
+	return out
 }
 
 func (a *App) nickname() string {
@@ -1630,117 +1966,194 @@ func (a *App) nickname() string {
 	return a.nick
 }
 
-// waitPortalReady blocks until the mesh emits PortalReady, the
-// signaling server responds with an error, the deadline expires,
-// or we get torn down. Errors come back fast (the server typically
-// rejects bad portal IDs in ~50ms) so the user isn't left staring
-// at a "Ulanmoqda..." spinner for the full timeout window.
-func (a *App) waitPortalReady(timeout time.Duration) (PortalView, error) {
-	a.mu.RLock()
-	m := a.mesh
-	a.mu.RUnlock()
-	if m == nil {
+// waitPortalReady blocks until the given session's mesh emits
+// PortalReady, surfaces an error, or the deadline expires. The
+// session's own mu carries the eventual PortalView (set by pumpSession
+// on EventPortalReady), so we poll it on a short tick rather than
+// duplicating the mesh-event-channel plumbing here.
+func (a *App) waitPortalReady(s *portalSession, timeout time.Duration) (PortalView, error) {
+	if s == nil || s.mesh == nil {
 		return PortalView{}, errors.New("mesh tear down")
 	}
-
 	deadline := time.After(timeout)
 	tick := time.NewTicker(50 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		if pi := m.Portal(); pi != nil {
+		if pi := s.mesh.Portal(); pi != nil {
 			return portalToView(pi), nil
 		}
 		select {
-		case err := <-m.InitialError():
-			a.tearDown()
+		case err := <-s.mesh.InitialError():
 			return PortalView{}, err
 		case <-deadline:
-			a.tearDown()
 			return PortalView{}, errors.New("portal javobi kelmadi (timeout)")
 		case <-tick.C:
 		}
 	}
 }
 
-// pumpEvents fans mesh events out to the frontend via Wails event bus.
-// Runs until the mesh.Manager closes.
-func (a *App) pumpEvents() {
-	a.mu.RLock()
-	m := a.mesh
-	a.mu.RUnlock()
-	if m == nil {
+// pumpSession fans events from one mesh.Manager out to the frontend,
+// tagging each with the session's localID + portalID so the JS side
+// can route them to the right portal in its store. Runs until the
+// mesh closes; closes pumpDone on exit so closeSession can wait on it.
+func (a *App) pumpSession(s *portalSession) {
+	defer close(s.pumpDone)
+	if s.mesh == nil {
 		return
 	}
 	for {
 		select {
-		case <-m.Done():
+		case <-s.mesh.Done():
 			return
-		case ev, ok := <-m.Events():
+		case ev, ok := <-s.mesh.Events():
 			if !ok {
 				return
 			}
-			a.relayEvent(ev)
+			a.relayEvent(s, ev)
 		}
 	}
 }
 
-func (a *App) relayEvent(ev mesh.MeshEvent) {
+func (a *App) relayEvent(s *portalSession, ev mesh.MeshEvent) {
 	if a.ctx == nil {
 		return
 	}
+	sid := s.localID
 	switch ev.Type {
 	case mesh.EventPortalReady:
-		// Pass through portalToView so the JSON we emit matches the
-		// PortalView shape the frontend subscribes with (portalId,
-		// code, ownerId — lowerCamel json tags). Sending *ev.Portal
-		// directly serialised the raw mesh.PortalInfo struct with Go
-		// field names (PortalID, Code, OwnerID), so the subscriber's
-		// setPortal() overwrote the good data Welcome had just put
-		// in the store with object whose fields were all undefined —
-		// the ID/KOD then rendered blank. Race was platform-dependent
-		// (Windows hit it most reliably; macOS sometimes won the race).
-		runtime.EventsEmit(a.ctx, "portal:ready", portalToView(ev.Portal))
-		// Reapply any services the user wants auto-shared every
-		// session. Don't block the event loop on disk I/O — fire and
-		// forget; if it fails the user can still re-Och manually.
-		go a.restoreExposedServices()
+		view := portalToView(ev.Portal)
+		// Owner sessions know their code from the server; joiner
+		// sessions don't (the server doesn't echo it back). For
+		// joiners we patched the code into PortalView at JoinPortal
+		// time before persistEnter; the live mesh.Portal doesn't
+		// carry it, so prefer the cached view.code if non-empty.
+		s.mu.Lock()
+		if s.view.Code != "" {
+			view.Code = s.view.Code
+		}
+		s.view = view
+		s.state = "connected"
+		s.err = nil
+		s.mu.Unlock()
+		runtime.EventsEmit(a.ctx, "portal:ready", portalReadyEvent(s, view))
+		// Reapply persisted exposed services to the new mesh. Per
+		// session — we want the same set of shares to surface in
+		// every active portal. Fire-and-forget; failure shouldn't
+		// block the event loop.
+		go a.restoreExposedServicesFor(s)
 
 	case mesh.EventPeerJoining:
-		runtime.EventsEmit(a.ctx, "peer:joining", peerToView(ev.Peer))
+		runtime.EventsEmit(a.ctx, "peer:joining", peerEvent(s, ev.Peer, "connecting"))
 
 	case mesh.EventPeerReady:
-		runtime.EventsEmit(a.ctx, "peer:ready", peerToView(ev.Peer))
+		runtime.EventsEmit(a.ctx, "peer:ready", peerEvent(s, ev.Peer, "connected"))
 
 	case mesh.EventPeerRTT:
-		runtime.EventsEmit(a.ctx, "peer:rtt", peerToView(ev.Peer))
+		runtime.EventsEmit(a.ctx, "peer:rtt", peerEvent(s, ev.Peer, ""))
 
 	case mesh.EventPeerTransport:
-		runtime.EventsEmit(a.ctx, "peer:transport", peerToView(ev.Peer))
+		runtime.EventsEmit(a.ctx, "peer:transport", peerEvent(s, ev.Peer, ""))
 
 	case mesh.EventPeerLeft:
-		runtime.EventsEmit(a.ctx, "peer:left", peerToView(ev.Peer))
+		runtime.EventsEmit(a.ctx, "peer:left", peerEvent(s, ev.Peer, "closed"))
 
 	case mesh.EventPortalClosed:
-		runtime.EventsEmit(a.ctx, "portal:closed", nil)
+		s.setState("closed", nil)
+		// Drop the session from the map so the dashboard's "active
+		// portals" strip stops showing it. Note: do NOT close the
+		// session here — the mesh has already torn itself down. We
+		// just need to forget it.
+		a.sessionsMu.Lock()
+		delete(a.sessions, sid)
+		if a.activeID == sid {
+			a.activeID = ""
+		}
+		a.sessionsMu.Unlock()
+		runtime.EventsEmit(a.ctx, "portal:closed", map[string]string{"sessionId": sid})
 
 	case mesh.EventChat:
 		runtime.EventsEmit(a.ctx, "chat", ChatMessage{
-			From:     ev.Peer.ID,
-			Nickname: ev.Peer.Nickname,
-			Text:     ev.ChatText,
-			At:       time.Now(),
-			IsLocal:  false,
+			SessionID: sid,
+			From:      ev.Peer.ID,
+			Nickname:  ev.Peer.Nickname,
+			Text:      ev.ChatText,
+			At:        time.Now(),
+			IsLocal:   false,
 		})
 
 	case mesh.EventServiceAnnounce:
-		runtime.EventsEmit(a.ctx, "peer:services", peerToView(ev.Peer))
+		runtime.EventsEmit(a.ctx, "peer:services", peerEvent(s, ev.Peer, ""))
 
 	case mesh.EventError:
 		msg := ""
 		if ev.Err != nil {
 			msg = ev.Err.Error()
 		}
-		runtime.EventsEmit(a.ctx, "error", msg)
+		runtime.EventsEmit(a.ctx, "error",
+			map[string]string{"sessionId": sid, "message": msg})
+	}
+}
+
+// peerEvent builds the JS payload for peer:* events, tagging it with
+// the session id so the frontend can route into its per-session
+// peer map without ambiguity.
+func peerEvent(s *portalSession, p *mesh.Peer, override string) map[string]any {
+	pv := peerToView(p)
+	if override != "" {
+		pv.State = override
+	}
+	pv.SessionID = s.localID
+	return map[string]any{
+		"sessionId": s.localID,
+		"portalId":  s.snapshotPortalID(),
+		"peer":      pv,
+	}
+}
+
+// portalReadyEvent is the per-session payload for "portal:ready".
+// Older callers who subscribed expecting just the PortalView still
+// get its fields at the top level; the sessionId is added for the
+// new multi-portal-aware UI.
+func portalReadyEvent(s *portalSession, v PortalView) map[string]any {
+	return map[string]any{
+		"sessionId":   s.localID,
+		"portalId":    v.PortalID,
+		"code":        v.Code,
+		"ownerId":     v.OwnerID,
+		"ownPeerId":   v.OwnPeerID,
+		"ownVip":      v.OwnVIP,
+		"isOwner":     v.IsOwner,
+		"nickname":    s.nickname,
+		"background":  s.background,
+	}
+}
+
+// snapshotPortalID returns the server-assigned portal ID, or "" if
+// PortalReady hasn't fired yet.
+func (s *portalSession) snapshotPortalID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.view.PortalID
+}
+
+// progressWithSession augments a transfer.ProgressEvent with the
+// session it belongs to. We re-encode as a generic map because
+// transfer.ProgressEvent is a struct in another package and we
+// can't add fields to it without invasive changes.
+func progressWithSession(ev transfer.ProgressEvent, sid string) map[string]any {
+	return map[string]any{
+		"sessionId": sid,
+		"xferId":    ev.XferID,
+		"peerId":    ev.PeerID,
+		"direction": ev.Direction,
+		"manifest":  ev.Manifest,
+		"bytes":     ev.Bytes,
+		"total":     ev.Total,
+		"done":      ev.Done,
+		"error":     ev.Error,
+		"startedAt": ev.StartedAt,
+		"updatedAt": ev.UpdatedAt,
+		"savePath":  ev.SavePath,
 	}
 }
 

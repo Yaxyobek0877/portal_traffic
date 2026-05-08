@@ -1,11 +1,23 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Copy, QrCode, LogOut, Check, Eye, EyeOff, Settings as SettingsIcon } from "lucide-react";
+import {
+  Copy,
+  QrCode,
+  LogOut,
+  Check,
+  Eye,
+  EyeOff,
+  Settings as SettingsIcon,
+  Layers,
+  Crown,
+  ArrowLeft,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import type { PortalView } from "../types";
 import { usePortalStore } from "../stores/portalStore";
 import { useT } from "../i18n";
+import { app } from "../lib/wails";
 
 type Props = {
   portal: PortalView;
@@ -92,6 +104,14 @@ export function PortalHeader({ portal, onLeave }: Props) {
       </div>
 
       <div className="no-drag flex items-center gap-1">
+        <PortalSwitcher />
+        <button
+          onClick={() => setScreen("welcome")}
+          title={t("header.dashboard")}
+          className="h-9 w-9 rounded-btn flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.05]"
+        >
+          <ArrowLeft className="w-4 h-4" strokeWidth={2} />
+        </button>
         <button
           onClick={() => setScreen("settings")}
           title={t("common.tooltip.settings")}
@@ -225,6 +245,92 @@ function Stat({
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// PortalSwitcher renders the count of live sessions and a dropdown
+// to jump between them. Hidden when only one session exists — the
+// chip would just be visual noise. The dropdown lists each session
+// with its portal id, owner badge, and peer count; clicking
+// switches the foreground.
+function PortalSwitcher() {
+  const { t } = useT();
+  const sessions = usePortalStore((s) =>
+    Object.values(s.sessions).map((sess) => sess.summary)
+  );
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close the dropdown when the user clicks outside it.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  if (sessions.length <= 1) return null;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title={t("header.switcher")}
+        className="h-9 px-2.5 rounded-btn text-xs flex items-center gap-1.5 text-zinc-300 hover:bg-white/[0.05] panel"
+      >
+        <Layers className="w-3.5 h-3.5 text-violet-300" />
+        <span className="font-mono">{sessions.length}</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-11 w-72 z-40 panel rounded-card overflow-hidden bg-[#0d1322]/95 backdrop-blur shadow-xl">
+          <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-zinc-500 border-b border-white/5">
+            {t("header.switcher.title")}
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {sessions.map((s) => (
+              <button
+                key={s.sessionId}
+                onClick={async () => {
+                  setOpen(false);
+                  await app.SwitchPortal(s.sessionId);
+                }}
+                className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 text-xs hover:bg-white/[0.05] ${
+                  s.isActive ? "bg-violet-500/[0.06]" : ""
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    s.state === "connected"
+                      ? "bg-emerald-400"
+                      : s.state === "connecting"
+                      ? "bg-amber-400 animate-pulse"
+                      : "bg-rose-400"
+                  }`}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-violet-300">{s.portalId || "…"}</span>
+                    {s.isOwner && <Crown className="w-2.5 h-2.5 text-amber-400" />}
+                    {s.isActive && (
+                      <span className="text-[9px] uppercase tracking-wider text-violet-300">
+                        {t("welcome.active.foreground")}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-zinc-500 truncate">
+                    {s.nickname} · {s.peerCount} {t("welcome.active.peers")}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

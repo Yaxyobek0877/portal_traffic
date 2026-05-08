@@ -27,13 +27,15 @@ import {
   Pencil,
   X,
   Check,
+  Radio,
+  PlugZap,
 } from "lucide-react";
 import { Logo } from "../components/Logo";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
 import { useT } from "../i18n";
 import { parseInvite } from "../lib/deeplink";
-import type { HistoryEntry } from "../types";
+import type { HistoryEntry, PortalSummary } from "../types";
 
 type Mode = "idle" | "create" | "join";
 
@@ -49,6 +51,11 @@ export function Welcome() {
   const history = usePortalStore((s) => s.history);
   const setHistory = usePortalStore((s) => s.setHistory);
   const nat = usePortalStore((s) => s.nat);
+  const setSessionSummaries = usePortalStore((s) => s.setSessionSummaries);
+  // Active sessions, derived from the store's session map.
+  const sessions = usePortalStore((s) =>
+    Object.values(s.sessions).map((sess) => sess.summary)
+  );
 
   const [mode, setMode] = useState<Mode>("idle");
   const [portalId, setPortalId] = useState("");
@@ -69,7 +76,12 @@ export function Welcome() {
   useEffect(() => {
     app.SignalingURL().then(setSignalingUrl);
     app.RecentPortals(8).then(setHistory);
-  }, [setSignalingUrl, setHistory]);
+    // Hydrate the active-sessions strip on mount so a hot-reload or
+    // a launch with sessions already running shows them right away.
+    app.ActivePortals().then((list) => {
+      if (Array.isArray(list)) setSessionSummaries(list);
+    });
+  }, [setSignalingUrl, setHistory, setSessionSummaries]);
 
   // One-click rejoin from the Recent list. Mirrors what the mobile
   // client does (PortalViewModel.rejoinRecent):
@@ -84,24 +96,32 @@ export function Welcome() {
   // The previous behaviour (pre-fill the join form, make the user
   // click submit again) was a holdover from before the dashboard
   // redesign — pure friction now.
-  const rejoinRow = async (h: typeof history[number]) => {
+  const rejoinRow = async (h: typeof history[number], opts?: { background?: boolean }) => {
     if (busy) return;
+    const background = !!opts?.background;
     setError("");
     setRejoiningId(h.id);
     const myGen = ++genRef.current;
     setBusy(true);
     try {
-      // Use the signed-in user's nickname (post-account work this
-      // is always populated). Fall back to the historical handle if
-      // the field is somehow empty so we never call into the backend
-      // with a blank name.
       const nick = nickname.trim() || h.nickname;
-      const p = h.isOwner
-        ? await app.CreatePortal(nick, false)
-        : await app.JoinPortal(nick, h.portalId, h.code);
+      const fn = background
+        ? h.isOwner
+          ? () => app.BackgroundCreatePortal(nick)
+          : () => app.BackgroundJoinPortal(nick, h.portalId, h.code)
+        : h.isOwner
+        ? () => app.CreatePortal(nick, false)
+        : () => app.JoinPortal(nick, h.portalId, h.code);
+      const p = await fn();
       if (myGen !== genRef.current) return;
-      setPortal(p);
-      setScreen("portal");
+      // Refresh the strip immediately so the new session appears
+      // without waiting for the event pipeline to catch up.
+      const list = await app.ActivePortals();
+      if (Array.isArray(list)) setSessionSummaries(list);
+      if (!background) {
+        setPortal(p);
+        setScreen("portal");
+      }
     } catch (e: any) {
       if (myGen !== genRef.current) return;
       setError(e?.message || String(e));
@@ -141,20 +161,29 @@ export function Welcome() {
 
   // One-click Create. Skips the old idle→create→submit pivot — the
   // dashboard primary action shouldn't make the user click twice.
-  const handleCreate = async () => {
+  const handleCreate = async (opts?: { background?: boolean }) => {
     setError("");
     if (!nickname.trim()) {
       setError(t("welcome.error.empty_nickname"));
       return;
     }
+    const background = !!opts?.background;
     setMode("create");
     const myGen = ++genRef.current;
     setBusy(true);
     try {
-      const p = await app.CreatePortal(nickname.trim(), false);
+      const p = background
+        ? await app.BackgroundCreatePortal(nickname.trim())
+        : await app.CreatePortal(nickname.trim(), false);
       if (myGen !== genRef.current) return;
-      setPortal(p);
-      setScreen("portal");
+      const list = await app.ActivePortals();
+      if (Array.isArray(list)) setSessionSummaries(list);
+      if (!background) {
+        setPortal(p);
+        setScreen("portal");
+      } else {
+        setMode("idle");
+      }
     } catch (e: any) {
       if (myGen !== genRef.current) return;
       setError(e?.message || String(e));
@@ -164,19 +193,30 @@ export function Welcome() {
     }
   };
 
-  const handleJoinSubmit = async () => {
+  const handleJoinSubmit = async (opts?: { background?: boolean }) => {
     setError("");
     if (!portalId.trim() || !code.trim()) {
       setError(t("welcome.error.empty_id_or_code"));
       return;
     }
+    const background = !!opts?.background;
     const myGen = ++genRef.current;
     setBusy(true);
     try {
-      const p = await app.JoinPortal(nickname.trim(), portalId.trim(), code.trim());
+      const p = background
+        ? await app.BackgroundJoinPortal(nickname.trim(), portalId.trim(), code.trim())
+        : await app.JoinPortal(nickname.trim(), portalId.trim(), code.trim());
       if (myGen !== genRef.current) return;
-      setPortal(p);
-      setScreen("portal");
+      const list = await app.ActivePortals();
+      if (Array.isArray(list)) setSessionSummaries(list);
+      if (!background) {
+        setPortal(p);
+        setScreen("portal");
+      } else {
+        setMode("idle");
+        setPortalId("");
+        setCode("");
+      }
     } catch (e: any) {
       if (myGen !== genRef.current) return;
       setError(e?.message || String(e));
@@ -294,6 +334,36 @@ export function Welcome() {
             <p className="text-sm text-zinc-400 mt-1.5">{t("welcome.subtitle")}</p>
           </motion.div>
 
+          {/* Active connections strip — every live portal session
+              (foreground + background). Click to switch which one the
+              UI is foregrounded on; X to leave just that one. */}
+          {sessions.length > 0 && (
+            <section className="mt-6">
+              <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-zinc-500 mb-2">
+                <Radio className="w-3 h-3" />
+                {t("welcome.active")}
+                <span className="text-zinc-600 font-mono">({sessions.length})</span>
+              </div>
+              <div className="space-y-1.5">
+                {sessions.map((s) => (
+                  <ActiveSessionRow
+                    key={s.sessionId}
+                    s={s}
+                    onSwitch={async () => {
+                      await app.SwitchPortal(s.sessionId);
+                      setScreen("portal");
+                    }}
+                    onLeave={async () => {
+                      await app.LeavePortal(s.sessionId);
+                      const list = await app.ActivePortals();
+                      if (Array.isArray(list)) setSessionSummaries(list);
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Recent portals — promoted ABOVE the action cards because
               for returning users (who have history) rejoining is the
               primary intent, not creating a new portal. New users
@@ -313,6 +383,7 @@ export function Welcome() {
                     busy={busy}
                     rejoining={rejoiningId === h.id}
                     onRejoin={() => rejoinRow(h)}
+                    onRejoinBackground={() => rejoinRow(h, { background: true })}
                     onRenamed={async () => {
                       // Pull a fresh list so the row's label updates
                       // in place without forcing the parent to track
@@ -344,14 +415,17 @@ export function Welcome() {
                   transition={{ duration: 0.18 }}
                   className="grid grid-cols-1 sm:grid-cols-2 gap-3"
                 >
-                  {/* Create card — primary, gradient border */}
-                  <button
-                    onClick={handleCreate}
-                    disabled={busy}
-                    className="group relative text-left rounded-input p-4 panel hover:bg-white/[0.06] transition disabled:opacity-60 disabled:cursor-wait overflow-hidden"
-                  >
+                  {/* Create card — primary action opens the portal in
+                      foreground; the bolt button on the corner runs the
+                      same flow but in the background, leaving the user
+                      on this dashboard. */}
+                  <div className="group relative rounded-input panel hover:bg-white/[0.06] transition overflow-hidden">
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition pointer-events-none bg-gradient-to-br from-violet-500/10 to-cyan-500/5" />
-                    <div className="relative">
+                    <button
+                      onClick={() => handleCreate()}
+                      disabled={busy}
+                      className="relative w-full text-left p-4 disabled:opacity-60 disabled:cursor-wait"
+                    >
                       <div className="w-9 h-9 rounded-md bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
                         <Sparkles className="w-4 h-4 text-violet-300" />
                       </div>
@@ -368,8 +442,16 @@ export function Welcome() {
                       <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
                         {t("welcome.create.card_hint")}
                       </p>
-                    </div>
-                  </button>
+                    </button>
+                    <button
+                      onClick={() => handleCreate({ background: true })}
+                      disabled={busy}
+                      title={t("welcome.create.background")}
+                      className="absolute top-2 right-2 z-10 p-1.5 rounded-md text-zinc-500 hover:text-violet-300 hover:bg-violet-500/10 transition disabled:opacity-50"
+                    >
+                      <PlugZap className="w-4 h-4" />
+                    </button>
+                  </div>
 
                   {/* Join card — secondary */}
                   <button
@@ -450,7 +532,7 @@ export function Welcome() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="grid grid-cols-3 gap-2 pt-1">
                     <button
                       onClick={busy ? cancel : () => setMode("idle")}
                       className="panel rounded-btn h-10 text-sm hover:bg-white/[0.07]"
@@ -458,7 +540,16 @@ export function Welcome() {
                       {busy ? t("welcome.cancel") : t("welcome.back")}
                     </button>
                     <button
-                      onClick={handleJoinSubmit}
+                      onClick={() => handleJoinSubmit({ background: true })}
+                      disabled={busy}
+                      title={t("welcome.join.background")}
+                      className="panel rounded-btn h-10 text-sm flex items-center justify-center gap-1.5 hover:bg-white/[0.07] disabled:opacity-50"
+                    >
+                      <PlugZap className="w-3.5 h-3.5 text-violet-300" />
+                      <span className="hidden sm:inline">{t("welcome.join.background_short")}</span>
+                    </button>
+                    <button
+                      onClick={() => handleJoinSubmit()}
                       disabled={busy}
                       className="btn-primary rounded-btn h-10 text-sm font-semibold disabled:opacity-50"
                     >
@@ -550,6 +641,7 @@ function RecentRow({
   busy,
   rejoining,
   onRejoin,
+  onRejoinBackground,
   onRenamed,
   onRemoved,
 }: {
@@ -557,6 +649,7 @@ function RecentRow({
   busy: boolean;
   rejoining: boolean;
   onRejoin: () => void;
+  onRejoinBackground: () => void;
   onRenamed: () => void | Promise<void>;
   onRemoved: () => void | Promise<void>;
 }) {
@@ -686,8 +779,23 @@ function RecentRow({
         </div>
       </button>
       {/* Inline tools — only visible on hover/focus to keep the row
-          quiet at rest. Pencil opens rename, X drops the entry. */}
+          quiet at rest. PlugZap rejoins in background (no screen
+          swap), pencil opens rename, X drops the entry. */}
       <div className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition shrink-0">
+        {canRejoin && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRejoinBackground();
+            }}
+            disabled={busy && !rejoining}
+            title={t("welcome.recent.background")}
+            className="p-1.5 rounded-md text-zinc-400 hover:text-violet-300 hover:bg-violet-500/10 disabled:opacity-40"
+          >
+            <PlugZap className="w-3.5 h-3.5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={(e) => {
@@ -717,6 +825,93 @@ function RecentRow({
       ) : (
         <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 transition shrink-0 mr-2" />
       )}
+    </div>
+  );
+}
+
+// ActiveSessionRow — one entry in the dashboard's "Faol ulanishlar"
+// strip. Each row represents a live portal session (foreground or
+// background). The row body switches the UI to that session's
+// Portal screen; the X drops only that session, leaving every
+// other live one untouched.
+//
+// The active session is highlighted with a stronger border + a
+// pulsing dot so the user can see at a glance which one their
+// PeerTable / chat is currently scoped to.
+function ActiveSessionRow({
+  s,
+  onSwitch,
+  onLeave,
+}: {
+  s: PortalSummary;
+  onSwitch: () => void | Promise<void>;
+  onLeave: () => void | Promise<void>;
+}) {
+  const { t } = useT();
+  const initial = (s.nickname?.trim()[0] || "?").toUpperCase();
+  const stateColor =
+    s.state === "connecting"
+      ? "bg-amber-400 animate-pulse"
+      : s.state === "failed" || s.state === "closed"
+      ? "bg-rose-400"
+      : "bg-emerald-400";
+  return (
+    <div
+      className={`w-full panel rounded-input pl-3 pr-1.5 py-2.5 flex items-center gap-3 text-sm hover:bg-white/[0.07] group transition ${
+        s.isActive ? "border-violet-500/40 bg-violet-500/[0.04]" : ""
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onSwitch}
+        className="flex items-center gap-3 min-w-0 flex-1 text-left"
+      >
+        <div className="relative w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/40 to-cyan-500/30 flex items-center justify-center text-[11px] font-bold shrink-0">
+          {initial}
+          <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-[#0d1322] ${stateColor}`} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            {s.portalId ? (
+              <span className="font-mono text-violet-300 text-sm">{s.portalId}</span>
+            ) : (
+              <span className="text-zinc-500 italic">{t("common.connecting")}</span>
+            )}
+            {s.isOwner && (
+              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5 shrink-0">
+                <Crown className="w-2.5 h-2.5" />
+                {t("common.owner")}
+              </span>
+            )}
+            {s.isActive && (
+              <span className="text-[10px] uppercase tracking-wider text-violet-300 shrink-0">
+                {t("welcome.active.foreground")}
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] text-zinc-500 truncate">
+            {s.nickname}
+            {s.peerCount > 0 && (
+              <span className="ml-2 text-zinc-600">
+                · {s.peerCount} {t("welcome.active.peers")}
+              </span>
+            )}
+            {s.error && <span className="ml-2 text-rose-400">{s.error}</span>}
+          </div>
+        </div>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onLeave();
+        }}
+        title={t("welcome.active.leave")}
+        className="p-1.5 rounded-md text-zinc-400 hover:text-rose-300 hover:bg-rose-500/10"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+      <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 transition shrink-0 mr-2" />
     </div>
   );
 }

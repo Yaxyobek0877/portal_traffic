@@ -6,6 +6,7 @@
 
 import type {
   PortalView,
+  PortalSummary,
   PeerView,
   ServiceView,
   ChatMessage,
@@ -26,10 +27,31 @@ type Bridge = {
   SetSignalingURL: (url: string) => Promise<void>;
   CreatePortal: (nickname: string, publicNick: boolean) => Promise<PortalView>;
   JoinPortal: (nickname: string, portalId: string, code: string) => Promise<PortalView>;
+  // Multi-portal: open the connection without making it the
+  // foreground session (the UI stays on whatever it was on).
+  BackgroundCreatePortal: (nickname: string) => Promise<PortalView>;
+  BackgroundJoinPortal: (nickname: string, portalId: string, code: string) => Promise<PortalView>;
+  // Leave drops the active session; LeavePortal drops a specific
+  // session by its localID; LeaveAllPortals drops them all (used on
+  // sign-out).
   Leave: () => Promise<void>;
+  LeavePortal: (sessionId: string) => Promise<void>;
+  LeaveAllPortals: () => Promise<void>;
+  // SwitchPortal brings a different session to the foreground —
+  // emits portal:switched so the UI can re-render.
+  SwitchPortal: (sessionId: string) => Promise<void>;
+  // ActivePortals lists every live session for the dashboard's
+  // "Faol ulanishlar" strip. ActiveSessionID returns the foreground
+  // session's localID (or "" when none).
+  ActivePortals: () => Promise<PortalSummary[]>;
+  ActiveSessionID: () => Promise<string>;
   CurrentPortal: () => Promise<PortalView>;
+  // Peers returns peers of the active session (legacy shape kept
+  // for older callers); SessionPeers takes a localID.
   Peers: () => Promise<PeerView[]>;
+  SessionPeers: (sessionId: string) => Promise<PeerView[]>;
   SendChat: (text: string) => Promise<number>;
+  SendChatTo: (sessionId: string, text: string) => Promise<number>;
   LocalServices: () => Promise<ServiceView[]>;
   ExposeService: (name: string, protocol: "tcp" | "udp", port: number, target: string) => Promise<void>;
   SetExposeEnabled: (port: number, protocol: "tcp" | "udp", enabled: boolean) => Promise<void>;
@@ -148,7 +170,30 @@ const stub: Bridge = {
     ownVip: "10.42.0.2",
     isOwner: false,
   }),
+  BackgroundCreatePortal: async (nickname) => ({
+    portalId: "808080",
+    code: "707070",
+    ownerId: "preview-bg-owner",
+    ownPeerId: "preview-bg-owner",
+    ownVip: "10.42.1.1",
+    isOwner: true,
+  }),
+  BackgroundJoinPortal: async (nickname, portalId) => ({
+    portalId,
+    code: "",
+    ownerId: "preview-bg-owner",
+    ownPeerId: "preview-bg-self",
+    ownVip: "10.42.1.2",
+    isOwner: false,
+  }),
   Leave: async () => {},
+  LeavePortal: async () => {},
+  LeaveAllPortals: async () => {},
+  SwitchPortal: async () => {},
+  ActivePortals: async () => [],
+  ActiveSessionID: async () => "",
+  SessionPeers: async () => [],
+  SendChatTo: async () => 0,
   CurrentPortal: async () => ({
     portalId: "",
     code: "",
