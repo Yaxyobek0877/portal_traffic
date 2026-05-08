@@ -31,6 +31,7 @@ import { PeerServicesGrid } from "../components/PeerServicesGrid";
 import { StatusBar } from "../components/StatusBar";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
+import type { ServiceView, RiskAssessment } from "../types";
 
 export function PortalView() {
   const portal = usePortalStore((s) => s.portal);
@@ -60,6 +61,72 @@ export function PortalView() {
       const s = await app.LocalServices();
       setLocalServices(s);
     } catch {}
+  };
+
+  // Own-service handlers — moved up here from ServicesPanel when the
+  // 'Mening servislarim' list relocated to the centre grid. They're
+  // identical wires onto app.* with a refresh after each call.
+  const togglePauseOwn = async (s: ServiceView) => {
+    try {
+      await app.SetExposeEnabled(s.port, s.protocol as "tcp" | "udp", !!s.paused);
+      await refreshLocalServices();
+    } catch {}
+  };
+
+  const removeOwn = async (port: number) => {
+    try {
+      await app.UnexposeService(port);
+      await refreshLocalServices();
+    } catch {}
+  };
+
+  // retargetOwn — the inline pencil edit on a row. Returns true on
+  // success so the row component can collapse its editor; false on
+  // validation or backend errors so the editor stays open and the
+  // user can fix the input. Keeps the row's name + history because
+  // ExposeService is idempotent on (port, protocol).
+  const retargetOwn = async (s: ServiceView, newTarget: string): Promise<boolean> => {
+    const trimmed = newTarget.trim();
+    if (trimmed && !/^[\w.\-]+:\d{1,5}$/.test(trimmed)) {
+      return false;
+    }
+    if (trimmed) {
+      // Risk check — same logic as ServicesPanel's confirmRisk.
+      // Inline here so Portal doesn't need a circular import; the
+      // duplication is one if statement.
+      let risk: RiskAssessment;
+      try {
+        risk = await app.AssessExposeRisk(
+          trimmed,
+          s.protocol as "tcp" | "udp",
+          s.port,
+        );
+      } catch {
+        risk = { level: "safe" as const, reason: "", hint: "" };
+      }
+      if (risk.level !== "safe") {
+        const prefix = risk.level === "danger" ? "⚠️ XAVFLI" : "⚡ Diqqat";
+        if (
+          !window.confirm(
+            `${prefix}: ${risk.reason}\n\n${risk.hint}\n\nHar holda davom etasizmi?`,
+          )
+        ) {
+          return false;
+        }
+      }
+    }
+    try {
+      await app.ExposeService(
+        s.name,
+        s.protocol as "tcp" | "udp",
+        s.port,
+        trimmed,
+      );
+      await refreshLocalServices();
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const onBack = () => {
@@ -155,9 +222,17 @@ export function PortalView() {
           </div>
         </aside>
 
-        {/* Centre: PEER SERVICES — what the user can dial into. */}
+        {/* Centre: SERVISLAR — own + peer services in one grid. */}
         <main className="flex flex-col min-h-0 overflow-hidden">
-          <PeerServicesGrid peers={livePeers} />
+          <PeerServicesGrid
+            ownServices={localServices}
+            ownNickname={nickname}
+            ownVip={portal.ownVip}
+            peers={livePeers}
+            onTogglePause={togglePauseOwn}
+            onRemoveOwn={removeOwn}
+            onRetargetOwn={retargetOwn}
+          />
         </main>
 
         {/* Right: top half "Mening servislarim" (form + exposed list

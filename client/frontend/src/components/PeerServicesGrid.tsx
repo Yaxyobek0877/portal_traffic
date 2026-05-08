@@ -1,22 +1,31 @@
-// PeerServicesGrid — the central "what can I connect to?" view.
+// PeerServicesGrid — the central "what services are in this room?"
+// view.
 //
-// Shows every announced service from every live peer as a prominent
-// card with a single Ulash button. The user's primary in-portal
-// task is "join my friend's game / open their NVR / SSH into their
-// machine"; that path used to take three steps (find the right tab,
-// scroll to the peer, click their service); now the dial is the
-// front-and-centre column.
+// User asked for THEIR own opened services to live in the same grid
+// as other peers' (so 'mening' and 'boshqalar' are side by side, not
+// in two different columns). Layout:
 //
-// Cards are grouped by peer so RTSP-on-alice and RTSP-on-bob don't
-// blur together. Empty state ("hech kim hali servis e'lon qilmagan")
-// renders when no live peer has any services — telling the user to
-// share the portal ID + code with someone who'll expose stuff.
+//   ┌─ Servislar (bu xonada) ─────────────────┐
+//   │                                          │
+//   │ ┌─ Siz ──────────────────────────────┐  │
+//   │ │ ● kamera  TCP :554 → 192.168.x:554 │  │
+//   │ │   (LAN, health=ok)    pencil pause │  │
+//   │ │ ● ssh     TCP :22                  │  │
+//   │ └────────────────────────────────────┘  │
+//   │                                          │
+//   │ ┌─ Alice ────────────────────────────┐  │
+//   │ │ ● minecraft TCP :25565   [Ulash]   │  │
+//   │ └────────────────────────────────────┘  │
+//   │                                          │
+//   │ ┌─ Bob ──────────────────────────────┐  │
+//   │ │ ● cs2 UDP :27015         [Ulash]   │  │
+//   │ └────────────────────────────────────┘  │
+//   └──────────────────────────────────────────┘
 //
-// On a successful Ulash, the card swaps the button for a
-// copy-to-clipboard pill carrying the local alias (e.g.
-// 127.0.0.1:27015). Pill is green when the local port mirrors the
-// remote one, amber when proxy.DialPreferringPort had to OS-pick
-// because the mirror was already taken on the user's side.
+// Own services use the existing ExposedServiceRow (target editor /
+// pause / remove); peer services use the dial-button card row.
+// Sections are visually distinct so the user always knows which is
+// theirs vs. someone else's.
 
 import React, { useState } from "react";
 import { Link2, Globe, Copy, Check, Crown } from "lucide-react";
@@ -24,39 +33,85 @@ import type { PeerView, ServiceView } from "../types";
 import { app } from "../lib/wails";
 import { avatarColor, avatarInitial } from "../lib/avatar";
 import { shortId } from "../lib/format";
+import { ExposedServiceRow } from "./ExposedServiceRow";
 
-export function PeerServicesGrid({ peers }: { peers: PeerView[] }) {
+type Props = {
+  // Own services (the user has opened these to the room).
+  ownServices: ServiceView[];
+  ownNickname: string;
+  ownVip: string;
+
+  // Other peers and their announced services.
+  peers: PeerView[];
+
+  // Callbacks for own-service actions. Hoisted to the parent so the
+  // grid doesn't need to know about Wails directly.
+  onTogglePause: (s: ServiceView) => void;
+  onRemoveOwn: (port: number) => void;
+  onRetargetOwn: (s: ServiceView, target: string) => Promise<boolean>;
+};
+
+export function PeerServicesGrid({
+  ownServices,
+  ownNickname,
+  ownVip,
+  peers,
+  onTogglePause,
+  onRemoveOwn,
+  onRetargetOwn,
+}: Props) {
   const live = peers.filter((p) => p.state !== "closed");
-  const total = live.reduce((n, p) => n + p.services.length, 0);
+  const peerCount = live.filter((p) => p.services.length > 0).length;
+  const peerServiceCount = live.reduce((n, p) => n + p.services.length, 0);
+  const totalServices = ownServices.length + peerServiceCount;
+  const empty = totalServices === 0;
 
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="px-5 pt-5 pb-3 border-b border-white/5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="font-semibold text-base flex items-center gap-2">
             <Link2 className="w-4 h-4 text-cyan-400" strokeWidth={2} />
-            Boshqalar ulashgan servislar
+            Servislar
           </h2>
-          {total > 0 && (
+          {!empty && (
             <span className="text-xs text-zinc-500 font-mono">
-              {total} ta servis · {live.filter((p) => p.services.length > 0).length} peer
+              {totalServices} ta · {ownServices.length > 0 ? `siz ${ownServices.length}` : "siz 0"}
+              {peerCount > 0 ? ` · ${peerCount} peer` : ""}
             </span>
           )}
         </div>
         <p className="text-xs text-zinc-500 mt-1">
-          Peer'lar e'lon qilgan servislar — <span className="text-violet-300">Ulash</span> bossangiz lokal alias ochiladi va shu manzilga ulansangiz mesh orqali boshqa qurilmaga yo'naltiriladi.
+          Bu xonadagi barcha ochilgan portlar. <span className="text-violet-300">Ulash</span> bossangiz lokal alias ochiladi va shu manzilga ulansangiz mesh orqali peer servisiga yo'naltiriladi.
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
-        {total === 0 && (
+        {empty && (
           <div className="text-sm text-zinc-500 text-center py-12 panel rounded-card">
-            Hozircha hech kim servis e'lon qilmagan.
+            Hozircha hech kim biror port ochmagan.
             <div className="mt-1.5 text-xs text-zinc-600">
-              Do'stingiz portalga kirib biror portni Och bossa, shu yerda paydo bo'ladi.
+              Yuqoridagi forma orqali o'zingiz port oching, yoki do'stingiz kirib bir narsa ulashishini kuting.
             </div>
           </div>
         )}
+
+        {/* Section 1: SIZ — the user's own opened services. Renders
+            ExposedServiceRow for each so the pencil/pause/remove
+            controls and the cyan LAN pill are identical to what
+            ServicesPanel used to show. */}
+        {ownServices.length > 0 && (
+          <OwnSection
+            services={ownServices}
+            nickname={ownNickname}
+            vip={ownVip}
+            onTogglePause={onTogglePause}
+            onRemove={onRemoveOwn}
+            onRetarget={onRetargetOwn}
+          />
+        )}
+
+        {/* Section 2..N: per-peer services with dial buttons. */}
         {live.map((peer) =>
           peer.services.length === 0 ? null : (
             <PeerSection key={peer.peerId} peer={peer} />
@@ -67,9 +122,56 @@ export function PeerServicesGrid({ peers }: { peers: PeerView[] }) {
   );
 }
 
-// PeerSection groups one peer's announced services under a header
-// row carrying their avatar / nickname / VIP. Each service is its
-// own card-row with a prominent Ulash button on the right.
+function OwnSection({
+  services,
+  nickname,
+  vip,
+  onTogglePause,
+  onRemove,
+  onRetarget,
+}: {
+  services: ServiceView[];
+  nickname: string;
+  vip: string;
+  onTogglePause: (s: ServiceView) => void;
+  onRemove: (port: number) => void;
+  onRetarget: (s: ServiceView, target: string) => Promise<boolean>;
+}) {
+  const initial = (nickname.trim()[0] || "Y").toUpperCase();
+  return (
+    <section className="panel rounded-card overflow-hidden border-violet-500/20">
+      <header className="px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.04] bg-violet-500/[0.06]">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-cyan-400 flex items-center justify-center font-semibold text-xs text-white shrink-0">
+          {initial}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-medium text-sm flex items-center gap-1.5">
+            <span className="truncate">{nickname || "Siz"}</span>
+            <span className="text-[10px] uppercase tracking-wider text-violet-300 shrink-0">
+              siz
+            </span>
+          </div>
+          <div className="text-[11px] text-zinc-500 font-mono">{vip}</div>
+        </div>
+        <span className="text-[10px] text-zinc-600 font-mono shrink-0">
+          {services.length} ta
+        </span>
+      </header>
+      <div className="p-3 space-y-1.5">
+        {services.map((s) => (
+          <ExposedServiceRow
+            key={`${s.protocol}:${s.port}`}
+            s={s}
+            onTogglePause={() => onTogglePause(s)}
+            onRemove={() => onRemove(s.port)}
+            onRetarget={(t) => onRetarget(s, t)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function PeerSection({ peer }: { peer: PeerView }) {
   const color = avatarColor(peer.nickname || peer.peerId);
   const initial = avatarInitial(peer.nickname || peer.peerId);
@@ -145,7 +247,11 @@ function ServiceRow({ peer, svc }: { peer: PeerView; svc: ServiceView }) {
             {svc.protocol.toUpperCase()}
           </span>
           <span className="font-mono text-[11px] text-zinc-500">:{svc.port}</span>
-          {error && <span className="text-[10px] text-rose-400 truncate" title={error}>{error}</span>}
+          {error && (
+            <span className="text-[10px] text-rose-400 truncate" title={error}>
+              {error}
+            </span>
+          )}
         </div>
       </div>
       {addr ? (
