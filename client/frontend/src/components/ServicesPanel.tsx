@@ -454,13 +454,16 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
             "192.168.1.100" or smart-paste "192.168.1.100:554"
             (port auto-fills). */}
         <div className="space-y-2">
-          <div className="flex gap-2 items-stretch">
+          {/* Row 1: Nom + protocol toggle. Both wrap independently
+              so on narrow widths the protocol toggle drops below
+              the name input instead of clipping. */}
+          <div className="flex flex-wrap gap-2 items-stretch">
             <input
               type="text"
               placeholder="Nom (kamera, ssh, web…) — ixtiyoriy"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="input-base text-sm flex-1 min-w-[140px]"
+              className="input-base text-sm flex-1 min-w-[160px]"
               title="Boshqa peerlar ro'yxatda nima ko'rishi. Bo'sh qoldirilsa, 'tcp:80' kabi avtomatik nom beriladi."
             />
             <div className="flex rounded overflow-hidden border border-white/10 text-[11px] font-mono shrink-0">
@@ -490,14 +493,20 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
               </button>
             </div>
           </div>
-          <div className="flex gap-2 items-stretch">
+          {/* Row 2: LAN IP + Port + Och. flex-wrap lets Och drop to
+              its own line when the column is too narrow to fit all
+              three side by side (small panes, narrow window). The
+              Och button stays full-width-on-wrap so it remains
+              reachable rather than clipped at the right edge — this
+              was the user-reported bug. */}
+          <div className="flex flex-wrap gap-2 items-stretch">
             <input
               ref={lanIPRef}
               type="text"
-              placeholder="LAN IP (192.168.x.x) — bo'sh = lokal kompyuter"
+              placeholder="LAN IP (192.168.x.x) — bo'sh = lokal"
               value={lanIP}
               onChange={(e) => setLanIP(e.target.value)}
-              className="input-base text-sm flex-1 font-mono"
+              className="input-base text-sm flex-1 min-w-[160px] font-mono"
               title="Tarmoqdagi boshqa qurilmaga forward qilish kerak bo'lsa IP'sini yozing (kamera, NVR, printer). Bo'sh qoldirilsa, shu kompyuterning portini ekspoz qiladi. 'IP:port' shaklida yopishtirsangiz, port avtomatik to'ldiriladi."
             />
             <input
@@ -505,14 +514,15 @@ export function ServicesPanel({ localServices, peers, refreshLocalServices }: Pr
               placeholder="Port"
               value={port}
               onChange={(e) => setPort(e.target.value === "" ? "" : Number(e.target.value))}
-              className="input-base w-24 text-sm font-mono"
+              className="input-base w-20 text-sm font-mono shrink-0"
             />
             <button
               onClick={submitExpose}
-              className="btn-primary rounded-btn px-3 flex items-center gap-1 text-sm shrink-0"
+              className="btn-primary rounded-btn px-3 flex items-center justify-center gap-1 text-sm shrink-0 grow"
+              title="Servisni ochish"
             >
               <Plus className="w-4 h-4" strokeWidth={2} />
-              Och
+              <span>Och</span>
             </button>
           </div>
           {/* Helper: when the user has typed an IP, surface what the

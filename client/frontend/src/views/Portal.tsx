@@ -1,40 +1,34 @@
-// Portal screen layout (post-rework).
+// Portal screen layout (post-rework v2).
 //
-// Three columns instead of three columns + tabs. The user reported
-// that the previous layout was right-heavy: the services form was
-// crammed into a 360px panel where TCP/UDP/Both + the Och button
-// clipped, while the wide centre column was occupied by a peer table
-// that mostly duplicated information already on the left peer list.
+// User clarified the previous swap: the CENTER column should host
+// services that OTHER peers have opened (the consumption / dial
+// view), not the user's own services + form. The user's own
+// service management was moved back next to the chat — they're
+// both "outgoing" actions (talking to peers / publishing services
+// to peers) and pair sensibly in the right column.
 //
-// New layout:
+// Final layout:
 //
-//   ┌─────────────┬──────────────────────────┬─────────────┐
-//   │ A'zolar     │ Mening servislarim        │ Chat        │
-//   │ (members)   │  + form                   │             │
-//   │  + their    │  + lokal portlar          │             │
-//   │    services │  + LAN scan               │             │
-//   │    (dial)   │                           │             │
-//   └─────────────┴──────────────────────────┴─────────────┘
+//   ┌─────────────┬──────────────────────────┬──────────────────┐
+//   │ A'zolar     │ Boshqalar ulashgan       │ Mening servislarim│
+//   │ (members)   │ servislar                │  + Forma          │
+//   │  (offline   │  (PeerServicesGrid)      │ ─────             │
+//   │   visible)  │  prominent Ulash         │ Chat              │
+//   │             │  buttons per service     │                   │
+//   └─────────────┴──────────────────────────┴──────────────────┘
 //
-// Members column shows each peer's announced services inline with a
-// 'Ulash' (dial) button — the old "Boshqa peerlardagi servislar"
-// section that was at the bottom of the right tab moves here.
-// Offline peers (state==="closed") stay in the list so the user can
-// see who was in the room earlier; the per-peer Forget button is
-// the only path to actually drop a row.
-//
-// Chat moves to the right column on its own (no tabs needed). Width
-// trims from 360 → 320 since chat doesn't need as much horizontal
-// room as the services form did.
+// Both side columns are 320 wide; centre is 1fr. The right column
+// is split vertically — top half has the user's own services (form
+// + exposed list, scrollable), bottom half has the chat.
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
 import { PortalHeader } from "../components/PortalHeader";
 import { PeerCard } from "../components/PeerCard";
 import { ChatPanel } from "../components/ChatPanel";
 import { ServicesPanel } from "../components/ServicesPanel";
+import { PeerServicesGrid } from "../components/PeerServicesGrid";
 import { StatusBar } from "../components/StatusBar";
-import { PeerServicesList } from "../components/PeerServicesList";
 import { app } from "../lib/wails";
 import { usePortalStore } from "../stores/portalStore";
 
@@ -57,9 +51,6 @@ export function PortalView() {
   useEffect(() => {
     if (!portal?.portalId) return;
     refreshLocalServices();
-    // Poll while in a portal so the per-service health indicator
-    // (green/red dot) stays current — Go side re-probes targets
-    // every 30s, we pull the latest snapshot at the same cadence.
     const t = window.setInterval(refreshLocalServices, 30000);
     return () => window.clearInterval(t);
   }, [portal?.portalId]);
@@ -71,17 +62,10 @@ export function PortalView() {
     } catch {}
   };
 
-  // onBack just navigates back to the dashboard. The portal stays
-  // CONNECTED in the background — exposed services keep working,
-  // peers stay alive, the active-portals strip on Welcome shows it.
   const onBack = () => {
     setScreen("welcome");
   };
 
-  // onClose tears down THIS specific session and goes back. Distinct
-  // from onBack so the user can leave the screen without forcing
-  // a disconnect. The header surfaces both paths via different
-  // buttons.
   const onClose = async () => {
     await app.Leave();
     setPortal(null);
@@ -94,8 +78,6 @@ export function PortalView() {
   if (!portal) return null;
 
   const sortedPeers = [...peers].sort((a, b) => {
-    // online (any non-closed) → offline; within each, owner first,
-    // then by state (connected → connecting → others), then alpha.
     const liveScore = (p: typeof a) => (p.state === "closed" ? 1 : 0);
     const ds = liveScore(a) - liveScore(b);
     if (ds !== 0) return ds;
@@ -107,18 +89,18 @@ export function PortalView() {
     return (a.nickname || a.peerId).localeCompare(b.nickname || b.peerId);
   });
 
+  const livePeers = sortedPeers.filter((p) => p.state !== "closed");
+
   return (
     <div className="h-full flex flex-col">
       <PortalHeader portal={portal} onBack={onBack} onClose={onClose} />
 
-      {/* Three columns. The members column is wider (340) than before
-          (300) so each peer card has room for the inline services
-          list with dial buttons. The chat column is narrower (320 vs
-          previous 360) since it no longer carries the services tab.
-          The center stays as 1fr — that's where the form lives, and
-          it has all the breathing room it needs. */}
-      <div className="flex-1 grid grid-cols-[340px_1fr_320px] min-h-0">
-        {/* Left: members + each peer's services */}
+      {/* Three columns: members | peer-services | my-services + chat. */}
+      <div className="flex-1 grid grid-cols-[280px_1fr_360px] min-h-0">
+        {/* Left: members. Each peer card stays compact — no inline
+            services here anymore, since the consumption view is the
+            centre. Offline peers render at low opacity with a hover-
+            reveal X to forget. */}
         <aside className="border-r border-white/5 flex flex-col min-h-0">
           <div className="px-4 py-3 border-b border-white/5">
             <div className="text-xs uppercase tracking-widest text-zinc-500">
@@ -135,8 +117,7 @@ export function PortalView() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-            {/* Self pseudo-card */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
             <div className="panel rounded-card p-3 flex items-center gap-3 border-violet-500/30">
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-cyan-400 flex items-center justify-center font-semibold text-sm shrink-0">
                 {(nickname || "Y")[0]?.toUpperCase()}
@@ -154,25 +135,15 @@ export function PortalView() {
 
             <AnimatePresence mode="popLayout">
               {sortedPeers.map((p) => (
-                <div key={p.peerId} className="space-y-1.5">
-                  <PeerCard
-                    peer={p}
-                    onForget={
-                      p.state === "closed"
-                        ? () => removePeer(p.peerId)
-                        : undefined
-                    }
-                  />
-                  {/* Inline services for this peer. Renders a small
-                      indented list under the card so the dial button
-                      sits next to the peer that owns the service —
-                      no more cross-referencing the bottom of the
-                      right panel. Hidden for offline peers (their
-                      services are unreachable until they rejoin). */}
-                  {p.state !== "closed" && p.services.length > 0 && (
-                    <PeerServicesList peer={p} />
-                  )}
-                </div>
+                <PeerCard
+                  key={p.peerId}
+                  peer={p}
+                  onForget={
+                    p.state === "closed"
+                      ? () => removePeer(p.peerId)
+                      : undefined
+                  }
+                />
               ))}
             </AnimatePresence>
 
@@ -184,29 +155,35 @@ export function PortalView() {
           </div>
         </aside>
 
-        {/* Centre: my services panel — form, exposed list, LAN scan,
-            local-listener detection. Inherits the wide centre column
-            so TCP/UDP/Both/Och never clip. */}
+        {/* Centre: PEER SERVICES — what the user can dial into. */}
         <main className="flex flex-col min-h-0 overflow-hidden">
-          <ServicesPanel
-            localServices={localServices}
-            peers={sortedPeers.filter((p) => p.state !== "closed")}
-            refreshLocalServices={refreshLocalServices}
-          />
+          <PeerServicesGrid peers={livePeers} />
         </main>
 
-        {/* Right: chat. No more tabs — the services panel that used
-            to share this column moved to the centre. The chat lives
-            here permanently with full vertical room. */}
+        {/* Right: top half "Mening servislarim" (form + exposed list
+            + LAN scan), bottom half Chat. Resizable via flex so the
+            user can lean on either when they need more room. */}
         <aside className="border-l border-white/5 flex flex-col min-h-0">
-          <ChatPanel
-            messages={messages}
-            myPeerId={portal.ownPeerId}
-            peers={sortedPeers.filter((p) => p.state !== "closed")}
-            transfers={transfers.filter((t) =>
-              sortedPeers.some((p) => p.peerId === t.peerId)
-            )}
-          />
+          {/* Top: my services. Capped at 50% of the column so chat
+              stays visible. Internal scroll. */}
+          <div className="basis-1/2 min-h-0 flex flex-col border-b border-white/5">
+            <ServicesPanel
+              localServices={localServices}
+              peers={livePeers}
+              refreshLocalServices={refreshLocalServices}
+            />
+          </div>
+          {/* Bottom: chat. */}
+          <div className="basis-1/2 min-h-0 flex flex-col">
+            <ChatPanel
+              messages={messages}
+              myPeerId={portal.ownPeerId}
+              peers={livePeers}
+              transfers={transfers.filter((t) =>
+                livePeers.some((p) => p.peerId === t.peerId),
+              )}
+            />
+          </div>
         </aside>
       </div>
 
