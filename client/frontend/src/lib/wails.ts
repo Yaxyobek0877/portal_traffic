@@ -49,6 +49,15 @@ type Bridge = {
   // the background. Called by the frontend right after unlock — see
   // App.tsx's effect that depends on `unlocked`.
   ResumeActiveSessions: () => Promise<void>;
+  // Per-install device label — defaults to a platform-derived name
+  // ('mac' / 'win 64' / 'linux'); user can rename.
+  CurrentDeviceName: () => Promise<string>;
+  SetDeviceName: (name: string) => Promise<void>;
+  // System-startup hook. SetAutoRun writes / removes the OS-level
+  // entry (LaunchAgent / Run registry / .desktop) and persists the
+  // preference. IsAutoRun reads the persisted flag.
+  IsAutoRun: () => Promise<boolean>;
+  SetAutoRun: (enabled: boolean) => Promise<void>;
   // Per-port approval gate. SetServiceApproval flips the
   // require_approval flag on a row; ApproveServiceRequest /
   // DenyServiceRequest reply to a pending prompt; ResetApprovalCache
@@ -205,6 +214,10 @@ const stub: Bridge = {
   ActivePortals: async () => [],
   ActiveSessionID: async () => "",
   ResumeActiveSessions: async () => {},
+  CurrentDeviceName: async () => "mac",
+  SetDeviceName: async () => {},
+  IsAutoRun: async () => false,
+  SetAutoRun: async () => {},
   SetServiceApproval: async () => {},
   ApproveServiceRequest: async () => {},
   DenyServiceRequest: async () => {},

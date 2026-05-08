@@ -7,7 +7,51 @@ ga rioya qiladi.
 
 ## [Unreleased]
 
-v0.5.0 dan keyingi ishlanma bu yerga yoziladi.
+v0.5.1 dan keyingi ishlanma bu yerga yoziladi.
+
+## [0.5.1] — 2026-05-08
+
+Polish reliz: app icon barcha platformalarda, qurilma nomi (multi-
+device disambiguation), tizim startup'ida avtomatik ishga tushish, va
+landing/release jadvalining stabil URL'lari.
+
+### Added — Yangi imkoniyatlar
+
+- **Windows .ico va Linux ikonkalari** — `build/windows/icon.ico` (6
+  o'lcham: 16/32/48/64/128/256), `build/linux/icon.png`. .exe va Linux
+  desktop'da Portal logosi to'g'ri ko'rinadi (avval default Wails
+  ikonkasi edi).
+- **Qurilma nomi (Device name)** — `Settings → Profil` da yangi maydon.
+  Default platform-derived (`mac` / `win 64` / `linux`); foydalanuvchi
+  `uy` / `ish` / `serverim` ga o'zgartirishi mumkin. Mesh nicknamesi
+  `texuz · uy` ko'rinishida announce qilinadi → bir akkauntdan turli
+  qurilmalar room'da farqlanadi.
+- **Auto-run on system startup** — `Settings → Profil` da toggle.
+  - macOS: `~/Library/LaunchAgents/uz.1pro.portal.plist` LaunchAgent
+  - Windows: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+    registry value
+  - Linux: `~/.config/autostart/portal.desktop` XDG autostart
+  Toggle yoqilsa OS-darajasidagi entry yoziladi; o'chirilsa olib
+  tashlanadi. Saqlangan portallar `ResumeActiveSessions` orqali
+  reboot keyin avtomatik qayta ulanadi.
+
+### Changed — O'zgartirilgan
+
+- **Stabil yuklab olish URL'lari** — Release CI endi assetlarni tag'siz
+  nom bilan paketlaydi: `Portal-darwin-arm64.zip`,
+  `Portal-windows-amd64.zip`, va h.k. README, web/index.html va
+  `release_body.md` jadvallari `releases/latest/download/Portal-<triplet>.<ext>`
+  formatida — har versiya chiqishida URL o'zgarmaydi.
+- **README va landing page tablitsasi** — placeholder `vX.Y.Z`
+  o'rniga to'g'ridan-to'g'ri klikli download linklari, har bir
+  platforma uchun.
+
+### Documentation — Hujjatlar
+
+- `docs/ROOM-CONTROLS-GAPS.md` — multi-device login bo'limi qo'shildi
+  (4-feature). Cloud-auth (HTTP `/api/auth`) signaling server'da
+  deploy qilingach client tomon avtomatik ishlaydi degan reja
+  yozilgan.
 
 ## [0.5.0] — 2026-05-08
 

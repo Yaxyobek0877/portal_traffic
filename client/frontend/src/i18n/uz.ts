@@ -85,6 +85,15 @@ export const uz: Dict = {
   "settings.profile.reset_confirm": "Ha, tiklash",
   "settings.profile.reset_cancel": "Bekor qilish",
   "settings.profile.member_since": "Akkaunt yaratildi",
+  "settings.profile.device_name": "Qurilma nomi",
+  "settings.profile.device_name_placeholder": "uy, ish, mac, win 64…",
+  "settings.profile.device_name_hint":
+    "Boshqa qurilmalardan ham shu akkaunt bilan kirsangiz, peer'lar qaysi qurilmadan ekanligingizni ko'radi:",
+  "settings.profile.autorun": "Tizim yuklanganda avtomatik ishga tushish",
+  "settings.profile.autorun_on": "Yoqilgan — Portal tizim yonganda avtomatik ochiladi",
+  "settings.profile.autorun_off": "O'chirilgan — qo'lda ochish kerak",
+  "settings.profile.autorun_hint":
+    "Yoqilgan bo'lsa, OS startup hook yoziladi (macOS LaunchAgent / Windows registry / Linux .desktop). Saqlangan portallar avtomatik qayta ulanadi.",
 
   // Network
   "settings.network.title": "Tarmoq",

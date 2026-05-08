@@ -235,6 +235,18 @@ function ProfileTab({
   const { t } = useT();
   const [confirmReset, setConfirmReset] = useState(false);
   const [accountUser, setAccountUser] = useState("");
+  // Device-label state — pulled from the Go side which falls back to
+  // a platform default ('mac' / 'win 64' / 'linux') when nothing is
+  // saved yet. Editing this changes how the device is announced in
+  // the room: 'texuz · uy' instead of plain 'texuz'.
+  const [deviceName, setDeviceName] = useState("");
+  const [deviceDraft, setDeviceDraft] = useState("");
+  const [deviceSavedAt, setDeviceSavedAt] = useState<number | null>(null);
+  // Auto-run state — checkbox-style toggle. The Go side writes the
+  // OS-level hook (LaunchAgent / Run / .desktop) and persists the
+  // flag; we read it on mount so the toggle reflects current truth.
+  const [autoRun, setAutoRun] = useState(false);
+  const [autoRunErr, setAutoRunErr] = useState("");
 
   // Pull the actual stored username on mount. nickname in the store
   // tracks the *display* nickname (which defaults to the username but
@@ -247,10 +259,37 @@ function ProfileTab({
         if (!nickname.trim()) setNickname(u);
       }
     });
+    app.CurrentDeviceName().then((d) => {
+      setDeviceName(d);
+      setDeviceDraft(d);
+    });
+    app.IsAutoRun().then(setAutoRun);
   }, [nickname, setNickname]);
 
   const handle = accountUser || nickname || "—";
   const initial = (handle.trim()[0] || "?").toUpperCase();
+
+  const saveDeviceName = async () => {
+    const next = deviceDraft.trim();
+    try {
+      await app.SetDeviceName(next);
+      const fresh = await app.CurrentDeviceName();
+      setDeviceName(fresh);
+      setDeviceDraft(fresh);
+      setDeviceSavedAt(Date.now());
+    } catch {}
+  };
+
+  const toggleAutoRun = async () => {
+    setAutoRunErr("");
+    const next = !autoRun;
+    try {
+      await app.SetAutoRun(next);
+      setAutoRun(next);
+    } catch (e: any) {
+      setAutoRunErr(e?.message || String(e));
+    }
+  };
 
   return (
     <Section
@@ -288,6 +327,81 @@ function ProfileTab({
           readOnly
           className="input-base w-full font-mono text-sm bg-white/[0.02] cursor-default"
         />
+      </Field>
+
+      {/* Device label — multi-device disambiguation. Default is
+          platform-derived ('mac' / 'win 64' / 'linux'); rename to
+          'uy' / 'ish' / 'serverim' for distinct rooms. The mesh
+          nickname becomes 'username · device' so peers see which
+          install they're talking to. Editable inline; Save persists
+          and refreshes the displayed value. */}
+      <Field label={t("settings.profile.device_name")}>
+        <div className="flex gap-2 items-stretch">
+          <input
+            type="text"
+            value={deviceDraft}
+            onChange={(e) => setDeviceDraft(e.target.value)}
+            placeholder={t("settings.profile.device_name_placeholder")}
+            maxLength={32}
+            className="input-base flex-1 text-sm"
+          />
+          <button
+            onClick={saveDeviceName}
+            disabled={deviceDraft.trim() === deviceName.trim()}
+            className="btn-primary rounded-btn px-4 text-sm font-medium disabled:opacity-50"
+          >
+            {t("settings.network.save")}
+          </button>
+        </div>
+        {deviceSavedAt && (
+          <div className="text-xs text-emerald-400 mt-1.5">
+            {t("settings.network.saved")}
+          </div>
+        )}
+        <p className="text-[11px] text-zinc-500 mt-2 leading-relaxed">
+          {t("settings.profile.device_name_hint")}{" "}
+          <span className="font-mono text-zinc-400">
+            {handle} · {deviceName || "—"}
+          </span>
+        </p>
+      </Field>
+
+      {/* Auto-run on system startup — checkbox toggle. Wails-side
+          writes the platform-specific entry (LaunchAgent on macOS,
+          HKCU\…\Run on Windows, ~/.config/autostart on Linux);
+          flipping the toggle off removes the entry. */}
+      <Field label={t("settings.profile.autorun")}>
+        <button
+          onClick={toggleAutoRun}
+          className={`w-full rounded-input px-3 py-2.5 flex items-center gap-3 transition border ${
+            autoRun
+              ? "bg-violet-500/[0.08] border-violet-500/30"
+              : "bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]"
+          }`}
+        >
+          <span
+            className={`w-9 h-5 rounded-full relative transition ${
+              autoRun ? "bg-violet-500" : "bg-zinc-700"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${
+                autoRun ? "left-4" : "left-0.5"
+              }`}
+            />
+          </span>
+          <span className="text-sm">
+            {autoRun
+              ? t("settings.profile.autorun_on")
+              : t("settings.profile.autorun_off")}
+          </span>
+        </button>
+        <p className="text-[11px] text-zinc-500 mt-2 leading-relaxed">
+          {t("settings.profile.autorun_hint")}
+        </p>
+        {autoRunErr && (
+          <div className="text-xs text-rose-400 mt-1.5">{autoRunErr}</div>
+        )}
       </Field>
 
       <div className="pt-2 border-t border-white/5 space-y-2">

@@ -628,6 +628,11 @@ func (a *App) BackgroundCreatePortal(nickname string) (PortalView, error) {
 }
 
 func (a *App) createPortal(nickname string, makeActive bool) (PortalView, error) {
+	// Stamp the device label onto the mesh nickname so multi-device
+	// users (same account, several boxes) are distinguishable in the
+	// room. nicknameWithDevice is a no-op when the user hasn't given
+	// a device a custom label and the platform default is empty.
+	nickname = a.nicknameWithDevice(nickname)
 	s, err := a.bringUpSession(nickname, makeActive, true /*isOwner*/)
 	if err != nil {
 		return PortalView{}, err
@@ -668,6 +673,8 @@ func (a *App) joinPortal(nickname, portalID, code string, makeActive bool) (Port
 	if portalID == "" || code == "" {
 		return PortalView{}, errors.New("portal ID va kod bo'sh bo'lmasligi kerak")
 	}
+	// Same device-stamping as createPortal — see comment there.
+	nickname = a.nicknameWithDevice(nickname)
 	s, err := a.bringUpSession(nickname, makeActive, false /*isOwner*/)
 	if err != nil {
 		return PortalView{}, err

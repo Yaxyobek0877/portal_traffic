@@ -87,6 +87,13 @@ export type StringKey =
   | "settings.profile.reset_confirm"
   | "settings.profile.reset_cancel"
   | "settings.profile.member_since"
+  | "settings.profile.device_name"
+  | "settings.profile.device_name_placeholder"
+  | "settings.profile.device_name_hint"
+  | "settings.profile.autorun"
+  | "settings.profile.autorun_on"
+  | "settings.profile.autorun_off"
+  | "settings.profile.autorun_hint"
   // Network section
   | "settings.network.title"
   | "settings.network.signaling_label"

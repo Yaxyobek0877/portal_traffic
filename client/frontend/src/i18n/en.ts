@@ -85,6 +85,15 @@ export const en: Dict = {
   "settings.profile.reset_confirm": "Yes, reset",
   "settings.profile.reset_cancel": "Cancel",
   "settings.profile.member_since": "Account created",
+  "settings.profile.device_name": "Device name",
+  "settings.profile.device_name_placeholder": "home, work, mac, win 64…",
+  "settings.profile.device_name_hint":
+    "When the same account signs in from multiple devices, room peers see which one you're on:",
+  "settings.profile.autorun": "Run on system startup",
+  "settings.profile.autorun_on": "On — Portal launches when your computer boots",
+  "settings.profile.autorun_off": "Off — launch manually",
+  "settings.profile.autorun_hint":
+    "When on, an OS startup hook is installed (macOS LaunchAgent / Windows Run registry / Linux .desktop). Saved sessions auto-reconnect after reboot.",
 
   // Network
   "settings.network.title": "Network",

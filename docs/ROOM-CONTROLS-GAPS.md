@@ -78,15 +78,46 @@ xona uchun "**every join asks admin**" rejimini xohladi.
   `ApprovalQueue` kabi)
 - Pending peerlar UI'da "Ulanish kutilmoqda" indicator
 
+### 4. Multi-device login (bir akkaunt — bir nechta qurilma)
+
+Hozir har Portal install **mahalliy** vault (username + parol) ushlaydi.
+Foydalanuvchi telefon + laptop + ishxonadan **bir xil akkaunt** bilan
+kirsa, har biriga alohida ro'yxatdan o'tish kerak. Foydalanuvchi haqiqiy
+"akkaunt cloud'da" tajribasini xohladi.
+
+**Server o'zgarish**:
+- HTTP `/api/auth/signup` — username + parol cloud'ga (server-server.go
+  da prototip mavjud, lekin signaling.1pro.uz binarisida deploy bo'lmagan
+  — qarang `Server auth deploy gap` memorisi)
+- HTTP `/api/auth/signin` — JWT yoki session cookie qaytaradi
+- Client har dial paytida session token'ni signaling websocket'ga
+  qo'shadi → server username'ni tasdiqlaydi
+- `nickname_taken` xatosi shu yerda chiqadi (bir akkaunt + bir
+  device-tag bo'lsa qaytaradi)
+
+**Hozirgi vaqt yechimi (client-only)**: Device name (`Settings → Profil
+→ Qurilma nomi`) — har install o'z labelini berib turadi (mac / win 64
+/ uy / ish). Mesh nicknamesi `texuz · uy` ko'rinishida announce qilinadi
+→ peer'lar har installni alohida ko'radi va `nickname_taken` muammoga
+duch kelmaydi (chunki har device-tag boshqa-boshqa nickname).
+
+Server cloud-auth deploy bo'lmaguncha, har install hali ham mahalliy
+vault ishlatadi — sinxron qilish qo'lda (parolni boshqa kompyuterda
+ham yarating, **lekin device name boshqacha bo'lsin**).
+
 ## Status
 
 | Feature | Client | Server | Status |
 |---------|:------:|:------:|--------|
 | Per-port approval gate | ✅ | — | **DONE** |
 | NICKNAME_TAKEN error | ✅ | — | **DONE** (server xato yuborsa) |
+| Device name (multi-device disambiguation) | ✅ | — | **DONE** (v0.5.1) |
+| Auto-run on system startup | ✅ | — | **DONE** (v0.5.1) |
+| App icon (mac + win + linux) | ✅ | — | **DONE** (v0.5.1) |
 | 8-char password | ❌ | ❌ | server kerak |
 | Code regenerate | ❌ | ❌ | server kerak |
 | Join approval mode | ❌ | ❌ | server kerak |
+| Cloud-sync multi-device login | ❌ | ❌ | server kerak (HTTP /api/auth) |
 
 Kerak bo'lsa server `cmd/signaling/main.go` (loyihangizdagi server kodi)ga
 yuqoridagi protokol qo'shimchalarini yozish kerak. Client tomon shu

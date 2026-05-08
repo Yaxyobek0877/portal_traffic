@@ -89,4 +89,18 @@ const (
 	// See client/auth.go.
 	KeyAuthUsername = "auth_username"
 	KeyAuthHash     = "auth_hash"
+
+	// Device name — short label the user attaches to THIS install
+	// ('uy' / 'ish' / 'mac' / 'win 64'), so when the same account
+	// signs in from a phone + a laptop + a work desktop, room peers
+	// can tell them apart. Empty defaults to a platform-derived name
+	// at first read (App.CurrentDeviceName). Combined with the
+	// nickname when announcing to the mesh: 'texuz · uy'.
+	KeyDeviceName = "device_name"
+
+	// Auto-run — when "1" the app installs an OS-level startup hook
+	// (LaunchAgent / Run registry / .desktop autostart) so it comes
+	// back after reboot. App.SetAutoRun(true) writes the hook;
+	// SetAutoRun(false) removes it. Empty / "0" = no auto-run.
+	KeyAutoRun = "auto_run"
 )
