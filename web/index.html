@@ -157,8 +157,22 @@
     transition: transform .15s ease, box-shadow .15s ease;
   }
   nav.top .cta:hover { transform: translateY(-1px); box-shadow: 0 8px 30px -6px rgba(139,92,246,.6); }
+  /* Secondary CTA for the navbar — same shape as .cta but outlined.
+     Used by the "Kirish" link so it sits alongside "Yuklab olish"
+     without competing for attention. */
+  nav.top .cta-outline {
+    background: var(--surface-2);
+    color: var(--text) !important; padding: 8px 14px; border-radius: var(--radius-sm);
+    font-size: 14px; font-weight: 600;
+    text-decoration: none;
+    border: 1px solid var(--border-2);
+    transition: border-color .15s ease, background .15s ease, transform .15s ease;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  nav.top .cta-outline:hover { border-color: var(--accent); background: rgba(139,92,246,.08); transform: translateY(-1px); }
+  nav.top .cta-outline svg { width: 14px; height: 14px; opacity: .85; }
   @media (max-width: 720px) {
-    nav.top .links a:not(.cta):not(.gh) { display: none; }
+    nav.top .links a:not(.cta):not(.cta-outline):not(.gh) { display: none; }
   }
 
   /* ---------- hero ---------- */
@@ -318,6 +332,151 @@
   .btn-ghost:hover { background: var(--surface-2); border-color: var(--border-2); transform: translateY(-2px); }
 
   .icon { width: 18px; height: 18px; stroke-width: 1.6; }
+
+  /* ---------- login section ---------- */
+  /* Sits directly under the hero so a returning user lands on it
+     without scrolling. Two-column on desktop (pitch + form), stacks
+     on mobile. The form posts to /admin/login with credentials, but
+     until the signaling server's /api/auth is deployed we intercept
+     submit in JS and surface a "tez orada" badge — see admin-form
+     handler below. */
+  section.login-section {
+    padding: 40px 0 80px;
+    position: relative;
+  }
+  .login-shell {
+    max-width: 980px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 40px;
+    align-items: center;
+    background: linear-gradient(180deg, rgba(139,92,246,.05), rgba(34,211,238,.025));
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 36px;
+    backdrop-filter: blur(8px);
+  }
+  .login-pitch h2 {
+    font-size: clamp(22px, 3vw, 30px);
+    margin: 0 0 12px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+  .login-pitch p {
+    color: var(--text-dim);
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0 0 18px;
+  }
+  .login-pitch ul {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 10px;
+    font-size: 14px; color: var(--text-dim);
+  }
+  .login-pitch li {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .login-pitch li::before {
+    content: "→";
+    color: var(--accent);
+    font-weight: 700;
+    flex: 0 0 auto;
+  }
+  .login-card {
+    background: rgba(10,14,26,.6);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
+    padding: 24px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .login-card label {
+    display: flex; flex-direction: column; gap: 6px;
+    font-size: 12px; color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .login-card input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-xs);
+    padding: 11px 12px;
+    font-size: 15px;
+    font-family: inherit;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .login-card input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--surface-2);
+  }
+  .login-card button {
+    margin-top: 4px;
+    background: var(--gradient);
+    color: white;
+    border: 0;
+    padding: 12px 18px;
+    font-size: 15px; font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    box-shadow: 0 6px 22px -6px rgba(139,92,246,.5);
+    transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+    font-family: inherit;
+  }
+  .login-card button:hover { transform: translateY(-1px); box-shadow: 0 10px 30px -8px rgba(139,92,246,.65); }
+  .login-card button:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+  .login-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .login-meta a { color: var(--accent); text-decoration: none; }
+  .login-meta a:hover { color: var(--accent-3); }
+  .login-status {
+    display: none;
+    padding: 10px 12px;
+    border-radius: var(--radius-xs);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .login-status.show { display: block; }
+  .login-status.info {
+    background: rgba(139,92,246,.10);
+    border: 1px solid rgba(139,92,246,.35);
+    color: #c7b8ff;
+  }
+  .login-status.error {
+    background: rgba(244,63,94,.08);
+    border: 1px solid rgba(244,63,94,.30);
+    color: #fda4af;
+  }
+  .login-soon-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid rgba(245,158,11,.4);
+    background: rgba(245,158,11,.08);
+    color: #fbbf24;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .login-soon-badge::before {
+    content: "";
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #fbbf24;
+    box-shadow: 0 0 0 0 rgba(251,191,36,.6);
+    animation: dotPulseAmber 1.8s infinite;
+  }
+  @media (max-width: 760px) {
+    .login-shell {
+      grid-template-columns: 1fr;
+      padding: 24px;
+      gap: 24px;
+    }
+  }
 
   /* ---------- sections ---------- */
   section { padding: 80px 0; position: relative; }
@@ -702,13 +861,19 @@
       <a href="#qadamlar">Qanday ishlaydi</a>
       <a href="#roadmap">Roadmap</a>
       <a class="gh" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">GitHub</a>
-      <!-- Web admin entry point: /admin/login is served by the
-           signaling server and hands the user into the dashboard
-           after sign-in. Hidden on narrow nav widths via the
-           existing :not(.cta):not(.gh) display:none rule kicks in
-           for everything except cta/gh — this anchor uses .gh-style
-           rules so it stays visible on mobile too. -->
-      <a class="gh" href="/admin/login">Kirish</a>
+      <!-- Secondary CTA — sends the visitor straight to the login
+           form embedded in the homepage hero (#kirish), rather than
+           jumping to /admin/login (which 404s until the static admin
+           shell is deployed). Visible on every viewport via the
+           cta-outline class. -->
+      <a class="cta-outline" href="#kirish">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+          <polyline points="10 17 15 12 10 7"/>
+          <line x1="15" y1="12" x2="3" y2="12"/>
+        </svg>
+        Kirish
+      </a>
       <a class="cta" href="https://github.com/Yaxyobek0877/portal_traffic#install">Yuklab olish</a>
     </div>
   </div>
@@ -829,6 +994,55 @@
     </div>
 
     <div class="typewriter-line"><span id="typewriter"></span></div>
+  </div>
+</section>
+
+<!-- =================== kirish (web admin) =================== -->
+<!-- Inline login section. Lives directly under the hero so a returning
+     user — typical visit pattern — sees the form on first paint. The
+     navbar "Kirish" anchors here (#kirish). The form posts to the
+     signaling server's /api/auth/login when deployed; while that
+     endpoint is still ahead of us in the roadmap, the submit handler
+     in app.js intercepts and surfaces a "tez orada (v0.6.0)" notice
+     instead of throwing a network error. -->
+<section id="kirish" class="login-section">
+  <div class="container">
+    <div class="login-shell">
+      <div class="login-pitch">
+        <span class="login-soon-badge">Tez orada · v0.6.0</span>
+        <h2 style="margin-top:14px">Brauzerdan boshqaring</h2>
+        <p>
+          Hisobingizga kirib portal'laringizni, ulangan qurilmalarni va
+          ochilgan portlarni <strong>brauzer orqali</strong> nazorat qiling.
+          Desktop dasturni ochmasdan ham — telefondan, ish kompyuteringizdan,
+          istalgan joydan.
+        </p>
+        <ul>
+          <li>Faol portallar va ularning ko'rinarli kodlari</li>
+          <li>Online/offline qurilmalar, RTT, ulanish turi (P2P / TURN)</li>
+          <li>Servislarni vaqtinchalik to'xtatish, qayta yoqish</li>
+          <li>Activity log — kim qachon qaysi servisga ulangan</li>
+        </ul>
+      </div>
+
+      <form class="login-card" id="webAdminForm" autocomplete="on" novalidate>
+        <label>
+          Foydalanuvchi
+          <input type="text" name="username" id="loginUsername" autocomplete="username" placeholder="texuz" />
+        </label>
+        <label>
+          Parol
+          <input type="password" name="password" id="loginPassword" autocomplete="current-password" placeholder="••••••••" />
+        </label>
+        <button type="submit" id="loginSubmit">
+          Kirish
+        </button>
+        <div class="login-meta">
+          <span>Hisobingiz yo'qmi? <a href="https://github.com/Yaxyobek0877/portal_traffic#install">Dasturni o'rnating</a></span>
+        </div>
+        <div class="login-status info" id="loginStatus" role="status"></div>
+      </form>
+    </div>
   </div>
 </section>
 
