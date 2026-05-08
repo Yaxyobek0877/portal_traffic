@@ -31,7 +31,13 @@ go.work.sum
 *.out
 bin/
 dist/
-build/
+# build/ used to be a blanket ignore, which also masked client/build/
+# (Wails' build dir) and made it impossible to re-include the
+# appicon assets that live there. Anchor the generic ignore to the
+# repo root and let per-project patterns below handle nested build
+# trees explicitly. Git can't re-include a file whose parent dir is
+# ignored, so anchoring at root is the only correct fix here.
+/build/
 coverage.out
 coverage.html
 
@@ -44,7 +50,14 @@ client/frontend/tsconfig.tsbuildinfo
 client/frontend/vite.config.d.ts
 client/frontend/vite.config.js
 client/frontend/node_modules/
-client/build/
+# client/build/ holds Wails build outputs (binaries + .app shell),
+# but ALSO our source-controlled icon assets. List the artefact
+# subdirs explicitly so the appicon.png / appicon.svg at the root
+# of the dir stay tracked — git can't re-include files inside an
+# ignored directory, only inside an ignored pattern at the file
+# level, so this is the correct shape.
+client/build/bin/
+client/build/darwin/
 client/.wails/
 # wailsjs/go is regenerated from app.go on every `wails build` — runtime/ is static
 client/frontend/wailsjs/go/
