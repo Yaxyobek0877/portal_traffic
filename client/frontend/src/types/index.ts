@@ -7,6 +7,42 @@ export type PortalView = {
   ownPeerId: string;
   ownVip: string;
   isOwner: boolean;
+  // Local session id assigned by the Go side. Stable for the
+  // lifetime of one portal connection; used to route per-session
+  // events into the right slot in the frontend's session map.
+  // Empty in legacy callers (CurrentPortal pre-multi-portal).
+  sessionId?: string;
+};
+
+// PortalSummary is the projection ActivePortals returns. The
+// Welcome dashboard's "Faol ulanishlar" strip iterates this.
+export type PortalSummary = {
+  sessionId: string;
+  portalId: string;
+  nickname: string;
+  isOwner: boolean;
+  state: "connecting" | "connected" | "failed" | "closed";
+  error?: string;
+  peerCount: number;
+  isActive: boolean;
+};
+
+// Payload for the "portal:ready" event after the multi-portal
+// rewrite. Carries everything PortalView used to plus the
+// sessionId / nickname / background flag.
+export type PortalReadyEvent = PortalView & {
+  sessionId: string;
+  nickname: string;
+  background: boolean;
+};
+
+// Payload shape for peer:* events after the multi-portal rewrite.
+// Wraps the PeerView with the routing fields the frontend store
+// uses to find the right session.
+export type PeerEvent = {
+  sessionId: string;
+  portalId: string;
+  peer: PeerView;
 };
 
 export type ServiceView = {
@@ -17,9 +53,30 @@ export type ServiceView = {
   health?: "ok" | "down" | "unknown";
   healthError?: string;
   paused?: boolean;
+  // requireApproval: when true, every peer dial on this service
+  // pops a 'tasdiqlab yoqish' modal on the host side. Cached
+  // per (peerId, port, protocol) once the user has decided.
+  requireApproval?: boolean;
+};
+
+// Payload of the `service:approval-request` event. The frontend
+// shows a modal listing the peer + service, and the user clicks
+// Allow / Deny which calls back to the Go side via
+// app.ApproveServiceRequest / DenyServiceRequest with the
+// requestId.
+export type ApprovalRequest = {
+  requestId: string;
+  peerId: string;
+  nickname: string;
+  protocol: "tcp" | "udp";
+  port: number;
+  serviceName: string;
 };
 
 export type PeerView = {
+  // sessionId is set on every peer:* event after the multi-portal
+  // rewrite. Empty on snapshot calls that don't carry the field.
+  sessionId?: string;
   peerId: string;
   nickname: string;
   virtualIp: string;
@@ -48,6 +105,7 @@ export type BandwidthResult = {
 };
 
 export type ChatMessage = {
+  sessionId?: string;
   from: string;
   nickname: string;
   text: string;
@@ -72,6 +130,7 @@ export type Manifest = {
 };
 
 export type TransferProgress = {
+  sessionId?: string;
   xferId: number;
   peerId: string;
   direction: "send" | "recv";
@@ -91,6 +150,9 @@ export type HistoryEntry = {
   code: string;
   nickname: string;
   isOwner: boolean;
+  // Optional user-given name. When empty the UI falls back to the
+  // portal id. Set via app.RenamePortal(historyId, label).
+  label: string;
   joinedAt: string;
   lastSeen: string;
 };

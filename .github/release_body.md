@@ -10,12 +10,16 @@ for the full list of changes.
 
 ## Yuklab olish / Downloads
 
-| Platform | Fayl / File |
+Pastdagi linklar har doim **eng yangi** relizga olib boradi —
+yangi versiya chiqsa avtomatik yangilanadi. The links below always
+point at the **latest** release.
+
+| Platform | Yuklab olish / Download |
 | --- | --- |
-| **macOS** (Apple Silicon — M1/M2/M3/M4) | `Portal-<tag>-darwin-arm64.zip` |
-| **macOS** (Intel) | `Portal-<tag>-darwin-amd64.zip` |
-| **Windows** (10/11, 64-bit) | `Portal-<tag>-windows-amd64.zip` |
-| **Linux** (Ubuntu 22.04+, Debian 12+) | `Portal-<tag>-linux-amd64.tar.gz` |
+| **macOS** (Apple Silicon — M1/M2/M3/M4) | [Portal-darwin-arm64.zip](https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-darwin-arm64.zip) |
+| **macOS** (Intel) | [Portal-darwin-amd64.zip](https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-darwin-amd64.zip) |
+| **Windows** (10/11, 64-bit) | [Portal-windows-amd64.zip](https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-windows-amd64.zip) |
+| **Linux** (Ubuntu 22.04+, Debian 12+) | [Portal-linux-amd64.tar.gz](https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-linux-amd64.tar.gz) |
 
 Mobile (Android) — beta, alohida release. / Mobile is in beta, separate
 release.

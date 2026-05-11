@@ -81,4 +81,26 @@ const (
 	// Empty = default-on, "0" disables, anything else (e.g. "1") forces on.
 	KeyLogUpload    = "log_upload_enabled"
 	KeyLogUploadURL = "log_upload_url"
+
+	// Local account — username/password gate the app shows on launch.
+	// auth_username is plaintext (it's not a secret; it doubles as the
+	// default Portal nickname after sign-in). auth_hash is bcrypt-hashed.
+	// Both empty → no account configured → SignUp screen is shown.
+	// See client/auth.go.
+	KeyAuthUsername = "auth_username"
+	KeyAuthHash     = "auth_hash"
+
+	// Device name — short label the user attaches to THIS install
+	// ('uy' / 'ish' / 'mac' / 'win 64'), so when the same account
+	// signs in from a phone + a laptop + a work desktop, room peers
+	// can tell them apart. Empty defaults to a platform-derived name
+	// at first read (App.CurrentDeviceName). Combined with the
+	// nickname when announcing to the mesh: 'texuz · uy'.
+	KeyDeviceName = "device_name"
+
+	// Auto-run — when "1" the app installs an OS-level startup hook
+	// (LaunchAgent / Run registry / .desktop autostart) so it comes
+	// back after reboot. App.SetAutoRun(true) writes the hook;
+	// SetAutoRun(false) removes it. Empty / "0" = no auto-run.
+	KeyAutoRun = "auto_run"
 )

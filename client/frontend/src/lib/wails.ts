@@ -6,6 +6,7 @@
 
 import type {
   PortalView,
+  PortalSummary,
   PeerView,
   ServiceView,
   ChatMessage,
@@ -26,10 +27,52 @@ type Bridge = {
   SetSignalingURL: (url: string) => Promise<void>;
   CreatePortal: (nickname: string, publicNick: boolean) => Promise<PortalView>;
   JoinPortal: (nickname: string, portalId: string, code: string) => Promise<PortalView>;
+  // Multi-portal: open the connection without making it the
+  // foreground session (the UI stays on whatever it was on).
+  BackgroundCreatePortal: (nickname: string) => Promise<PortalView>;
+  BackgroundJoinPortal: (nickname: string, portalId: string, code: string) => Promise<PortalView>;
+  // Leave drops the active session; LeavePortal drops a specific
+  // session by its localID; LeaveAllPortals drops them all (used on
+  // sign-out).
   Leave: () => Promise<void>;
+  LeavePortal: (sessionId: string) => Promise<void>;
+  LeaveAllPortals: () => Promise<void>;
+  // SwitchPortal brings a different session to the foreground —
+  // emits portal:switched so the UI can re-render.
+  SwitchPortal: (sessionId: string) => Promise<void>;
+  // ActivePortals lists every live session for the dashboard's
+  // "Faol ulanishlar" strip. ActiveSessionID returns the foreground
+  // session's localID (or "" when none).
+  ActivePortals: () => Promise<PortalSummary[]>;
+  ActiveSessionID: () => Promise<string>;
+  // ResumeActiveSessions re-dials every saved active-session row in
+  // the background. Called by the frontend right after unlock — see
+  // App.tsx's effect that depends on `unlocked`.
+  ResumeActiveSessions: () => Promise<void>;
+  // Per-install device label — defaults to a platform-derived name
+  // ('mac' / 'win 64' / 'linux'); user can rename.
+  CurrentDeviceName: () => Promise<string>;
+  SetDeviceName: (name: string) => Promise<void>;
+  // System-startup hook. SetAutoRun writes / removes the OS-level
+  // entry (LaunchAgent / Run registry / .desktop) and persists the
+  // preference. IsAutoRun reads the persisted flag.
+  IsAutoRun: () => Promise<boolean>;
+  SetAutoRun: (enabled: boolean) => Promise<void>;
+  // Per-port approval gate. SetServiceApproval flips the
+  // require_approval flag on a row; ApproveServiceRequest /
+  // DenyServiceRequest reply to a pending prompt; ResetApprovalCache
+  // clears sticky decisions so the host is re-asked next dial.
+  SetServiceApproval: (port: number, protocol: "tcp" | "udp", require: boolean) => Promise<void>;
+  ApproveServiceRequest: (requestId: string) => Promise<void>;
+  DenyServiceRequest: (requestId: string) => Promise<void>;
+  ResetApprovalCache: () => Promise<void>;
   CurrentPortal: () => Promise<PortalView>;
+  // Peers returns peers of the active session (legacy shape kept
+  // for older callers); SessionPeers takes a localID.
   Peers: () => Promise<PeerView[]>;
+  SessionPeers: (sessionId: string) => Promise<PeerView[]>;
   SendChat: (text: string) => Promise<number>;
+  SendChatTo: (sessionId: string, text: string) => Promise<number>;
   LocalServices: () => Promise<ServiceView[]>;
   ExposeService: (name: string, protocol: "tcp" | "udp", port: number, target: string) => Promise<void>;
   SetExposeEnabled: (port: number, protocol: "tcp" | "udp", enabled: boolean) => Promise<void>;
@@ -42,6 +85,8 @@ type Bridge = {
   OpenSaveDir: () => Promise<void>;
   RecentPortals: (n: number) => Promise<HistoryEntry[]>;
   ClearHistory: () => Promise<void>;
+  RenamePortal: (historyId: number, label: string) => Promise<void>;
+  RemoveRecentPortal: (historyId: number) => Promise<void>;
   GetTurnConfig: () => Promise<TurnConfig>;
   SetTurnConfig: (c: TurnConfig) => Promise<void>;
   LocalListeners: () => Promise<LocalListener[]>;
@@ -59,12 +104,44 @@ type Bridge = {
   MeasureBandwidth: (peerId: string) => Promise<BandwidthResult>;
 
   // Updater + crash reporting (added v0.4.0)
+  // InstallUpdate (v0.5.4) downloads the latest release for this OS,
+  // stages a swap script, and quits the running app so the script can
+  // replace the binary and relaunch. Returns "" on success or a short
+  // English error string. Caller should show "Yangilanmoqda…" while
+  // waiting since the renderer process will exit before the promise
+  // resolves on the happy path.
   AppVersion: () => Promise<string>;
   CheckForUpdate: (refresh: boolean) => Promise<UpdateResult>;
+  InstallUpdate: () => Promise<string>;
   OpenReleasePage: (url: string) => Promise<void>;
   CrashReports: () => Promise<CrashReport[]>;
   OpenCrashFolder: () => Promise<void>;
   ClearCrashReports: () => Promise<void>;
+
+  // Local account (added v0.5.0). HasAccount picks Sign-Up vs. Sign-In
+  // mode on launch. SignUp throws on validation failure — error
+  // strings the lock view matches on by prefix:
+  //   "username_empty" / "username_too_long" / "password_too_short"
+  //   "password_weak:lower,upper,digit,special" (v0.5.1+)
+  // SignIn returns a result struct with an OK bool and LockoutSeconds.
+  // LockoutSeconds is non-zero when an in-memory rate limit has kicked
+  // in (5 failures per username) — the UI shows a countdown instead
+  // of a generic "wrong credentials" banner. Storage errors surface
+  // as OK:false too, so the UI can't be used as a username-existence
+  // oracle.
+  HasAccount: () => Promise<boolean>;
+  SignUp: (username: string, password: string) => Promise<void>;
+  SignIn: (
+    username: string,
+    password: string
+  ) => Promise<SignInResult>;
+  CurrentUsername: () => Promise<string>;
+  ResetVault: () => Promise<void>;
+};
+
+export type SignInResult = {
+  ok: boolean;
+  lockoutSeconds: number;
 };
 
 export type UpdateResult = {
@@ -121,7 +198,39 @@ const stub: Bridge = {
     ownVip: "10.42.0.2",
     isOwner: false,
   }),
+  BackgroundCreatePortal: async (nickname) => ({
+    portalId: "808080",
+    code: "707070",
+    ownerId: "preview-bg-owner",
+    ownPeerId: "preview-bg-owner",
+    ownVip: "10.42.1.1",
+    isOwner: true,
+  }),
+  BackgroundJoinPortal: async (nickname, portalId) => ({
+    portalId,
+    code: "",
+    ownerId: "preview-bg-owner",
+    ownPeerId: "preview-bg-self",
+    ownVip: "10.42.1.2",
+    isOwner: false,
+  }),
   Leave: async () => {},
+  LeavePortal: async () => {},
+  LeaveAllPortals: async () => {},
+  SwitchPortal: async () => {},
+  ActivePortals: async () => [],
+  ActiveSessionID: async () => "",
+  ResumeActiveSessions: async () => {},
+  CurrentDeviceName: async () => "mac",
+  SetDeviceName: async () => {},
+  IsAutoRun: async () => false,
+  SetAutoRun: async () => {},
+  SetServiceApproval: async () => {},
+  ApproveServiceRequest: async () => {},
+  DenyServiceRequest: async () => {},
+  ResetApprovalCache: async () => {},
+  SessionPeers: async () => [],
+  SendChatTo: async () => 0,
   CurrentPortal: async () => ({
     portalId: "",
     code: "",
@@ -152,6 +261,8 @@ const stub: Bridge = {
   OpenSaveDir: async () => {},
   RecentPortals: async () => [],
   ClearHistory: async () => {},
+  RenamePortal: async () => {},
+  RemoveRecentPortal: async () => {},
   GetTurnConfig: async () => ({ url: "", username: "", credential: "" }),
   SetTurnConfig: async () => {},
   LocalListeners: async () => [],
@@ -197,10 +308,21 @@ const stub: Bridge = {
     assetForOs: "",
     checkedAt: new Date().toISOString(),
   }),
+  InstallUpdate: async () => "preview",
   OpenReleasePage: async () => {},
   CrashReports: async () => [],
   OpenCrashFolder: async () => {},
   ClearCrashReports: async () => {},
+
+  // Preview-mode (no Wails runtime) auth stubs. HasAccount=false so
+  // the SignUp screen shows; SignUp silently succeeds; SignIn accepts
+  // any 8+ char password. Keeps the lock screen out of the way during
+  // pure-frontend development.
+  HasAccount: async () => false,
+  SignUp: async () => {},
+  SignIn: async (_u, p) => ({ ok: p.length >= 8, lockoutSeconds: 0 }),
+  CurrentUsername: async () => "",
+  ResetVault: async () => {},
 };
 
 export const app: Bridge =

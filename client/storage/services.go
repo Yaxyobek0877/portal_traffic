@@ -14,7 +14,14 @@ type ExposedService struct {
 	Name      string `json:"name"`
 	Target    string `json:"target"`  // "" → 127.0.0.1:<port>
 	Enabled   bool   `json:"enabled"` // false = remembered but skipped on auto-restore
-	UpdatedAt int64  `json:"updatedAt"`
+	// RequireApproval gates every peer dial attempt: when true, the
+	// host's UI is asked to allow/deny each new (peer, port) combo
+	// before the proxy connects to the target. Once approved for a
+	// given peer, the decision is cached for the session so the user
+	// isn't re-prompted on every reconnect. False = auto-allow (the
+	// behaviour from before this flag).
+	RequireApproval bool  `json:"requireApproval"`
+	UpdatedAt       int64 `json:"updatedAt"`
 }
 
 // SaveExposedService upserts the row keyed on (port, protocol). Setting
@@ -29,15 +36,20 @@ func (s *Store) SaveExposedService(svc ExposedService) error {
 	if svc.Enabled {
 		enabled = 1
 	}
+	approval := 0
+	if svc.RequireApproval {
+		approval = 1
+	}
 	_, err := s.db.Exec(`
-		INSERT INTO exposed_services (port, protocol, name, target, enabled, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO exposed_services (port, protocol, name, target, enabled, require_approval, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(port, protocol) DO UPDATE SET
 			name=excluded.name,
 			target=excluded.target,
 			enabled=excluded.enabled,
+			require_approval=excluded.require_approval,
 			updated_at=excluded.updated_at
-	`, svc.Port, svc.Protocol, svc.Name, svc.Target, enabled, svc.UpdatedAt)
+	`, svc.Port, svc.Protocol, svc.Name, svc.Target, enabled, approval, svc.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("storage: save exposed service: %w", err)
 	}
@@ -59,7 +71,7 @@ func (s *Store) DeleteExposedService(port int, protocol string) error {
 // Enabled themselves.
 func (s *Store) ListExposedServices() ([]ExposedService, error) {
 	rows, err := s.db.Query(`
-		SELECT port, protocol, name, target, enabled, updated_at
+		SELECT port, protocol, name, target, enabled, require_approval, updated_at
 		FROM exposed_services
 		ORDER BY port, protocol
 	`)
@@ -71,11 +83,15 @@ func (s *Store) ListExposedServices() ([]ExposedService, error) {
 	var out []ExposedService
 	for rows.Next() {
 		var svc ExposedService
-		var enabled int
-		if err := rows.Scan(&svc.Port, &svc.Protocol, &svc.Name, &svc.Target, &enabled, &svc.UpdatedAt); err != nil {
+		var enabled, approval int
+		if err := rows.Scan(
+			&svc.Port, &svc.Protocol, &svc.Name, &svc.Target,
+			&enabled, &approval, &svc.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		svc.Enabled = enabled != 0
+		svc.RequireApproval = approval != 0
 		out = append(out, svc)
 	}
 	return out, rows.Err()

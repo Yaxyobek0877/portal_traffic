@@ -70,23 +70,26 @@ and more.
 
 ### Tayyor installerlar / Pre-built installers
 
-[**Releases sahifasidan**](https://github.com/Yaxyobek0877/portal_traffic/releases)
-o'z OS'ingiz uchun yuklab oling:
+Eng so'nggi versiyani to'g'ridan-to'g'ri yuklab oling — quyidagi
+linklar har doim **eng yangi** relizga olib boradi (GitHub `latest`
+yo'lini avtomatik yo'naltiradi):
 
-| Platform | Fayl |
+| Platform | Yuklab olish |
 | --- | --- |
-| macOS (Apple Silicon) | `Portal-vX.Y.Z-darwin-arm64.zip` |
-| macOS (Intel) | `Portal-vX.Y.Z-darwin-amd64.zip` |
-| Windows 10/11 (64-bit) | `Portal-vX.Y.Z-windows-amd64.zip` |
-| Linux (Ubuntu/Debian) | `Portal-vX.Y.Z-linux-amd64.tar.gz` |
+| **macOS** (Apple Silicon — M1/M2/M3/M4) | [Portal-darwin-arm64.zip](https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-darwin-arm64.zip) |
+| **macOS** (Intel) | [Portal-darwin-amd64.zip](https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-darwin-amd64.zip) |
+| **Windows** 10/11 (64-bit) | [Portal-windows-amd64.zip](https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-windows-amd64.zip) |
+| **Linux** (Ubuntu 22.04+ / Debian 12+) | [Portal-linux-amd64.tar.gz](https://github.com/Yaxyobek0877/portal_traffic/releases/latest/download/Portal-linux-amd64.tar.gz) |
 
-> ⚠️ **v0.4.0:** binarlar imzolanmagan. macOS'da right-click → Open;
-> Windows'da SmartScreen → "Run anyway". Sertifikatlar [keyingi
-> reliz'da](docs/CODE_SIGNING.md).
+Hamma versiyalar va release notes:
+[releases sahifasi](https://github.com/Yaxyobek0877/portal_traffic/releases).
 
-> ⚠️ **v0.4.0:** binaries are unsigned. macOS: right-click → Open;
-> Windows: SmartScreen → "Run anyway". Code signing in [next
-> release](docs/CODE_SIGNING.md).
+> ⚠️ **Imzolash:** binarlar hozircha imzolanmagan (Apple Developer ID
+> va Authenticode kelajakda). macOS'da birinchi ochishda right-click → Open;
+> Windows'da SmartScreen → "More info → Run anyway".
+>
+> Binaries are currently unsigned. macOS: right-click → Open on first
+> launch; Windows: SmartScreen → "More info → Run anyway".
 
 ### Manbadan build / Build from source
 

@@ -102,20 +102,27 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); background-clip: padding-box; }
 
-/* input default */
-input.input-base, textarea.input-base {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 6px;
-  color: white;
-  padding: 10px 12px;
-  outline: none;
-  transition: border-color .15s, background .15s, box-shadow .15s;
-}
-input.input-base:focus, textarea.input-base:focus {
-  border-color: #8b5cf6;
-  background: rgba(255,255,255,0.06);
-  box-shadow: 0 0 0 3px rgba(139,92,246,.18);
+/* input default. Wrapped in @layer components so Tailwind utilities —
+   which live in the `utilities` layer that ranks higher — can override
+   individual properties (e.g. `pl-9` for icon-prefixed inputs in
+   Lock.tsx). Without the layer, this un-layered rule outranks every
+   layered Tailwind class regardless of specificity, and the `padding`
+   shorthand silently wipes out `pl-9` so the icon overlaps the text. */
+@layer components {
+  .input-base {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 6px;
+    color: white;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+  }
+  .input-base:focus {
+    border-color: #8b5cf6;
+    background: rgba(255,255,255,0.06);
+    box-shadow: 0 0 0 3px rgba(139,92,246,.18);
+  }
 }
 
 /* drag region for the title bar (Wails on macOS uses CSS for this) */

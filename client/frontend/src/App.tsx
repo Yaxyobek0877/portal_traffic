@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Welcome } from "./views/Welcome";
 import { PortalView } from "./views/Portal";
 import { Settings } from "./views/Settings";
+import { Lock } from "./views/Lock";
+import { ApprovalQueue } from "./components/ApprovalQueue";
 import { usePortalStore } from "./stores/portalStore";
 import { app, subscribe } from "./lib/wails";
 import type { UpdateResult } from "./lib/wails";
@@ -9,16 +11,21 @@ import { useT } from "./i18n";
 import type {
   ChatMessage,
   NATResult,
-  PeerView,
-  PortalView as PortalT,
+  PeerEvent,
+  PortalReadyEvent,
+  PortalSummary,
   TransferProgress,
 } from "./types";
 
 export default function App() {
   const { t } = useT();
+  const unlocked = usePortalStore((s) => s.unlocked);
   const screen = usePortalStore((s) => s.screen);
   const setScreen = usePortalStore((s) => s.setScreen);
-  const setPortal = usePortalStore((s) => s.setPortal);
+  const upsertSession = usePortalStore((s) => s.upsertSession);
+  const removeSession = usePortalStore((s) => s.removeSession);
+  const setActiveSession = usePortalStore((s) => s.setActiveSession);
+  const setSessionSummaries = usePortalStore((s) => s.setSessionSummaries);
   const upsertPeer = usePortalStore((s) => s.upsertPeer);
   const removePeer = usePortalStore((s) => s.removePeer);
   const clearPeers = usePortalStore((s) => s.clearPeers);
@@ -49,6 +56,13 @@ export default function App() {
       return false;
     }
   });
+  // Installing state for the in-app installer (v0.5.4). Drives the
+  // button label and disables Dismiss while the swap script is being
+  // staged. The Go side runtime.Quit's the renderer on success, so on
+  // the happy path this state never resets — failures fall through and
+  // surface in `installError` so the user sees what went wrong.
+  const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string>("");
 
   // Check for an update on startup. The cache means this is essentially
   // free after the first call (24h TTL on the backend side). We don't
@@ -61,49 +75,158 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // Auto-resume sessions the user had open last time, once they've
+  // unlocked the vault. The Go side walks active_sessions and dials
+  // each in the background — owner rows recreate (fresh portal_id),
+  // joiner rows attempt the saved id+code and silently drop if the
+  // portal is gone. Active-portals strip on Welcome shows them as
+  // they come up.
+  //
+  // Guarded so the call only fires when unlock flips from false →
+  // true; otherwise a sign-out → sign-back-in cycle would re-dial,
+  // which is what we want, but a re-render loop wouldn't.
+  useEffect(() => {
+    if (!unlocked) return;
+    app.ResumeActiveSessions().catch(() => {});
+  }, [unlocked]);
+
   useEffect(() => {
     // One-shot bootstrap calls.
     app.NATInfo().then((r) => r && setNat(r));
     app.SaveDir().then(setSaveDir);
+    // Hydrate the sessions map up front so a hot reload (or a
+    // launch with sessions already running) shows the active-portals
+    // strip immediately instead of waiting for the next event.
+    app.ActivePortals().then((list) => {
+      if (Array.isArray(list)) setSessionSummaries(list);
+    });
+    app.ActiveSessionID().then((id) => {
+      if (id) setActiveSession(id);
+    });
+
+    // refreshSummaries pulls a fresh ActivePortals list. Cheap (one
+    // map walk on the Go side) and ensures any race between event
+    // arrival and an out-of-band session change is reconciled.
+    const refreshSummaries = () => {
+      app.ActivePortals().then((list) => {
+        if (Array.isArray(list)) setSessionSummaries(list);
+      });
+    };
 
     const offs: Array<() => void> = [];
 
     offs.push(
-      subscribe<PortalT>("portal:ready", (p) => {
-        // Defensive: an older backend (or a backend with the legacy
-        // bug where *ev.Portal was emitted directly) sends payloads
-        // shaped like {PortalID:…, Code:…} — capitalised Go field
-        // names instead of our lowerCamel JSON tags. Ignore those
-        // rather than letting them overwrite the good data Welcome
-        // already put in the store from app.CreatePortal()'s return.
-        if (!p || !p.portalId) {
-          return;
+      subscribe<PortalReadyEvent>("portal:ready", (p) => {
+        if (!p || !p.sessionId) return;
+        upsertSession({
+          sessionId: p.sessionId,
+          portal: {
+            portalId: p.portalId,
+            code: p.code,
+            ownerId: p.ownerId,
+            ownPeerId: p.ownPeerId,
+            ownVip: p.ownVip,
+            isOwner: p.isOwner,
+            sessionId: p.sessionId,
+          },
+        });
+        // Background sessions don't take the screen — the UI stays
+        // wherever it was. Foreground sessions land on the portal
+        // screen. portal:switched fires alongside for foreground
+        // sessions; we use either signal.
+        if (!p.background) {
+          setActiveSession(p.sessionId);
+          setScreen("portal");
         }
-        setPortal(p);
-        setScreen("portal");
+        refreshSummaries();
       })
     );
     offs.push(
-      subscribe<PeerView>("peer:joining", (p) => upsertPeer({ ...p, state: "connecting" }))
+      subscribe<{ sessionId: string; portalId: string }>("portal:switched", (p) => {
+        if (!p || !p.sessionId) return;
+        setActiveSession(p.sessionId);
+      })
     );
     offs.push(
-      subscribe<PeerView>("peer:ready", (p) => upsertPeer({ ...p, state: "connected" }))
+      subscribe<PeerEvent>("peer:joining", (e) => {
+        if (!e || !e.peer) return;
+        upsertPeer({ ...e.peer, sessionId: e.sessionId, state: "connecting" });
+        refreshSummaries();
+      })
     );
-    offs.push(subscribe<PeerView>("peer:rtt", (p) => upsertPeer(p)));
-    offs.push(subscribe<PeerView>("peer:transport", (p) => upsertPeer(p)));
-    offs.push(subscribe<PeerView>("peer:left", (p) => removePeer(p.peerId)));
     offs.push(
-      subscribe("portal:closed", () => {
-        setBanner(t("banner.portal_closed"));
-        setPortal(null);
-        clearPeers();
-        clearMessages();
-        setScreen("welcome");
+      subscribe<PeerEvent>("peer:ready", (e) => {
+        if (!e || !e.peer) return;
+        upsertPeer({ ...e.peer, sessionId: e.sessionId, state: "connected" });
+      })
+    );
+    offs.push(
+      subscribe<PeerEvent>("peer:rtt", (e) => {
+        if (!e || !e.peer) return;
+        upsertPeer({ ...e.peer, sessionId: e.sessionId });
+      })
+    );
+    offs.push(
+      subscribe<PeerEvent>("peer:transport", (e) => {
+        if (!e || !e.peer) return;
+        upsertPeer({ ...e.peer, sessionId: e.sessionId });
+      })
+    );
+    offs.push(
+      subscribe<PeerEvent>("peer:left", (e) => {
+        if (!e || !e.peer) return;
+        // Mark as closed instead of yanking the row out of the
+        // session's peer map — the user asked to keep ever-connected
+        // peers visible (with an offline indicator) so they can see
+        // who was in the room earlier. Explicit removal lives behind
+        // the per-peer Forget button now.
+        upsertPeer({ ...e.peer, sessionId: e.sessionId, state: "closed" });
+        refreshSummaries();
+      })
+    );
+    offs.push(
+      subscribe<{ sessionId?: string }>("portal:closed", (p) => {
+        const sid = p?.sessionId;
+        if (sid) {
+          // Specific session ended — drop just that one.
+          removeSession(sid);
+          // If it was the active one, the store already cleared the
+          // top-level peers/messages/portal as part of removeSession.
+          // Send the user back to Welcome only when no sessions are
+          // left, so a single-portal close doesn't yank them from a
+          // background-connected session they're actively using.
+          const remaining = usePortalStore.getState().sessions;
+          if (Object.keys(remaining).length === 0) {
+            clearPeers();
+            clearMessages();
+            setScreen("welcome");
+          }
+          setBanner(t("banner.portal_closed"));
+        } else {
+          // Older event shape (no sessionId) — treat as "everything
+          // is gone" for backwards compatibility.
+          setBanner(t("banner.portal_closed"));
+          clearPeers();
+          clearMessages();
+          setScreen("welcome");
+        }
+        refreshSummaries();
       })
     );
     offs.push(subscribe<ChatMessage>("chat", (m) => addMessage(m)));
-    offs.push(subscribe<PeerView>("peer:services", (p) => upsertPeer(p)));
-    offs.push(subscribe<string>("error", (msg) => msg && setBanner(msg)));
+    offs.push(
+      subscribe<PeerEvent>("peer:services", (e) => {
+        if (!e || !e.peer) return;
+        upsertPeer({ ...e.peer, sessionId: e.sessionId });
+      })
+    );
+    offs.push(
+      subscribe<string | { sessionId?: string; message?: string }>("error", (msg) => {
+        if (!msg) return;
+        if (typeof msg === "string") setBanner(msg);
+        else if (msg.message) setBanner(msg.message);
+      })
+    );
     offs.push(subscribe<NATResult>("nat:result", (r) => setNat(r)));
     offs.push(subscribe<TransferProgress>("transfer:progress", (t) => upsertTransfer(t)));
     offs.push(
@@ -118,7 +241,10 @@ export default function App() {
 
     return () => offs.forEach((off) => off());
   }, [
-    setPortal,
+    upsertSession,
+    removeSession,
+    setActiveSession,
+    setSessionSummaries,
     upsertPeer,
     removePeer,
     clearPeers,
@@ -139,6 +265,29 @@ export default function App() {
     } catch {}
   };
 
+  // Kicks off the in-app installer. The Go-side InstallUpdate runs
+  // CheckForUpdate again (cheap — 24h cache), downloads the asset
+  // matching this OS, stages the swap script, and then runtime.Quit's
+  // the app after a short delay so the script can replace the binary
+  // and relaunch. We never get here on the happy path because the
+  // process exits — non-empty return = we stayed alive, so something
+  // went wrong and we surface that.
+  const installUpdate = async () => {
+    if (installing) return;
+    setInstalling(true);
+    setInstallError("");
+    try {
+      const err = await app.InstallUpdate();
+      if (err) {
+        setInstallError(err);
+        setInstalling(false);
+      }
+    } catch (e: any) {
+      setInstallError(String(e?.message || e || "unknown"));
+      setInstalling(false);
+    }
+  };
+
   return (
     <div className="h-full w-full overflow-hidden">
       {banner && (
@@ -153,29 +302,57 @@ export default function App() {
         </div>
       )}
       {update?.available && !updateDismissed && (
-        <div className="absolute top-3 right-3 z-40 max-w-[280px] bg-violet-500/15 border border-violet-500/30 text-violet-100 text-xs px-3 py-2 rounded-md backdrop-blur-md shadow-lg flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="opacity-80">{t("update.available")}</div>
-            <div className="font-mono font-semibold truncate">v{update.latestVersion}</div>
+        <div className="absolute top-3 right-3 z-40 w-[320px] bg-violet-500/15 border border-violet-500/30 text-violet-100 text-xs px-3 py-2 rounded-md backdrop-blur-md shadow-lg">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="opacity-80">{t("update.available")}</div>
+              <div className="font-mono font-semibold truncate">v{update.latestVersion}</div>
+            </div>
+            <button
+              onClick={installUpdate}
+              disabled={installing}
+              className="px-2 py-1 rounded-md bg-violet-500/40 hover:bg-violet-500/60 text-violet-50 text-[11px] font-semibold whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
+            >
+              {installing ? t("update.installing") : t("update.install")}
+            </button>
+            <button
+              onClick={() => app.OpenReleasePage(update.releaseUrl)}
+              className="px-2 py-1 rounded-md bg-violet-500/15 hover:bg-violet-500/30 text-violet-50/80 text-[11px] whitespace-nowrap"
+              title={t("update.download")}
+            >
+              ↗
+            </button>
+            <button
+              onClick={dismissUpdate}
+              disabled={installing}
+              className="text-violet-300/70 hover:text-violet-100 disabled:opacity-30"
+              title={t("update.dismiss")}
+            >
+              ×
+            </button>
           </div>
-          <button
-            onClick={() => app.OpenReleasePage(update.releaseUrl)}
-            className="px-2 py-1 rounded-md bg-violet-500/30 hover:bg-violet-500/50 text-violet-50 text-[11px] font-semibold whitespace-nowrap"
-          >
-            {t("update.download")}
-          </button>
-          <button
-            onClick={dismissUpdate}
-            className="text-violet-300/70 hover:text-violet-100"
-            title={t("update.dismiss")}
-          >
-            ×
-          </button>
+          {installError && (
+            <div className="mt-1.5 text-[11px] text-rose-300/90 break-words">
+              {t("update.install_failed")}{installError}
+            </div>
+          )}
         </div>
       )}
-      {screen === "welcome" && <Welcome />}
-      {screen === "portal" && <PortalView />}
-      {screen === "settings" && <Settings />}
+      {/* Vault gate. Until the user creates or enters their master
+          password the rest of the UI stays unmounted, so e.g. a peek
+          at the laptop can't see portal history or trigger a re-join.
+          Banner and update toast intentionally render above this so
+          a "Reconnecting..." blip fired by background re-tries is
+          still visible — they don't leak any post-unlock state. */}
+      {!unlocked && <Lock />}
+      {unlocked && screen === "welcome" && <Welcome />}
+      {unlocked && screen === "portal" && <PortalView />}
+      {unlocked && screen === "settings" && <Settings />}
+      {/* Approval queue overlays everything else when a peer dial
+          on a require_approval port is waiting on the host. Lives at
+          the App level so it doesn't get unmounted when the user
+          flips between Welcome / Portal / Settings. */}
+      {unlocked && <ApprovalQueue />}
     </div>
   );
 }

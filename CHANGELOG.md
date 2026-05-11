@@ -7,7 +7,408 @@ ga rioya qiladi.
 
 ## [Unreleased]
 
-v0.4.1 dan keyingi ishlanma bu yerga yoziladi.
+v0.5.6 dan keyingi ishlanma bu yerga yoziladi.
+
+## [0.5.6] — 2026-05-11
+
+v0.5.0 dan beri davom etgan **updater "yangilash loop"** xatosi'ni
+yopuvchi point-release. v0.5.5 va undan oldingi relizlarda
+`client/main.go` dagi `Version` konstanta `wails.json`'ning
+`productVersion`'i bilan moslashtirilmagan edi (`v0.5.5` tag'ida
+mos ravishda `"0.5.4"` va `"0.5.5"`'da turdi). Natijada o'rnatilgan
+Portal har gal o'zini eski deb baholab, `update.install` tugmasini
+har bosilganda yangilanish jarayonini takror boshqarib turardi
+("install bosaman → ilova restart bo'ladi → yana 5.5'ni o'rnat
+deydi"). Ushbu reliz ikkala manbani `0.5.6`'ga sinxron qiladi;
+foydalanuvchi v0.5.6'ni bir marta qabul qilgach, keyingi relizlar
+to'g'ri taqqoslanadi.
+
+### Fixed — Tuzatildi
+
+- **`client/main.go: Version` ↔ `wails.json: productVersion`
+  sinxronizatsiyasi.** Endi `"0.5.6"`'da bir xil. Hujjatdagi izoh
+  ham yangilangan — bumpni kelajakda unutib qo'ymaslik uchun
+  release runbook talab qiladi.
+
+### Notes
+
+- Kod tarkibida bu reliz hech qanday yangi xususiyat yoki regressiyani
+  o'z ichiga olmaydi. `v0.5.5` ↔ `v0.5.6` orasidagi yagona o'zgarish
+  ushbu ikki versiya raqami va CHANGELOG entry.
+
+## [0.5.5] — 2026-05-11
+
+Sign-in tajribasini brauzergacha kengaytirish va mobile platformani live
+qilish. Foydalanuvchi endi `portal.1pro.uz` web'da ham, Android'da ham,
+desktop'da ham bir xil hisob bilan kirib, o'zining portallarini har uch
+joydan ko'ra oladi. Bundan tashqari mobile birinchi marta to'liq simlangan
+— signaling.1pro.uz `/api/auth/*` ga ulanish, Cloudflare Calls TURN,
+UZ+EN i18n va brendlangan launcher icon bilan.
+
+### Added — Yangi imkoniyatlar
+
+- **Web tomondan jonli sign-in/up** — bosh sahifaning chap ustunidagi
+  forma endi haqiqiy `/api/auth/{signup,signin}` ga POST qiladi:
+  - `web/login.js` validator client-side (3-32 belgi username, 8+ belgi
+    parol) bilan, server xatolari `USERNAME_TAKEN`, `INVALID_CREDENTIALS`,
+    `LOCKED_OUT` field error sifatida chiqadi.
+  - Muvaffaqiyatli kirishdan keyin `/admin/dashboard` ga redirect; allaqachon
+    signed-in tashrif buyuruvchi (`/api/me` 200) formani umuman ko'rmaydi.
+  - Sign-up / Sign-in tab'lari bitta formani rejimga qarab moslaydi;
+    Sign-up'da parol takror maydoni + visibility toggle (`Eye`/`EyeOff`),
+    Sign-in'da yo'q.
+  - `/download/<asset>` brendlangan URL'lar — signaling server
+    `--downloads-base` orqali GitHub Releases'ga 302 qiladi, foydalanuvchi
+    `portal.1pro.uz/download/Portal-darwin-arm64.dmg` ko'rinishdagi
+    havolani ulashishi mumkin.
+- **Persistent userstore** — `server/userstore.go` parollarni Argon2id
+  bilan saqlaydi (`~/.portal-server/users.json` atomic write); per-IP
+  lockout (`golang.org/x/time/rate`), typed error code'lar. Userstore
+  state restartlardan keyin saqlanadi.
+- **Cross-device portallar (account-linked)** — desktop endi cloud
+  hisobiga sign-in qilingan paytda `signaling.1pro.uz/api/portals` ga
+  o'z aktiv portallarini push qiladi; web admin shell (`/admin/dashboard`)
+  brauzerdan turib ularning ro'yxatini ko'rsata oladi. Avvalgi "account
+  linkage isn't wired yet" eslatmasi olib tashlandi.
+- **Parol reveal toggle** — web va desktop sign-in formalarida `Eye` /
+  `EyeOff` ikonali tugma; default `type="password"`.
+- **`Connected` chrome tushirildi** — desktop sarlavhasidagi har vaqtli
+  "Connected" badge realda kam ma'lumotli edi va estetik shovqin keltirar
+  edi. Status barda peer count + transport indicator bor — ular yetarli.
+
+### Mobile — Android ilovasi birinchi marta to'liq simlangan
+
+- **Sign-in / sign-up** — `mobile/.../auth/AuthApi.kt` deployed
+  `/api/auth/{signup,signin,signout,me}` ga gaplashadi. Sessiya cookie
+  `__Host-portal_session` DataStore'da turadi va har so'rovga qayta
+  qo'shiladi.
+- **Forma UI (`AuthScreen.kt`)** — web sign-in/up formasining mirror'i:
+  field-level error mapping (`USERNAME_TAKEN`, `PASSWORD_WEAK`,
+  `LOCKED_OUT` va h.k.), Sign-up'da parol takror, visibility toggle.
+- **Cloudflare Calls TURN** — `mobile/.../turn/` paketi
+  `client/cloudflareturn.go` ning Kotlin nusxasi:
+  `rtc.live.cloudflare.com` ga bitta POST → qisqa muddatli ICE
+  credential (30 daqiqaga cache); Settings'da Cloudflare `TOKEN_ID` +
+  `API_TOKEN` kiritiladi. `MeshManager` resolved server'larni
+  `PeerConnectionFactory` ga uzatadi.
+- **i18n (UZ + EN)** — `i18n/Strings.kt` ikki tilli string jadvali;
+  har ekran `t(key)` orqali o'qiydi; Settings'da locale toggle.
+  Default — Uzbek (desktop bilan bir xil).
+- **Brendlangan launcher icon** — `scripts/gen_icons.py` ishlab chiqaradigan
+  foreground + monochrome PNG mipmap'lar; flat zinc-950 background;
+  `app_name = "Portal"`. Eski material webp + vector drawable'lar olib
+  tashlandi.
+- **Animatsiyali Logo** — `ui/Logo.kt`, frontend Logo'sining Compose
+  porti (besh konsentrik aylanuvchi halqa). Welcome va Auth ekranlarida.
+- **About card** — Settings'da `versionName` ko'rsatadi
+  (`buildConfig = true` orqali generatsiya qilingan).
+- **Hujjatlar** — `mobile/{ARCHITECTURE,BUILDING,INSTALL}.md` +
+  yangilangan README.
+
+### Changed — O'zgartirilgan
+
+- **Update banner i18n** — `update.install`, `update.installing`,
+  `update.install_failed` key'lari (v0.5.4'dan).
+- **Release pipeline** — `.github/workflows/release.yml` endi
+  `draft=false` bilan publish qiladi (avval qo'lda promote kerak edi);
+  web/ assetlar uchun cache-busting query string qo'shiladi.
+
+### Infrastructure
+
+- **Cloudflare Pages auto-deploy** — `web/` papkasining har push'i
+  Cloudflare Pages'da avtomatik build bo'ladi; `/admin/*` URL'lar
+  trailing slash siz ham ishlaydi.
+- **Server'ning private repoga ko'chirishi** — backend
+  (`server/auth_handlers.go`, `userstore.go`, va h.k.) endi alohida
+  `Yaxyobek0877/portal_server` private GitHub repo'sida saqlanadi.
+  Public `portal_traffic` repo'sida `server/` allaqachon `.gitignore`'da
+  edi — endi qachondir kerak bo'lganda fetch qilish mumkin.
+
+## [0.5.4] — 2026-05-08
+
+In-app auto-update va web admin paneli uchun server-side roadmap.
+v0.5.x serial yangilanishlarining yopilishi: foydalanuvchi endi
+relizlarni qo'lda yuklab olib, ikki marta bosib chiqarib qayta
+o'rnatishi shart emas — banner'dagi "Yangilash" tugmasi bir bosishda
+yangilab beradi.
+
+### Added — Yangi imkoniyatlar
+
+- **In-app auto-update (Yangilash tugmasi)** — Update banner'ga
+  ikkita yangi tugma qo'shildi:
+  - **Yangilash** — `App.InstallUpdate()` chaqiradi: GitHub Releases'dan
+    OS-specific asset'ni yuklab oladi (`client/updater/install.go`),
+    OS temp dir'ga staging qiladi (`portal-update-<unixns>`), swap
+    script (mac/linux: `/bin/bash`, windows: `.bat`) yozadi va detached
+    spawn qiladi (Unix `Setsid: true`, Windows `cmd /c start /min`).
+    500 ms keyin `runtime.Quit(ctx)` chaqirib o'zini o'chiradi; script
+    eski binary'ni `rm -rf` qilib, yangisini ko'chirib qayta ishga
+    tushiradi (macOS'da `open`, Linux'da bevosita exec, Windows'da
+    `start ""`).
+  - **↗** — release sahifasini brauzerda ochadi (avval bo'lgan oqim,
+    qoldirildi: foydalanuvchi notlarni o'qishi yoki qo'lda yuklab
+    olishi mumkin).
+  - Tugma `installing` paytida `Yangilanmoqda…` deb yoziladi va
+    `disabled` bo'ladi (Dismiss tugmasi ham bloklanadi). Xato bo'lsa
+    banner ostida `update.install_failed` matni ko'rinadi.
+  - Zip va tar.gz arxivlari qo'llab-quvvatlanadi (`unzip` + `untargz`),
+    zip-slip / tar-slip himoyasi bor.
+- **Web admin paneli — server-side roadmap** —
+  `docs/ROOM-CONTROLS-GAPS.md` da yangi bo'lim
+  **"Web admin paneli (online qurilma boshqaruvi)"**: foydalanuvchi
+  brauzerdan turib o'z portal/peer/servislarini ko'rish va boshqarish
+  uchun nima kerak — `/api/portals`, `/api/portals/:id/services`,
+  `service.announce` / `service.pause_request` xabarlari, opt-in
+  toggle'lari. Hozirgi `web/admin/login.html` + `dashboard.html`
+  static mockup, real backend deploy qilinishi kerak. Hech qaysi
+  client tomon o'zgarish ishlamaguncha avval server tomon qayta
+  yozilishi kerak — bu hujjatlash, kelajakda bosqichma-bosqich
+  amalga oshirish uchun.
+
+### Changed — O'zgartirilgan
+
+- **Update banner kengligi** — `max-w-[280px]` → `w-[320px]` (yangi
+  Yangilash tugmasini joylab olish uchun).
+- **Update banner tugmasi yorlig'i** — eski "Yuklab olish" tugmasi
+  endi kompakt "↗" (release sahifa link), `Yangilash` esa primary
+  CTA. i18n key'lari: `update.install`, `update.installing`,
+  `update.install_failed`.
+
+### Documentation
+
+- `docs/ROOM-CONTROLS-GAPS.md` — yangi bo'lim **"Auto-update
+  (v0.5.4 da yopildi)"**: backend / detach / frontend dizayni
+  qisqacha yozilgan; web admin uchun **uchta server endpoint'i**
+  va **ikkita yangi WebSocket xabari**ning shartlari.
+
+## [0.5.3] — 2026-05-08
+
+Patch reliz: device-name separator'ni server tomonidan ruxsat
+etilgan belgiga to'g'rilash va resume paytida nicknamasi
+ikki marta stamp bo'lishidan saqlash.
+
+### Fixed — Tuzatilgan xatolar
+
+- **NICKNAME_INVALID hali ham qaytayotgan edi** — v0.5.2'dagi `'@'`
+  separator ham server validator regex'iga (`server/nickname.go
+  validNickname`: `[a-zA-Z0-9_\-.]`) tushmadi. Test qildim:
+  ```
+  send portal.create  nick=texuz@mac → recv NICKNAME_INVALID
+  ```
+  Endi separator `'.'` (period) — server qabul qiladigan uchta
+  belgidan biri (`_`, `-`, `.`); o'qilishi eng tabiiy: `texuz.uy`,
+  `texuz.win64`. Device label sanitize qilinadi: faqat
+  `[a-zA-Z0-9_\-]` qoladi.
+- **Raw nickname'ni storage'ga saqlash** — avval `persistEnter`
+  combined nicknamesini (`texuz.mac`) saqlardi. Resume paytida
+  `BackgroundCreatePortal('texuz.mac')` chaqirilardi va
+  `nicknameWithDevice` yana stamp qilardi → `texuz.mac.mac`. Fix:
+  `createPortal` / `joinPortal` raw nickname'ni (`texuz`) saqlaydi,
+  mesh layer'ga combined formni yuboradi. Device label har create'da
+  joriy qiymatdan olinadi — agar foydalanuvchi `mac` → `uy` ga
+  o'zgartirsa keyingi sessiyalar `texuz.uy` bilan announce qilinadi.
+
+### Changed — O'zgartirilgan
+
+- **Frontend `splitNicknameAndDevice`** — endi `'.'` da (avval `'@'`)
+  bo'linadi va oxirgi `'.'` ni topadi, shuning uchun
+  `'john.doe.mac'` to'g'ri parsed: nickname=`'john.doe'`,
+  device=`'mac'`.
+
+## [0.5.2] — 2026-05-08
+
+Patch reliz: device-name bilan auto-resume bog'liq blokerni tuzatish
+va landing page'ni yangilash.
+
+### Fixed — Tuzatilgan xatolar
+
+- **Auto-reconnect server tomonidan bloklanardi** — v0.5.1'da
+  qo'shilgan device-name `'·'` (middle-dot) ni mesh nicknamesiga
+  qo'shardi (`'texuz · mac'`). Deployed signaling server'ning
+  nickname validator'i Unicode glyph'larni va whitespace'ni rad
+  qiladi → `NICKNAME_INVALID` xatosi → `ResumeActiveSessions` har
+  saqlangan owner sessiya uchun fail bo'lardi va yangi portal_id
+  ham olinmasdan rad etilardi. Endi separator `'@'` (server qabul
+  qiladigan ASCII char) va whitespace strip qilinadi: `'texuz@win64'`
+  → server qabul qiladi → auto-resume ishlaydi.
+- Frontend `splitNicknameAndDevice` helper'i wire-format'ni
+  vizual ko'rinishga aylantiradi: `'texuz@uy'` → "texuz · uy"
+  (PeerCard'da username + device'ni alohida pretty-print qiladi).
+
+### Documentation
+
+- `docs/ROOM-CONTROLS-GAPS.md` — yangi bo'lim **Owner-offline portal
+  survival**: foydalanuvchi shikoyatining server-side root cause'i
+  (server owner disconnect bo'lishi bilan portal'ni o'chiradi → yangi
+  portal_id → friends'ning eski code'i ishlamaydi). Server-side
+  yechim sxemasi yozildi: 5-10 daqiqa grace period, ownership
+  transfer fallback.
+
+### Changed — Landing page
+
+- `web/index.html`: eski "6 xonali kod" ga oid matnlar yangilandi.
+- Yangi bo'lim **"v0.5.x da yangi"** — 8 ta feature card (mahalliy
+  hisob, multi-portal, auto-reconnect, approval, device name,
+  LAN qurilmalar, system startup, bandwidth probe).
+- Roadmap to'liq qayta yozildi: 8-bosqich (v0.5.0 + v0.5.1) tugadi
+  belgilandi, 9-bosqich (code signing) jarayonda, 10-bosqich
+  (cloud auth + xona boshqaruvi) keyingi.
+- "Qadamlar" bo'limiga "Hisob yarating" qadami qo'shildi (v0.5.0
+  vault'i sababli).
+
+## [0.5.1] — 2026-05-08
+
+Polish reliz: app icon barcha platformalarda, qurilma nomi (multi-
+device disambiguation), tizim startup'ida avtomatik ishga tushish, va
+landing/release jadvalining stabil URL'lari.
+
+### Added — Yangi imkoniyatlar
+
+- **Windows .ico va Linux ikonkalari** — `build/windows/icon.ico` (6
+  o'lcham: 16/32/48/64/128/256), `build/linux/icon.png`. .exe va Linux
+  desktop'da Portal logosi to'g'ri ko'rinadi (avval default Wails
+  ikonkasi edi).
+- **Qurilma nomi (Device name)** — `Settings → Profil` da yangi maydon.
+  Default platform-derived (`mac` / `win 64` / `linux`); foydalanuvchi
+  `uy` / `ish` / `serverim` ga o'zgartirishi mumkin. Mesh nicknamesi
+  `texuz · uy` ko'rinishida announce qilinadi → bir akkauntdan turli
+  qurilmalar room'da farqlanadi.
+- **Auto-run on system startup** — `Settings → Profil` da toggle.
+  - macOS: `~/Library/LaunchAgents/uz.1pro.portal.plist` LaunchAgent
+  - Windows: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+    registry value
+  - Linux: `~/.config/autostart/portal.desktop` XDG autostart
+  Toggle yoqilsa OS-darajasidagi entry yoziladi; o'chirilsa olib
+  tashlanadi. Saqlangan portallar `ResumeActiveSessions` orqali
+  reboot keyin avtomatik qayta ulanadi.
+
+### Changed — O'zgartirilgan
+
+- **Stabil yuklab olish URL'lari** — Release CI endi assetlarni tag'siz
+  nom bilan paketlaydi: `Portal-darwin-arm64.zip`,
+  `Portal-windows-amd64.zip`, va h.k. README, web/index.html va
+  `release_body.md` jadvallari `releases/latest/download/Portal-<triplet>.<ext>`
+  formatida — har versiya chiqishida URL o'zgarmaydi.
+- **README va landing page tablitsasi** — placeholder `vX.Y.Z`
+  o'rniga to'g'ridan-to'g'ri klikli download linklari, har bir
+  platforma uchun.
+
+### Documentation — Hujjatlar
+
+- `docs/ROOM-CONTROLS-GAPS.md` — multi-device login bo'limi qo'shildi
+  (4-feature). Cloud-auth (HTTP `/api/auth`) signaling server'da
+  deploy qilingach client tomon avtomatik ishlaydi degan reja
+  yozilgan.
+
+## [0.5.0] — 2026-05-08
+
+Katta UX va arxitektura yangilanishi: hisob-vault tizimi, bir nechta
+portalga bir vaqtda ulanish, avtomatik qayta ulanish, foydalanuvchi
+profili, va xavfsizlik gate'lari. Asosiy yo'nalishlar — meeting
+rejimiga yaqin tajriba va session lifecycle ustidan to'liq nazorat.
+
+### Added — Yangi imkoniyatlar
+
+- **Mahalliy hisob (vault) + Lock screen** — har ishga tushishda
+  username + parol gate. bcrypt cost 10, 8-char strong-password
+  policy (lower + upper + digit + special), 5 ta urinishdan keyin
+  30s rate-limit lockout. "Eslab qol" bayrog'i remembered=true
+  bo'lsa keyingi cold start lock'ni o'tkazib yuboradi.
+- **Account-app dashboard** — Welcome ekrani signed-in tajribaga
+  aylantirildi: avatar/nickname pill, Lock screen tabbed Sign-Up /
+  Sign-In, sign-out flow vault'ni qaytadan qulflaydi.
+- **Multi-portal sessions** — bir App bir vaqtda bir nechta portalga
+  ulanishi mumkin. `portalSession` per-portal mesh + forwarder +
+  transfer engine'ni egallaydi; foreground / background sessiyalar
+  Welcome dashboard'ning "Faol ulanishlar" stripida ko'rinadi;
+  PortalHeader'da Layers chip + dropdown bilan portal switcher.
+- **Background-connect** — Welcome'dagi PlugZap tugmalari xonaga
+  kirmasdan portal yaratish/ulash imkonini beradi.
+- **Avtomatik qayta ulanish** — `active_sessions` jadvalga yozilgan
+  sessiyalar app restart paytida unlock keyin avtomatik tiklanadi.
+  Owner sessiyalar yangi portal_id bilan qayta yaratiladi (eski
+  o'lgan); joiner sessiyalar saqlangan id+code bilan urinadi.
+  Exposed servislar har yangi sessionga `restoreExposedServicesFor`
+  orqali qayta announce bo'ladi.
+- **Per-port "tasdiqlab yoqish" (approval gate)** — har servis
+  qatorida shield ikoni bilan toggle. Yoqilgan bo'lsa har peer dial
+  paytida egasiga modal popup chiqadi (kim, qaysi servis, TCP/UDP),
+  Allow/Deny tugmalari bilan. Decision per (peer, port, protocol)
+  sticky cache. 5s TCP / 3s UDP timeout — javobsiz qoldirilsa
+  avtomatik rad etiladi.
+- **Persistent peers** — peer chiqib ketsa A'zolar ro'yxatida offline
+  ko'rinishida qoladi (kulrang dot, opacity-60, "offline" yorlig'i).
+  Hover'da X tugmasi forget uchun. Online qaytsa avtomatik tirilib
+  qaytadi.
+- **Yangi Portal layout** — markaz = "Servislar" grid (siz +
+  peer'lar birga, prominent Ulash tugmalari), o'ng tomon yarmi
+  "Mening servislarim" formasi + LAN scan, yarmi Chat. Chap tomon
+  kengaytirilgan PeerCard — har peer uchun state, RTT, P2P/TURN
+  badge, traffic hisoblari, ICE pair manzillari, "Tezligi" probe.
+- **Settings'ni real ilova qilish** — sidebar nav (Profile / Network
+  / Diagnostics / Files / Activity / History / Logs / About).
+  Profile tab egasi avatar, parolni tiklash, sign-out; Network tab
+  faqat signaling URL + read-only TURN status (Cloudflare/qo'lda
+  TURN UI olib tashlandi — server-side avtomatik beriladi).
+- **Portal nomlash + Recent dedup** — har owner sessiyaga `label`
+  tayinlash mumkin (pencil ikoni). Owner sessiyalari nickname
+  bo'yicha dedup qilinadi. Faol ulanishdagi portallar Recent
+  ro'yxatidan yashiriladi (bir portal ikki joyda ko'rinmaydi).
+- **NVR / kamera workflow** — ServicesPanel formasi Nom / LAN IP /
+  Port / Protocol qatorlariga bo'lindi. Hikvision NVR (SDK :8000)
+  preset, smart-paste IP:port, mesh-port remap (kamera 554 → mesh
+  8554) qo'llab-quvvatlanadi. Inline target editor (pencil) — health
+  uchun aniq maslahat: localhost target bo'lsa "✏️ bilan LAN IP'ga
+  o'zgartiring".
+- **Portal app ikonkasi** — Logo komponenti motivi (binafsha→cyan
+  halqalar + yorug' markaz) static rasterize qilindi. Wails build
+  uni iconfile.icns / appicon.ico ga aylantiradi.
+
+### Changed — O'zgartirilgan
+
+- **TURN sozlamalari UI olib tashlandi** — Cloudflare TURN credentials
+  va manual TURN URL formalari Settings'dan chiqarildi. signaling
+  server `PortalCreated/Joined` event'larida qisqa muddatli ICE
+  servers yuboradi → mesh.applyServerICE avtomatik qo'llaydi.
+  Foydalanuvchi hech narsa sozlashi shart emas. Backward-compat:
+  Go-side `Get/Set/TestCloudflareTurn` metodlari mavjud.
+- **History dedup mantiqi** — Owner qatorlari nickname bo'yicha
+  dedup. Pre-existing duplikatlar keyingi `AddHistory` chaqiruvida
+  bitta qatorga consolidate bo'ladi (label saqlanadi).
+- **Health probe protocol-aware** — TCP service'lar TCP-dial bilan
+  probe qilinadi, UDP service'lar `unknown` deb belgilanadi (UDP'ni
+  protokolsiz tekshirib bo'lmaydi). Friendly xato xabarlari:
+  "qurilma yoqilgan, lekin shu portda servis yo'q", "qurilma o'chiq
+  yoki tarmoqda yo'q", va h.k.
+- **PortalHeader navigation** — "Asosiy" tugmasi (label + arrow-left)
+  prominent, portal'ni uzilmasdan dashboardga qaytaradi. Kichik
+  qizil LogOut ikoni alohida — bu portalni yopish (uzilish). Ilgari
+  ikkalasi bir tugmada edi, foydalanuvchilar tasodifan disconnect
+  qilib qo'yardi.
+- **Landing page** — yuklab olish kartochkalari hero CTA tugmalari
+  ustiga ko'tarildi, har platforma uchun .zip / .tar.gz / .exe
+  yorlig'i bilan ko'rinadi. Versiya pill'i `v0.5.0 · jonli reliz`.
+
+### Fixed — Tuzatilgan xatolar
+
+- **Portal ekrani bo'sh chiqishi** — multi-portal handover'da
+  PortalView'da `SessionID` yo'q bo'lgani sababli `setActiveSession`
+  top-level `portal`'ni `null` qilib qo'yardi. SessionID Go-side
+  struct'ga qo'shildi va store reducer'i mavjud projection'ni
+  saqlaydi.
+- **useShallow on session selectors** — zustand v5 + React 18'da
+  `Object.values(...).map(...)` selector har render'da yangi array
+  yaratardi → "Maximum update depth exceeded" infinite loop.
+  `useShallow` bilan elementwise compare.
+- **History list stale snapshot** — Create/Join keyin RecentPortals
+  qayta yuklanadi (`refreshLists` helper).
+
+### Hujjatlar — Documentation
+
+- `docs/ROOM-CONTROLS-GAPS.md` — server-side talab qiladigan uch
+  feature'ni hujjatlashtirdi: 8-char password format, code
+  regenerate, "ask admin" join mode. Har biri uchun kerak bo'lgan
+  protocol qo'shimchalari yozilgan.
 
 ## [0.4.1] — 2026-05-04
 
@@ -159,7 +560,12 @@ Client mesh dvigateli — Wails'siz CLI test harness.
 
 Signal serveri (xususiy repo'da) ishga tushdi: `signaling.1pro.uz/ws`.
 
-[Unreleased]: https://github.com/Yaxyobek0877/portal_traffic/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Yaxyobek0877/portal_traffic/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.5.4
+[0.5.3]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.5.3
+[0.5.2]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.5.2
+[0.5.1]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.5.1
+[0.5.0]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.5.0
 [0.4.1]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Yaxyobek0877/portal_traffic/releases/tag/v0.3.0

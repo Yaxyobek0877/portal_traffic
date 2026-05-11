@@ -101,6 +101,7 @@ func (s *Store) migrate() error {
 		code        TEXT NOT NULL,
 		nickname    TEXT NOT NULL,
 		is_owner    INTEGER NOT NULL,
+		label       TEXT NOT NULL DEFAULT '',
 		joined_at   INTEGER NOT NULL,
 		last_seen   INTEGER NOT NULL
 	);
@@ -118,22 +119,79 @@ func (s *Store) migrate() error {
 	-- comes online — saves users from having to re-Och every camera /
 	-- game server / dev URL on every session.
 	CREATE TABLE IF NOT EXISTS exposed_services (
-		port      INTEGER NOT NULL,
-		protocol  TEXT NOT NULL,
-		name      TEXT NOT NULL,
-		target    TEXT NOT NULL DEFAULT '',
-		enabled   INTEGER NOT NULL DEFAULT 1,
-		updated_at INTEGER NOT NULL,
+		port             INTEGER NOT NULL,
+		protocol         TEXT NOT NULL,
+		name             TEXT NOT NULL,
+		target           TEXT NOT NULL DEFAULT '',
+		enabled          INTEGER NOT NULL DEFAULT 1,
+		require_approval INTEGER NOT NULL DEFAULT 0,
+		updated_at       INTEGER NOT NULL,
 		PRIMARY KEY (port, protocol)
+	);
+
+	-- Sessions the user wants restored on next launch. Bumped from
+	-- portal_history because semantics differ: history is "I've ever
+	-- been in this portal", active_sessions is "I'm in this portal
+	-- right now and want it back if the app crashes / I close it /
+	-- I reboot". Foreground and background sessions both land here;
+	-- LeavePortal is the only path that drops a row.
+	CREATE TABLE IF NOT EXISTS active_sessions (
+		portal_id   TEXT NOT NULL PRIMARY KEY,
+		code        TEXT NOT NULL DEFAULT '',
+		nickname    TEXT NOT NULL,
+		is_owner    INTEGER NOT NULL,
+		created_at  INTEGER NOT NULL,
+		last_seen   INTEGER NOT NULL
 	);
 	`
 	_, err := s.db.Exec(schema)
 	if err != nil {
 		return fmt.Errorf("storage: migrate: %w", err)
 	}
+
+	// Migration v2: add `label` column to portal_history. ALTER TABLE
+	// ADD COLUMN is idempotent in SQLite if you check first — we ignore
+	// "duplicate column" errors via the column-name probe below so the
+	// migration is safe to re-run on every startup.
+	if !s.columnExists("portal_history", "label") {
+		if _, err := s.db.Exec(
+			`ALTER TABLE portal_history ADD COLUMN label TEXT NOT NULL DEFAULT ''`,
+		); err != nil {
+			return fmt.Errorf("storage: migrate v2 (label): %w", err)
+		}
+	}
+
+	// Migration v4: add `require_approval` column to exposed_services
+	// for the per-port "owner approves each peer dial" gate. Default
+	// 0 (auto-allow) preserves the prior behaviour for everyone with
+	// an existing DB.
+	if !s.columnExists("exposed_services", "require_approval") {
+		if _, err := s.db.Exec(
+			`ALTER TABLE exposed_services ADD COLUMN require_approval INTEGER NOT NULL DEFAULT 0`,
+		); err != nil {
+			return fmt.Errorf("storage: migrate v4 (require_approval): %w", err)
+		}
+	}
+
 	// Stamp the current version (idempotent).
-	_, _ = s.db.Exec(`INSERT OR REPLACE INTO schema_version(version) VALUES(1)`)
+	_, _ = s.db.Exec(`INSERT OR REPLACE INTO schema_version(version) VALUES(4)`)
 	return nil
+}
+
+// columnExists reports whether `column` is already present on `table`,
+// using SQLite's pragma_table_info virtual table. Cheaper than catching
+// the duplicate-column error from ALTER TABLE and means migrations stay
+// declarative.
+func (s *Store) columnExists(table, column string) bool {
+	rows, err := s.db.Query(
+		`SELECT 1 FROM pragma_table_info(?) WHERE name = ?`,
+		table, column,
+	)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	return rows.Next()
 }
 
 // Now is broken out so tests can substitute a frozen clock.

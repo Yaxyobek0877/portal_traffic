@@ -110,12 +110,18 @@ jobs:
           fi
 
       # Package per-OS.
+      # Package per-OS with version-less filenames so the stable
+      # 'releases/latest/download/Portal-<triplet>.<ext>' URLs the
+      # README and landing page link to actually resolve. The release
+      # page still carries the tag in the title, and the .app /
+      # binary inside the archive carries the embedded Version
+      # constant from main.go for the About tab.
       - name: Package macOS .app
         if: runner.os == 'macOS'
         working-directory: ./client
         shell: bash
         run: |
-          NAME="Portal-${{ steps.tag.outputs.tag }}-${{ matrix.target }}.zip"
+          NAME="Portal-${{ matrix.target }}.zip"
           (cd build/bin && zip -r -y "../../$NAME" Portal.app)
           echo "ARTIFACT_PATH=client/$NAME" >> $GITHUB_ENV
 
@@ -124,7 +130,7 @@ jobs:
         working-directory: ./client
         shell: bash
         run: |
-          NAME="Portal-${{ steps.tag.outputs.tag }}-${{ matrix.target }}.tar.gz"
+          NAME="Portal-${{ matrix.target }}.tar.gz"
           (cd build/bin && tar -czf "../../$NAME" Portal)
           echo "ARTIFACT_PATH=client/$NAME" >> $GITHUB_ENV
 
@@ -133,7 +139,7 @@ jobs:
         working-directory: ./client
         shell: bash
         run: |
-          NAME="Portal-${{ steps.tag.outputs.tag }}-${{ matrix.target }}.zip"
+          NAME="Portal-${{ matrix.target }}.zip"
           powershell -Command "Compress-Archive -Path build/bin/Portal.exe -DestinationPath ../$NAME"
           echo "ARTIFACT_PATH=$NAME" >> $GITHUB_ENV
 
@@ -230,7 +236,14 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Portal ${{ steps.tag.outputs.tag }}
           body_path: .github/release_body.md
-          draft: true
+          # draft=false means the release goes live immediately, so
+          # /releases/latest/download/<asset> resolves to the new tag
+          # without a manual "Publish" click in the GitHub UI. The
+          # downside is a build that's mid-upload could be visible for
+          # a few seconds; we accept that — the alternative was the
+          # operator forgetting to publish (which left v0.5.4 stuck on
+          # v0.5.3 for the /download/ proxy until manually flipped).
+          draft: false
           prerelease: ${{ contains(steps.tag.outputs.tag, '-rc') || contains(steps.tag.outputs.tag, '-beta') }}
           files: |
             artifacts/**/*.zip
