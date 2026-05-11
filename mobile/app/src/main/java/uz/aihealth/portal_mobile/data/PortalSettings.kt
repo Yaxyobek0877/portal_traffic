@@ -10,6 +10,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import uz.aihealth.portal_mobile.protocol.portalJson
 import uz.aihealth.portal_mobile.signaling.DEFAULT_SIGNALING_URL
+import uz.aihealth.portal_mobile.turn.CloudflareTurnConfig
+import uz.aihealth.portal_mobile.turn.ManualTurnConfig
 
 @Serializable
 data class RecentPortal(
@@ -29,6 +31,23 @@ private object Keys {
     val NICKNAME = stringPreferencesKey("nickname")
     val SIGNAL_URL = stringPreferencesKey("signal_url")
     val RECENT_PORTALS = stringPreferencesKey("recent_portals")
+
+    // Added in v1.1: language + TURN settings. Defaults are applied at
+    // read time (see corresponding Flow below) so existing installs
+    // don't need a migration.
+    val LANG = stringPreferencesKey("lang")
+    val CF_TURN = stringPreferencesKey("cf_turn")          // JSON
+    val MANUAL_TURN = stringPreferencesKey("manual_turn")  // JSON
+
+    // Added in v1.2: server account session. Token comes from the
+    // Set-Cookie returned by /api/auth/{signup,signin}; we re-attach it
+    // verbatim on later /api/* calls. ACCOUNT_USERNAME and ACCOUNT_USER_ID
+    // are cached so the UI can show "Salom, X" without an /api/me round-trip
+    // on every cold start; the actual identity is re-validated on app
+    // launch via fetchMe(token). Cleared on sign-out or on a 401 from /api/me.
+    val SESSION_TOKEN = stringPreferencesKey("session_token")
+    val ACCOUNT_USERNAME = stringPreferencesKey("account_username")
+    val ACCOUNT_USER_ID = stringPreferencesKey("account_user_id")
 }
 
 private const val MAX_RECENTS = 10
@@ -46,6 +65,24 @@ class PortalSettings(private val context: Context) {
     val signalUrl: Flow<String> = context.portalDataStore.data
         .map { it[Keys.SIGNAL_URL] ?: DEFAULT_SIGNALING_URL }
 
+    /** "uz" or "en"; legacy installs without a stored value default to "uz". */
+    val lang: Flow<String> = context.portalDataStore.data
+        .map { it[Keys.LANG] ?: "uz" }
+
+    val cloudflareTurn: Flow<CloudflareTurnConfig> = context.portalDataStore.data
+        .map { prefs ->
+            prefs[Keys.CF_TURN]
+                ?.let { runCatching { portalJson.decodeFromString<CloudflareTurnConfig>(it) }.getOrNull() }
+                ?: CloudflareTurnConfig()
+        }
+
+    val manualTurn: Flow<ManualTurnConfig> = context.portalDataStore.data
+        .map { prefs ->
+            prefs[Keys.MANUAL_TURN]
+                ?.let { runCatching { portalJson.decodeFromString<ManualTurnConfig>(it) }.getOrNull() }
+                ?: ManualTurnConfig()
+        }
+
     val recentPortals: Flow<List<RecentPortal>> = context.portalDataStore.data
         .map {
             val raw = it[Keys.RECENT_PORTALS] ?: return@map emptyList()
@@ -54,6 +91,17 @@ class PortalSettings(private val context: Context) {
             }.getOrElse { emptyList() }
         }
 
+    /** Server-issued session cookie value, or "" if not signed in. */
+    val sessionToken: Flow<String> = context.portalDataStore.data
+        .map { it[Keys.SESSION_TOKEN].orEmpty() }
+
+    /** Cached username + ID from the last /api/me. Empty when signed out. */
+    val accountUsername: Flow<String> = context.portalDataStore.data
+        .map { it[Keys.ACCOUNT_USERNAME].orEmpty() }
+
+    val accountUserId: Flow<String> = context.portalDataStore.data
+        .map { it[Keys.ACCOUNT_USER_ID].orEmpty() }
+
     suspend fun setNickname(value: String) {
         context.portalDataStore.edit { it[Keys.NICKNAME] = value }
     }
@@ -61,6 +109,39 @@ class PortalSettings(private val context: Context) {
     suspend fun setSignalUrl(value: String) {
         context.portalDataStore.edit { it[Keys.SIGNAL_URL] = value }
     }
+
+    suspend fun setLang(value: String) {
+        context.portalDataStore.edit { it[Keys.LANG] = value }
+    }
+
+    suspend fun setCloudflareTurn(cfg: CloudflareTurnConfig) {
+        context.portalDataStore.edit { it[Keys.CF_TURN] = portalJson.encodeToString(cfg) }
+    }
+
+    suspend fun setManualTurn(cfg: ManualTurnConfig) {
+        context.portalDataStore.edit { it[Keys.MANUAL_TURN] = portalJson.encodeToString(cfg) }
+    }
+
+    /**
+     * Persist the active session. Pass empty strings for token/username/userId
+     * to clear (i.e. on sign-out). All three are stored together — partial
+     * states would only confuse the UI.
+     */
+    suspend fun setSession(token: String, username: String, userId: String) {
+        context.portalDataStore.edit {
+            if (token.isBlank()) {
+                it.remove(Keys.SESSION_TOKEN)
+                it.remove(Keys.ACCOUNT_USERNAME)
+                it.remove(Keys.ACCOUNT_USER_ID)
+            } else {
+                it[Keys.SESSION_TOKEN] = token
+                it[Keys.ACCOUNT_USERNAME] = username
+                it[Keys.ACCOUNT_USER_ID] = userId
+            }
+        }
+    }
+
+    suspend fun clearSession() = setSession("", "", "")
 
     /**
      * Insert/refresh a recent-portal entry. The most recent goes first;

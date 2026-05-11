@@ -27,6 +27,7 @@ import uz.aihealth.portal_mobile.peer.PortalPeerConnection
 import uz.aihealth.portal_mobile.peer.Role
 import uz.aihealth.portal_mobile.peer.WebRtcFactory
 import uz.aihealth.portal_mobile.peer.defaultIceServers
+import org.webrtc.PeerConnection
 import uz.aihealth.portal_mobile.protocol.MessageType
 import uz.aihealth.portal_mobile.protocol.Ping
 import uz.aihealth.portal_mobile.protocol.Pong
@@ -103,6 +104,7 @@ class MeshManager(
     private val scope: CoroutineScope,
     private val nickname: String,
     private val signalingUrl: String = DEFAULT_SIGNALING_URL,
+    private val iceServers: List<PeerConnection.IceServer> = defaultIceServers,
 ) {
     private val factory = WebRtcFactory.get(appContext)
     private var sig = SignalingClient(signalingUrl)
@@ -376,7 +378,7 @@ class MeshManager(
             localPeerId = myPeerId,
             remotePeerId = peerId,
             role = role,
-            iceServers = defaultIceServers,
+            iceServers = iceServers,
         )
         val mp = MeshPeer(peerId, nickname, virtualIp, isOwner, pc)
         peers[peerId] = mp

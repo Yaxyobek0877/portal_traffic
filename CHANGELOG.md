@@ -7,7 +7,95 @@ ga rioya qiladi.
 
 ## [Unreleased]
 
-v0.5.4 dan keyingi ishlanma bu yerga yoziladi.
+v0.5.5 dan keyingi ishlanma bu yerga yoziladi.
+
+## [0.5.5] — 2026-05-11
+
+Sign-in tajribasini brauzergacha kengaytirish va mobile platformani live
+qilish. Foydalanuvchi endi `portal.1pro.uz` web'da ham, Android'da ham,
+desktop'da ham bir xil hisob bilan kirib, o'zining portallarini har uch
+joydan ko'ra oladi. Bundan tashqari mobile birinchi marta to'liq simlangan
+— signaling.1pro.uz `/api/auth/*` ga ulanish, Cloudflare Calls TURN,
+UZ+EN i18n va brendlangan launcher icon bilan.
+
+### Added — Yangi imkoniyatlar
+
+- **Web tomondan jonli sign-in/up** — bosh sahifaning chap ustunidagi
+  forma endi haqiqiy `/api/auth/{signup,signin}` ga POST qiladi:
+  - `web/login.js` validator client-side (3-32 belgi username, 8+ belgi
+    parol) bilan, server xatolari `USERNAME_TAKEN`, `INVALID_CREDENTIALS`,
+    `LOCKED_OUT` field error sifatida chiqadi.
+  - Muvaffaqiyatli kirishdan keyin `/admin/dashboard` ga redirect; allaqachon
+    signed-in tashrif buyuruvchi (`/api/me` 200) formani umuman ko'rmaydi.
+  - Sign-up / Sign-in tab'lari bitta formani rejimga qarab moslaydi;
+    Sign-up'da parol takror maydoni + visibility toggle (`Eye`/`EyeOff`),
+    Sign-in'da yo'q.
+  - `/download/<asset>` brendlangan URL'lar — signaling server
+    `--downloads-base` orqali GitHub Releases'ga 302 qiladi, foydalanuvchi
+    `portal.1pro.uz/download/Portal-darwin-arm64.dmg` ko'rinishdagi
+    havolani ulashishi mumkin.
+- **Persistent userstore** — `server/userstore.go` parollarni Argon2id
+  bilan saqlaydi (`~/.portal-server/users.json` atomic write); per-IP
+  lockout (`golang.org/x/time/rate`), typed error code'lar. Userstore
+  state restartlardan keyin saqlanadi.
+- **Cross-device portallar (account-linked)** — desktop endi cloud
+  hisobiga sign-in qilingan paytda `signaling.1pro.uz/api/portals` ga
+  o'z aktiv portallarini push qiladi; web admin shell (`/admin/dashboard`)
+  brauzerdan turib ularning ro'yxatini ko'rsata oladi. Avvalgi "account
+  linkage isn't wired yet" eslatmasi olib tashlandi.
+- **Parol reveal toggle** — web va desktop sign-in formalarida `Eye` /
+  `EyeOff` ikonali tugma; default `type="password"`.
+- **`Connected` chrome tushirildi** — desktop sarlavhasidagi har vaqtli
+  "Connected" badge realda kam ma'lumotli edi va estetik shovqin keltirar
+  edi. Status barda peer count + transport indicator bor — ular yetarli.
+
+### Mobile — Android ilovasi birinchi marta to'liq simlangan
+
+- **Sign-in / sign-up** — `mobile/.../auth/AuthApi.kt` deployed
+  `/api/auth/{signup,signin,signout,me}` ga gaplashadi. Sessiya cookie
+  `__Host-portal_session` DataStore'da turadi va har so'rovga qayta
+  qo'shiladi.
+- **Forma UI (`AuthScreen.kt`)** — web sign-in/up formasining mirror'i:
+  field-level error mapping (`USERNAME_TAKEN`, `PASSWORD_WEAK`,
+  `LOCKED_OUT` va h.k.), Sign-up'da parol takror, visibility toggle.
+- **Cloudflare Calls TURN** — `mobile/.../turn/` paketi
+  `client/cloudflareturn.go` ning Kotlin nusxasi:
+  `rtc.live.cloudflare.com` ga bitta POST → qisqa muddatli ICE
+  credential (30 daqiqaga cache); Settings'da Cloudflare `TOKEN_ID` +
+  `API_TOKEN` kiritiladi. `MeshManager` resolved server'larni
+  `PeerConnectionFactory` ga uzatadi.
+- **i18n (UZ + EN)** — `i18n/Strings.kt` ikki tilli string jadvali;
+  har ekran `t(key)` orqali o'qiydi; Settings'da locale toggle.
+  Default — Uzbek (desktop bilan bir xil).
+- **Brendlangan launcher icon** — `scripts/gen_icons.py` ishlab chiqaradigan
+  foreground + monochrome PNG mipmap'lar; flat zinc-950 background;
+  `app_name = "Portal"`. Eski material webp + vector drawable'lar olib
+  tashlandi.
+- **Animatsiyali Logo** — `ui/Logo.kt`, frontend Logo'sining Compose
+  porti (besh konsentrik aylanuvchi halqa). Welcome va Auth ekranlarida.
+- **About card** — Settings'da `versionName` ko'rsatadi
+  (`buildConfig = true` orqali generatsiya qilingan).
+- **Hujjatlar** — `mobile/{ARCHITECTURE,BUILDING,INSTALL}.md` +
+  yangilangan README.
+
+### Changed — O'zgartirilgan
+
+- **Update banner i18n** — `update.install`, `update.installing`,
+  `update.install_failed` key'lari (v0.5.4'dan).
+- **Release pipeline** — `.github/workflows/release.yml` endi
+  `draft=false` bilan publish qiladi (avval qo'lda promote kerak edi);
+  web/ assetlar uchun cache-busting query string qo'shiladi.
+
+### Infrastructure
+
+- **Cloudflare Pages auto-deploy** — `web/` papkasining har push'i
+  Cloudflare Pages'da avtomatik build bo'ladi; `/admin/*` URL'lar
+  trailing slash siz ham ishlaydi.
+- **Server'ning private repoga ko'chirishi** — backend
+  (`server/auth_handlers.go`, `userstore.go`, va h.k.) endi alohida
+  `Yaxyobek0877/portal_server` private GitHub repo'sida saqlanadi.
+  Public `portal_traffic` repo'sida `server/` allaqachon `.gitignore`'da
+  edi — endi qachondir kerak bo'lganda fetch qilish mumkin.
 
 ## [0.5.4] — 2026-05-08
 

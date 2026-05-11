@@ -22,11 +22,14 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import uz.aihealth.portal_mobile.data.AuthApi
-import uz.aihealth.portal_mobile.data.AuthSession
+import uz.aihealth.portal_mobile.auth.AuthApi
+import uz.aihealth.portal_mobile.auth.AuthResult
+import uz.aihealth.portal_mobile.auth.MeResult
+import uz.aihealth.portal_mobile.auth.UserInfo
+import uz.aihealth.portal_mobile.auth.apiBaseFromSignal
 import uz.aihealth.portal_mobile.data.PortalSettings
 import uz.aihealth.portal_mobile.data.RecentPortal
-import uz.aihealth.portal_mobile.data.deriveApiBaseUrl
+import uz.aihealth.portal_mobile.i18n.Lang
 import uz.aihealth.portal_mobile.mesh.ChatMessage
 import uz.aihealth.portal_mobile.mesh.MeshManager
 import uz.aihealth.portal_mobile.mesh.MeshState
@@ -37,56 +40,72 @@ import uz.aihealth.portal_mobile.transfer.FileTransfer
 import uz.aihealth.portal_mobile.transfer.TransferEngine
 import uz.aihealth.portal_mobile.transfer.TransferManifest
 import uz.aihealth.portal_mobile.transfer.TransferSink
+import uz.aihealth.portal_mobile.turn.CloudflareTurn
+import uz.aihealth.portal_mobile.turn.CloudflareTurnConfig
+import uz.aihealth.portal_mobile.turn.IceServerResolver
+import uz.aihealth.portal_mobile.turn.ManualTurnConfig
+import uz.aihealth.portal_mobile.turn.TurnTestResult
 import java.io.File
-
-/**
- * Auth status for the lock screen / dashboard gate.
- *
- *  - [Loading]      — boot-time /api/me probe is in flight; UI shows
- *                     a brief skeleton instead of bouncing the user
- *                     back to login on every cold start.
- *  - [Anonymous]    — no valid session; show LockScreen.
- *  - [Authenticated] — show the regular Welcome → Portal flow.
- */
-sealed class AuthState {
-    object Loading : AuthState()
-    object Anonymous : AuthState()
-    data class Authenticated(val username: String) : AuthState()
-}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PortalViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settings = PortalSettings(app)
-    private val authSession = AuthSession(app)
-    private val authApi = AuthApi(authSession) {
-        // Resolve the API base URL from the user-configurable override
-        // first, then derive it from the signaling URL as a fallback.
-        // signalUrl is mutable Compose state so we read it lazily.
-        authSession.resolveApiBaseUrl(deriveApiBaseUrl(signalUrl))
-    }
 
     var nickname by mutableStateOf("")
     var signalUrl by mutableStateOf(DEFAULT_SIGNALING_URL)
 
-    // ---- Web-account auth state ----
-
-    private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
-    val authState: StateFlow<AuthState> = _authState.asStateFlow()
-
-    private val _authError = MutableStateFlow<String?>(null)
-    /** Last sign-in/sign-up error code (e.g. "invalid_credentials"). UI maps to localised text. */
-    val authError: StateFlow<String?> = _authError.asStateFlow()
-
-    private val _authLockoutSeconds = MutableStateFlow(0)
-    /** Server-supplied lockout countdown after too many failed attempts. */
-    val authLockoutSeconds: StateFlow<Int> = _authLockoutSeconds.asStateFlow()
-
-    private val _authBusy = MutableStateFlow(false)
-    val authBusy: StateFlow<Boolean> = _authBusy.asStateFlow()
-
     val recentPortals: StateFlow<List<RecentPortal>> = settings.recentPortals
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * Active language, also persisted. Reflects the user's pick across
+     * process restarts; default is UZ.
+     */
+    private val _lang = MutableStateFlow(Lang.UZ)
+    val lang: StateFlow<Lang> = _lang.asStateFlow()
+
+    /** Persisted Cloudflare TURN credentials. Empty until the user enters them. */
+    private val _cfTurn = MutableStateFlow(CloudflareTurnConfig())
+    val cfTurn: StateFlow<CloudflareTurnConfig> = _cfTurn.asStateFlow()
+
+    /** Last [CloudflareTurn.test] result; null while idle. */
+    private val _cfTurnTest = MutableStateFlow<TurnTestResult?>(null)
+    val cfTurnTest: StateFlow<TurnTestResult?> = _cfTurnTest.asStateFlow()
+
+    /** True while a Cloudflare TURN test request is in flight. */
+    private val _cfTurnTesting = MutableStateFlow(false)
+    val cfTurnTesting: StateFlow<Boolean> = _cfTurnTesting.asStateFlow()
+
+    /** Persisted manual TURN config (URL/user/pass). */
+    private val _manualTurn = MutableStateFlow(ManualTurnConfig())
+    val manualTurn: StateFlow<ManualTurnConfig> = _manualTurn.asStateFlow()
+
+    // ------------------------------------------------------------------------
+    // Account (server-side login)
+    //
+    // Optional layer — Portal's P2P features all work without an account.
+    // Signing in lets the user later get a "my portals" dashboard via the
+    // server's /api/portals endpoint and (eventually) recovery if they
+    // lose their device. Sign-in is exposed via [signIn]/[signUp]; the
+    // resulting session token is cookie material only — we never display
+    // it. Sign-out clears it locally and on the server.
+    // ------------------------------------------------------------------------
+
+    private val authApi = AuthApi()
+
+    /** Currently signed-in user, or null. Restored from settings on init,
+     *  re-validated against the server in the background. */
+    private val _signedInUser = MutableStateFlow<UserInfo?>(null)
+    val signedInUser: StateFlow<UserInfo?> = _signedInUser.asStateFlow()
+
+    /**
+     * False until the cold-start auth resolution finishes. Mandatory-login
+     * mode renders a brief splash while this is false so we don't flash
+     * the AuthScreen for one frame before the cached session loads.
+     */
+    private val _authReady = MutableStateFlow(false)
+    val authReady: StateFlow<Boolean> = _authReady.asStateFlow()
 
     private val _mesh = MutableStateFlow<MeshManager?>(null)
     private val _engine = MutableStateFlow<TransferEngine?>(null)
@@ -107,7 +126,7 @@ class PortalViewModel(app: Application) : AndroidViewModel(app) {
     val chatLog: List<ChatMessage> get() = _chatLog
 
     init {
-        // Pre-fill nickname / signal URL from saved settings on startup.
+        // Pre-fill nickname / signal URL / lang / TURN from saved settings.
         viewModelScope.launch {
             val saved = settings.nickname.first()
             if (saved.isNotEmpty() && nickname.isEmpty()) nickname = saved
@@ -116,142 +135,146 @@ class PortalViewModel(app: Application) : AndroidViewModel(app) {
             val saved = settings.signalUrl.first()
             if (saved.isNotEmpty()) signalUrl = saved
         }
-        // Boot-time auth probe. If we have a saved session cookie, ask
-        // /api/me whether it's still valid; on success we land directly
-        // on Welcome, on 401 the cookie is cleared and we show Lock.
         viewModelScope.launch {
-            val cached = authSession.username.first()
-            val token = authSession.currentToken()
-            if (token.isNullOrEmpty()) {
-                _authState.value = AuthState.Anonymous
-                return@launch
+            settings.lang.collect { _lang.value = Lang.fromCode(it) }
+        }
+        viewModelScope.launch {
+            settings.cloudflareTurn.collect { _cfTurn.value = it }
+        }
+        viewModelScope.launch {
+            settings.manualTurn.collect { _manualTurn.value = it }
+        }
+        // Restore the cached user immediately for a smooth "Salom, X"
+        // welcome on cold start, then re-validate against the server.
+        // For mandatory-login mode the rules are:
+        //   - cached identity present + token valid (200)  → Ok, stay in
+        //   - cached identity present + 401 from server    → evict, force re-auth
+        //   - cached identity present + network blip       → keep cached (offline ok)
+        //   - no cached identity                           → boot to AuthScreen
+        viewModelScope.launch {
+            val cachedUsername = settings.accountUsername.first()
+            val cachedUserId = settings.accountUserId.first()
+            if (cachedUsername.isNotBlank() && cachedUserId.isNotBlank()) {
+                _signedInUser.value = UserInfo(id = cachedUserId, username = cachedUsername)
             }
-            // Optimistically render the cached username while the
-            // network probe runs — feels instantaneous and degrades
-            // gracefully on a slow network.
-            cached?.let { _authState.value = AuthState.Authenticated(it) }
-            when (val r = authApi.me()) {
-                is AuthApi.AuthResult.Success -> {
-                    nickname = if (nickname.isBlank()) r.data.username else nickname
-                    _authState.value = AuthState.Authenticated(r.data.username)
-                }
-                is AuthApi.AuthResult.Failure -> {
-                    // Network failures shouldn't bounce the user out of
-                    // the app — keep the optimistic Authenticated state
-                    // if we already showed it. Only auth-level failures
-                    // (401, 403, server-emitted error codes) drop us
-                    // back to Anonymous.
-                    if (r.code != "network") {
-                        _authState.value = AuthState.Anonymous
-                    } else if (cached == null) {
-                        _authState.value = AuthState.Anonymous
+            val token = settings.sessionToken.first()
+            if (token.isNotBlank()) {
+                val apiBase = apiBaseFromSignal(signalUrl)
+                when (val r = authApi.fetchMe(apiBase, token)) {
+                    is MeResult.Ok -> {
+                        _signedInUser.value = r.user
+                        settings.setSession(token, r.user.username, r.user.id)
+                    }
+                    MeResult.Unauthorized -> {
+                        // Server says the token is dead. Clear local state
+                        // so the gate falls back to AuthScreen.
+                        settings.clearSession()
+                        _signedInUser.value = null
+                    }
+                    MeResult.NetworkError -> {
+                        // Don't punish the user for a flaky network — keep
+                        // whatever was cached. Next /api/me call (after
+                        // they retry an action) will reconcile.
                     }
                 }
             }
+            _authReady.value = true
         }
     }
 
-    // ---- Auth actions ----
+    /**
+     * Last AuthResult — null while idle. Read by AuthScreen to render
+     * server-side errors / lockout countdown / network failures. Cleared
+     * on a fresh attempt or when leaving the screen.
+     */
+    private val _authResult = MutableStateFlow<AuthResult?>(null)
+    val authResult: StateFlow<AuthResult?> = _authResult.asStateFlow()
 
-    fun signUp(username: String, password: String) {
-        if (_authBusy.value) return
-        _authError.value = null
-        _authLockoutSeconds.value = 0
-        viewModelScope.launch {
-            _authBusy.value = true
-            try {
-                when (val r = authApi.signUp(username.trim(), password)) {
-                    is AuthApi.AuthResult.Success -> {
-                        // Username on a brand-new account becomes the
-                        // default Portal nickname so the user doesn't
-                        // have to retype it on Welcome.
-                        if (nickname.isBlank()) {
-                            nickname = r.data.username
-                            settings.setNickname(r.data.username)
-                        }
-                        _authState.value = AuthState.Authenticated(r.data.username)
-                    }
-                    is AuthApi.AuthResult.Failure -> {
-                        _authError.value = r.code
-                    }
-                }
-            } finally {
-                _authBusy.value = false
-            }
-        }
-    }
+    private val _authBusy = MutableStateFlow(false)
+    val authBusy: StateFlow<Boolean> = _authBusy.asStateFlow()
 
     fun signIn(username: String, password: String) {
         if (_authBusy.value) return
-        _authError.value = null
-        _authLockoutSeconds.value = 0
         viewModelScope.launch {
             _authBusy.value = true
-            try {
-                when (val r = authApi.signIn(username.trim(), password)) {
-                    is AuthApi.AuthResult.Success -> {
-                        if (nickname.isBlank()) nickname = r.data.username
-                        _authState.value = AuthState.Authenticated(r.data.username)
-                    }
-                    is AuthApi.AuthResult.Failure -> {
-                        _authError.value = r.code
-                        if (r.code == "locked_out") {
-                            _authLockoutSeconds.value = r.lockoutSeconds.coerceAtLeast(1)
-                            tickLockoutDown()
-                        }
-                    }
-                }
-            } finally {
-                _authBusy.value = false
-            }
+            _authResult.value = null
+            val r = authApi.signIn(apiBaseFromSignal(signalUrl), username, password)
+            applyAuth(r)
+            _authBusy.value = false
+        }
+    }
+
+    fun signUp(username: String, password: String) {
+        if (_authBusy.value) return
+        viewModelScope.launch {
+            _authBusy.value = true
+            _authResult.value = null
+            val r = authApi.signUp(apiBaseFromSignal(signalUrl), username, password)
+            applyAuth(r)
+            _authBusy.value = false
         }
     }
 
     fun signOut() {
         viewModelScope.launch {
-            // Tear down any active mesh first — the user explicitly
-            // asked to sign out, leaving a portal connected behind a
-            // locked UI is a footgun.
-            try { _mesh.value?.leave() } catch (_: Throwable) {}
-            authApi.signOut()
-            _authState.value = AuthState.Anonymous
-        }
-    }
-
-    fun clearAuthError() {
-        _authError.value = null
-    }
-
-    /**
-     * Drive the lockout countdown to zero. Called once when the server
-     * returns a lockout; subsequent ticks happen here on the VM scope
-     * so the UI just reads the StateFlow.
-     */
-    private fun tickLockoutDown() {
-        viewModelScope.launch {
-            while (_authLockoutSeconds.value > 0) {
-                kotlinx.coroutines.delay(1000)
-                _authLockoutSeconds.value = (_authLockoutSeconds.value - 1).coerceAtLeast(0)
+            // Mandatory-login mode: signing out kicks the user back to the
+            // gate, so we also tear down any active mesh — leaving the
+            // foreground service alive while the user is at AuthScreen
+            // would be confusing and waste battery.
+            if (_mesh.value != null) {
+                leave()
             }
+            val token = settings.sessionToken.first()
+            // Fire-and-forget the server call — local sign-out should
+            // happen even if the network drops.
+            launch { authApi.signOut(apiBaseFromSignal(signalUrl), token) }
+            settings.clearSession()
+            _signedInUser.value = null
+            _authResult.value = null
         }
     }
+
+    fun clearAuthResult() {
+        _authResult.value = null
+    }
+
+    private suspend fun applyAuth(r: AuthResult) {
+        _authResult.value = r
+        if (r is AuthResult.Ok) {
+            _signedInUser.value = r.user
+            settings.setSession(r.sessionToken, r.user.username, r.user.id)
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Portal lifecycle
+    //
+    // Both create/join now run inside viewModelScope.launch so we can `await`
+    // the Cloudflare TURN credential fetch before constructing the mesh — a
+    // synchronous mesh.createPortal() while the resolver suspends would
+    // either block the main thread or skip TURN entirely.
+    // ------------------------------------------------------------------------
 
     fun createPortal() {
         if (nickname.isBlank()) return
-        commitNickname()
-        MeshService.start(getApplication(), "Portal yaratilmoqda…")
-        val mesh = ensureMesh()
-        mesh.createPortal()
-        observeForRecent(asOwner = true, joinedId = "", joinedCode = "")
+        viewModelScope.launch {
+            commitNickname()
+            MeshService.start(getApplication(), "Portal yaratilmoqda…")
+            val mesh = ensureMesh()
+            mesh.createPortal()
+            observeForRecent(asOwner = true, joinedId = "", joinedCode = "")
+        }
     }
 
     fun joinPortal(portalId: String, code: String) {
         if (nickname.isBlank() || portalId.isBlank() || code.isBlank()) return
-        commitNickname()
-        MeshService.start(getApplication(), "Portalga ulanmoqda…")
-        val mesh = ensureMesh()
-        mesh.joinPortal(portalId, code)
-        observeForRecent(asOwner = false, joinedId = portalId, joinedCode = code)
+        viewModelScope.launch {
+            commitNickname()
+            MeshService.start(getApplication(), "Portalga ulanmoqda…")
+            val mesh = ensureMesh()
+            mesh.joinPortal(portalId, code)
+            observeForRecent(asOwner = false, joinedId = portalId, joinedCode = code)
+        }
     }
 
     fun rejoinRecent(entry: RecentPortal) {
@@ -318,13 +341,47 @@ class PortalViewModel(app: Application) : AndroidViewModel(app) {
         MeshService.stop(getApplication())
     }
 
-    private fun commitNickname() {
-        viewModelScope.launch { settings.setNickname(nickname.trim()) }
+    // ------------------------------------------------------------------------
+    // Settings: language, signal URL, TURN
+    // ------------------------------------------------------------------------
+
+    fun setLang(value: Lang) {
+        _lang.value = value
+        viewModelScope.launch { settings.setLang(value.code) }
     }
 
     fun saveSignalUrl(value: String) {
         signalUrl = value
         viewModelScope.launch { settings.setSignalUrl(value) }
+    }
+
+    fun saveCloudflareTurn(cfg: CloudflareTurnConfig) {
+        _cfTurn.value = cfg
+        _cfTurnTest.value = null
+        CloudflareTurn.invalidateCache()
+        viewModelScope.launch { settings.setCloudflareTurn(cfg) }
+    }
+
+    fun saveManualTurn(cfg: ManualTurnConfig) {
+        _manualTurn.value = cfg
+        viewModelScope.launch { settings.setManualTurn(cfg) }
+    }
+
+    fun testCloudflareTurn() {
+        if (_cfTurnTesting.value) return
+        viewModelScope.launch {
+            _cfTurnTesting.value = true
+            _cfTurnTest.value = null
+            try {
+                _cfTurnTest.value = CloudflareTurn.test(_cfTurn.value)
+            } finally {
+                _cfTurnTesting.value = false
+            }
+        }
+    }
+
+    private suspend fun commitNickname() {
+        settings.setNickname(nickname.trim())
     }
 
     /** Watch the next Ready transition and persist the portal so the user
@@ -351,14 +408,20 @@ class PortalViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun ensureMesh(): MeshManager {
+    private suspend fun ensureMesh(): MeshManager {
         _mesh.value?.let { return it }
+        // Resolve ICE servers (STUN + Cloudflare-or-Manual TURN) before
+        // constructing the mesh. The Cloudflare path can take ~200ms;
+        // resolveOffline is the synchronous fallback if the user isn't
+        // configured for it.
+        val ice = IceServerResolver.resolve(_cfTurn.value, _manualTurn.value)
         val app = getApplication<Application>()
         val mesh = MeshManager(
             appContext = app,
             scope = viewModelScope,
             nickname = nickname,
             signalingUrl = signalUrl,
+            iceServers = ice,
         )
         viewModelScope.launch {
             mesh.chats.collect { _chatLog.add(it) }

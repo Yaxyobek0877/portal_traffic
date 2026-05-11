@@ -4,27 +4,27 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import uz.aihealth.portal_mobile.i18n.LocalLang
 import uz.aihealth.portal_mobile.mesh.MeshState
-import uz.aihealth.portal_mobile.ui.AuthState
+import uz.aihealth.portal_mobile.ui.AuthScreen
 import uz.aihealth.portal_mobile.ui.JoinScreen
-import uz.aihealth.portal_mobile.ui.LockScreen
+import uz.aihealth.portal_mobile.ui.Logo
 import uz.aihealth.portal_mobile.ui.PortalScreen
 import uz.aihealth.portal_mobile.ui.PortalViewModel
 import uz.aihealth.portal_mobile.ui.SettingsScreen
@@ -52,48 +52,62 @@ private object Routes {
     const val SETTINGS = "settings"
 }
 
+/**
+ * Top-level composition. Mandatory-login mode means the auth gate is
+ * the outermost decision: until the user has a valid session, *only*
+ * AuthScreen is reachable. The internal NavHost (welcome/join/portal/
+ * settings) is mounted only after sign-in.
+ *
+ * Why a top-level if/else and not just a NavHost route — the gate is
+ * stateful and global; routing AUTH inside the same nav graph as the
+ * portal screens would let back-stack history accumulate and create
+ * weird back-button behaviour ("the user signs in then presses back
+ * to land on the auth screen they thought they'd left"). Splitting
+ * the gate from the rest of the app keeps the back stack clean.
+ */
 @Composable
 fun PortalApp(modifier: Modifier = Modifier) {
     val vm: PortalViewModel = viewModel()
-    val authState by vm.authState.collectAsState()
+    val lang by vm.lang.collectAsState()
+    val authReady by vm.authReady.collectAsState()
+    val signedInUser by vm.signedInUser.collectAsState()
 
-    // Auth-state gate sits ABOVE the nav graph: while we don't know
-    // whether the saved cookie is still valid, render a tiny spinner;
-    // once we do, show either LockScreen or the regular Welcome→…
-    // nav graph. Putting the gate above the NavHost (rather than as
-    // a route) means signing out from any screen automatically tears
-    // the whole stack down and rebuilds — no leftover Portal screen
-    // peeking through behind the lock.
-    when (val s = authState) {
-        is AuthState.Loading -> AuthLoadingScreen(modifier)
-        is AuthState.Anonymous -> LockScreen(vm = vm)
-        is AuthState.Authenticated -> SignedInApp(vm = vm, modifier = modifier)
+    CompositionLocalProvider(LocalLang provides lang) {
+        when {
+            !authReady -> SplashScreen(modifier)
+            signedInUser == null -> AuthScreen(
+                vm = vm,
+                // onDone fires when the Auth screen wants to dismiss
+                // itself, but we don't pop anywhere — the gate flips
+                // automatically once vm.signedInUser becomes non-null
+                // and this branch stops being chosen.
+                onDone = {},
+                // Pass the Scaffold's innerPadding through so AuthScreen
+                // doesn't draw under the status bar / system gestures.
+                modifier = modifier,
+            )
+            else -> SignedInApp(vm = vm, modifier = modifier)
+        }
     }
 }
 
 /**
- * Pure spinner scene shown for the half-second between "the cached
- * cookie exists" and "the /api/me probe finished".
+ * Brief splash while we read the cached session and (best-effort) hit
+ * /api/me. Usually < 200 ms; long enough on a cold cache to avoid
+ * flashing the AuthScreen for a frame before the cached identity loads.
  */
 @Composable
-private fun AuthLoadingScreen(modifier: Modifier = Modifier) {
+private fun SplashScreen(modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+        modifier = modifier.fillMaxSize().padding(48.dp),
         contentAlignment = Alignment.Center,
     ) {
-        CircularProgressIndicator()
+        Logo(size = 120.dp)
     }
 }
 
-/**
- * The original WELCOME → JOIN → PORTAL → SETTINGS nav graph, only
- * mounted once the user is signed in. Lifted out of [PortalApp] so
- * the auth gate can swap the whole subtree atomically.
- */
 @Composable
-private fun SignedInApp(vm: PortalViewModel, modifier: Modifier) {
+private fun SignedInApp(vm: PortalViewModel, modifier: Modifier = Modifier) {
     val nav = rememberNavController()
     val meshState by vm.meshState.collectAsState()
 

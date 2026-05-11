@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import uz.aihealth.portal_mobile.i18n.t
 import uz.aihealth.portal_mobile.mesh.ChatMessage
 import uz.aihealth.portal_mobile.mesh.MeshState
 import uz.aihealth.portal_mobile.mesh.PeerSnapshot
@@ -76,13 +77,13 @@ fun PortalScreen(
                         when (val s = state) {
                             is MeshState.Ready ->
                                 if (s.portal.isOwner)
-                                    "Portal: ${s.portal.portalId}"
+                                    t("portal.title.owner", s.portal.portalId)
                                 else
-                                    "Portal ${s.portal.portalId}"
-                            MeshState.Connecting -> "Ulanmoqda…"
-                            is MeshState.Reconnecting -> "Qayta ulanmoqda… (${s.attempt}/8)"
-                            is MeshState.Failed -> "Xatolik"
-                            else -> "Portal"
+                                    t("portal.title.joiner", s.portal.portalId)
+                            MeshState.Connecting -> t("portal.title.connecting")
+                            is MeshState.Reconnecting -> t("portal.title.reconnecting", s.attempt)
+                            is MeshState.Failed -> t("portal.title.error")
+                            else -> t("portal.title.fallback")
                         },
                     )
                 },
@@ -91,7 +92,7 @@ fun PortalScreen(
                         vm.leave()
                         onLeave()
                     }) {
-                        Text("Chiqish")
+                        Text(t("portal.exit"))
                     }
                 },
             )
@@ -132,23 +133,23 @@ private fun HeaderCard(state: MeshState) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     if (info.isOwner) {
-                        ItemRow("Portal ID", info.portalId, mono = true)
+                        ItemRow(t("portal.id_label"), info.portalId, mono = true)
                         Spacer(Modifier.height(4.dp))
-                        ItemRow("Kod", info.code, mono = true)
+                        ItemRow(t("portal.code_label"), info.code, mono = true)
                         Spacer(Modifier.height(12.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                "Bu kodni do'stlaringiz bilan ulashing.",
+                                t("portal.share_code"),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.weight(1f),
                             )
-                            OutlinedButton(onClick = { qrOpen = true }) { Text("QR") }
+                            OutlinedButton(onClick = { qrOpen = true }) { Text(t("portal.qr_button")) }
                         }
                     } else {
-                        ItemRow("Portal ID", info.portalId, mono = true)
+                        ItemRow(t("portal.id_label"), info.portalId, mono = true)
                         Spacer(Modifier.height(4.dp))
-                        ItemRow("Sizning IP", info.ownVip, mono = true)
+                        ItemRow(t("portal.your_ip"), info.ownVip, mono = true)
                     }
                 }
             }
@@ -171,7 +172,7 @@ private fun HeaderCard(state: MeshState) {
                 ),
             ) {
                 Text(
-                    text = "Xato: ${state.reason}",
+                    text = t("portal.error", state.reason),
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
@@ -180,7 +181,7 @@ private fun HeaderCard(state: MeshState) {
 
         MeshState.Connecting -> {
             Text(
-                "Signal serveriga ulanmoqda…",
+                t("portal.connecting_signal"),
                 modifier = Modifier.padding(16.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -196,7 +197,7 @@ private fun HeaderCard(state: MeshState) {
                 ),
             ) {
                 Text(
-                    "Tarmoq vaqtinchalik uzildi. Urinish ${state.attempt}/8…",
+                    t("portal.reconnecting_msg", state.attempt),
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
@@ -233,7 +234,7 @@ private fun PeerListSection(
 ) {
     Column(modifier = modifier.padding(16.dp)) {
         Text(
-            text = if (peers.isEmpty()) "Hech kim ulangan emas" else "Peer'lar (${peers.size})",
+            text = if (peers.isEmpty()) t("portal.no_peers") else t("portal.peers_count", peers.size),
             style = MaterialTheme.typography.titleSmall,
         )
         Spacer(Modifier.height(8.dp))
@@ -250,10 +251,10 @@ private fun PeerRow(peer: PeerSnapshot, onSendFile: (android.net.Uri) -> Unit) {
         if (uri != null) onSendFile(uri)
     }
     val (color, label) = when (peer.state) {
-        PeerState.CONNECTED -> Color(0xFF4CAF50) to "ulangan"
-        PeerState.CONNECTING -> Color(0xFFFFC107) to "ulanmoqda"
-        PeerState.FAILED -> Color(0xFFF44336) to "xato"
-        PeerState.CLOSED -> Color(0xFF9E9E9E) to "yopildi"
+        PeerState.CONNECTED -> Color(0xFF4CAF50) to t("portal.peer.connected")
+        PeerState.CONNECTING -> Color(0xFFFFC107) to t("portal.peer.connecting")
+        PeerState.FAILED -> Color(0xFFF44336) to t("portal.peer.failed")
+        PeerState.CLOSED -> Color(0xFF9E9E9E) to t("portal.peer.closed")
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(color))
@@ -290,12 +291,12 @@ private fun PeerRow(peer: PeerSnapshot, onSendFile: (android.net.Uri) -> Unit) {
 private fun TransferListSection(transfers: List<FileTransfer>, modifier: Modifier = Modifier) {
     Column(modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(
-            text = "Fayllar (${transfers.size})",
+            text = t("portal.transfers_count", transfers.size),
             style = MaterialTheme.typography.titleSmall,
         )
         Spacer(Modifier.height(4.dp))
-        transfers.forEach { t ->
-            TransferRow(t)
+        transfers.forEach { tr ->
+            TransferRow(tr)
             Spacer(Modifier.height(4.dp))
         }
     }
@@ -308,9 +309,9 @@ private fun TransferRow(t: FileTransfer) {
         (t.bytes.toDouble() / t.manifest.size.toDouble() * 100).coerceIn(0.0, 100.0).toInt()
     } else 0
     val sub = when {
-        t.error != null -> "xato: ${t.error}"
-        t.done && t.savePath != null -> "tayyor — ${t.savePath}"
-        t.done -> "tayyor"
+        t.error != null -> uz.aihealth.portal_mobile.i18n.t("portal.transfer.error", t.error!!)
+        t.done && t.savePath != null -> uz.aihealth.portal_mobile.i18n.t("portal.transfer.done_with_path", t.savePath!!)
+        t.done -> uz.aihealth.portal_mobile.i18n.t("portal.transfer.done")
         t.manifest.size > 0 -> "$pct% · ${humanBytes(t.bytes)} / ${humanBytes(t.manifest.size)}"
         else -> humanBytes(t.bytes)
     }
@@ -375,7 +376,7 @@ private fun ChatSection(vm: PortalViewModel, modifier: Modifier = Modifier) {
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
-                placeholder = { Text("Xabar yozing…") },
+                placeholder = { Text(t("portal.chat.placeholder")) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
@@ -387,7 +388,7 @@ private fun ChatSection(vm: PortalViewModel, modifier: Modifier = Modifier) {
                 },
                 enabled = input.isNotBlank(),
             ) {
-                Text("Yuborish")
+                Text(t("portal.chat.send"))
             }
         }
     }
@@ -399,7 +400,7 @@ private fun QrInviteDialog(portalId: String, code: String, onDismiss: () -> Unit
     val bmp = remember(invite) { generateQrBitmap(invite, 600).asImageBitmap() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Portal taklifi") },
+        title = { Text(t("portal.qr.title")) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
@@ -411,7 +412,7 @@ private fun QrInviteDialog(portalId: String, code: String, onDismiss: () -> Unit
                 ) {
                     Image(
                         bitmap = bmp,
-                        contentDescription = "QR taklif",
+                        contentDescription = "QR",
                         modifier = Modifier.fillMaxWidth().padding(8.dp),
                     )
                 }
@@ -424,14 +425,14 @@ private fun QrInviteDialog(portalId: String, code: String, onDismiss: () -> Unit
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "QR ni do'stingizning kamerasiga tutsangiz, portalga to'g'ridan-to'g'ri kiradi.",
+                    t("portal.qr.hint"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Yopish") }
+            TextButton(onClick = onDismiss) { Text(t("common.close")) }
         },
     )
 }
