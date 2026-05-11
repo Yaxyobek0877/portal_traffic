@@ -7,7 +7,34 @@ ga rioya qiladi.
 
 ## [Unreleased]
 
-v0.5.5 dan keyingi ishlanma bu yerga yoziladi.
+v0.5.6 dan keyingi ishlanma bu yerga yoziladi.
+
+## [0.5.6] — 2026-05-11
+
+v0.5.0 dan beri davom etgan **updater "yangilash loop"** xatosi'ni
+yopuvchi point-release. v0.5.5 va undan oldingi relizlarda
+`client/main.go` dagi `Version` konstanta `wails.json`'ning
+`productVersion`'i bilan moslashtirilmagan edi (`v0.5.5` tag'ida
+mos ravishda `"0.5.4"` va `"0.5.5"`'da turdi). Natijada o'rnatilgan
+Portal har gal o'zini eski deb baholab, `update.install` tugmasini
+har bosilganda yangilanish jarayonini takror boshqarib turardi
+("install bosaman → ilova restart bo'ladi → yana 5.5'ni o'rnat
+deydi"). Ushbu reliz ikkala manbani `0.5.6`'ga sinxron qiladi;
+foydalanuvchi v0.5.6'ni bir marta qabul qilgach, keyingi relizlar
+to'g'ri taqqoslanadi.
+
+### Fixed — Tuzatildi
+
+- **`client/main.go: Version` ↔ `wails.json: productVersion`
+  sinxronizatsiyasi.** Endi `"0.5.6"`'da bir xil. Hujjatdagi izoh
+  ham yangilangan — bumpni kelajakda unutib qo'ymaslik uchun
+  release runbook talab qiladi.
+
+### Notes
+
+- Kod tarkibida bu reliz hech qanday yangi xususiyat yoki regressiyani
+  o'z ichiga olmaydi. `v0.5.5` ↔ `v0.5.6` orasidagi yagona o'zgarish
+  ushbu ikki versiya raqami va CHANGELOG entry.
 
 ## [0.5.5] — 2026-05-11
 

@@ -26,7 +26,13 @@ import (
 // Version is the canonical product version. Bump for each release;
 // embedded into Wails app metadata, the Settings → About tab, and
 // the User-Agent string sent to the GitHub Releases API.
-const Version = "0.5.4"
+//
+// IMPORTANT: this constant MUST match `wails.json:productVersion` and
+// the git tag (`vX.Y.Z`). v0.5.0 → v0.5.5 shipped with this number
+// stuck at "0.5.4", which made the in-app updater see itself as
+// permanently outdated against the GitHub `releases/latest` tag and
+// re-prompt for install on every relaunch.
+const Version = "0.5.6"
 
 // keep slog import alive even if main.go shrinks
 var _ = slog.LevelInfo
