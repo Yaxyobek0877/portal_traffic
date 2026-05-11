@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import uz.aihealth.portal_mobile.i18n.t
 
 @Composable
 fun JoinScreen(
@@ -37,6 +38,11 @@ fun JoinScreen(
     var code by remember { mutableStateOf("") }
     var scanError by remember { mutableStateOf<String?>(null) }
 
+    // Localised once at composition time so the lambda doesn't need to
+    // re-call t() from a non-composable scanner callback below.
+    val qrPrompt = t("join.qr_prompt")
+    val qrError = t("join.qr_error")
+
     val scanner = rememberLauncherForActivityResult(ScanContract()) { result ->
         val raw = result.contents
         if (raw.isNullOrBlank()) {
@@ -45,7 +51,7 @@ fun JoinScreen(
         }
         val parsed = parseInvite(raw)
         if (parsed == null) {
-            scanError = "QR ichida 6 raqamli ID va kod topilmadi"
+            scanError = qrError
             return@rememberLauncherForActivityResult
         }
         portalId = parsed.first
@@ -60,14 +66,14 @@ fun JoinScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Portalga qo'shilish", style = MaterialTheme.typography.headlineMedium)
+        Text(t("join.title"), style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(24.dp))
 
         OutlinedButton(
             onClick = {
                 val opts = ScanOptions()
                     .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                    .setPrompt("QR ni kameraga tuting")
+                    .setPrompt(qrPrompt)
                     .setBeepEnabled(false)
                     .setOrientationLocked(false)
                     .setBarcodeImageEnabled(false)
@@ -75,7 +81,7 @@ fun JoinScreen(
             },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("QR kodni skanerlash")
+            Text(t("join.scan_qr"))
         }
         if (scanError != null) {
             Spacer(Modifier.height(8.dp))
@@ -87,7 +93,7 @@ fun JoinScreen(
         }
         Spacer(Modifier.height(20.dp))
         Text(
-            "yoki qo'l bilan kiriting",
+            t("join.or_manual"),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -95,7 +101,7 @@ fun JoinScreen(
         OutlinedTextField(
             value = portalId,
             onValueChange = { portalId = it.filter { c -> c.isDigit() }.take(6) },
-            label = { Text("Portal ID (6 raqam)") },
+            label = { Text(t("join.portal_id_label")) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             modifier = Modifier.fillMaxWidth(),
@@ -104,7 +110,7 @@ fun JoinScreen(
         OutlinedTextField(
             value = code,
             onValueChange = { code = it.filter { c -> c.isDigit() }.take(6) },
-            label = { Text("Kod (6 raqam)") },
+            label = { Text(t("join.code_label")) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             modifier = Modifier.fillMaxWidth(),
@@ -118,11 +124,11 @@ fun JoinScreen(
             enabled = portalId.length == 6 && code.length == 6,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Qo'shilish")
+            Text(t("join.submit"))
         }
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text("Orqaga")
+            Text(t("common.back"))
         }
     }
 }

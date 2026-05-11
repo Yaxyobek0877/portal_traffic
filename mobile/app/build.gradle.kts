@@ -37,6 +37,10 @@ android {
     }
     buildFeatures {
         compose = true
+        // Surfaces versionName/versionCode to Kotlin so the Settings →
+        // About card can show "v1.0" without us having to read PackageInfo
+        // at runtime.
+        buildConfig = true
     }
     packaging {
         resources {

@@ -1,114 +1,136 @@
-# Portal Mobile (Android) — Beta
+# Portal Mobile (Android)
 
-Bu papka Portal'ning Android client'i. **Beta holatida** — desktop versiya
-bilan to'liq simli protokol mosligiga ega, lekin v0.4.0 reliz tarkibiga
-hali kirmaydi.
+Bu papka Portal'ning Android client'i. Desktop versiya bilan to'liq simli
+protokol mosligiga ega — Android peer Wails desktop peer'lari bilan bir
+xil portalda ishtirok eta oladi.
 
-This directory contains Portal's Android client. It is **in beta** —
-fully wire-protocol compatible with the desktop version, but not part
-of the v0.4.0 release.
+This directory holds Portal's Android client. Wire-compatible with the
+desktop client; an Android peer can join a portal alongside Wails
+desktop peers.
+
+---
+
+## Tezkor havolalar / Quick links
+
+- [INSTALL.md](INSTALL.md) — APK ni telefonga yuklash (sideload)
+- [BUILDING.md](BUILDING.md) — manbadan qurish, toolchain, xatolar
+- [ARCHITECTURE.md](ARCHITECTURE.md) — paket-paket Go reference bilan moslik
+- [CLAUDE.md](CLAUDE.md) — Claude Code uchun loyiha qoidalari
 
 ---
 
 ## Hozirgi imkoniyatlar / Current features
 
-- Portal yaratish va qo'shilish (6 xonali ID + kod) / Create and join portal (6-digit ID + code)
-- To'liq mesh WebRTC handshake (desktop bilan birga ishlaydi)
-- Shifrlangan broadcast chat (PBKDF2-SHA256 + NaCl secretbox)
-- RTT heartbeat va peer ro'yxati / RTT heartbeat and peer roster
-- Bo'lakli fayl uzatish / Chunked file transfer
-- QR kod ko'rsatish va skanerlash / QR code display + scan
-- DataStore sozlamalar (taxallus, signal URL, oxirgi 10 portal)
-- Joiner uchun avtomatik qayta ulanish (8 marta, exponential backoff)
-- Foreground service — backgroundga ketganda ulanishni saqlaydi
-
----
+- **Portal yaratish va qo'shilish** (6 xonali ID + kod) / Create and join portal
+- **To'liq mesh WebRTC handshake** — desktop bilan birga ishlaydi
+- **Shifrlangan broadcast chat** (PBKDF2-SHA256 + NaCl secretbox)
+- **RTT heartbeat** va peer ro'yxati
+- **Bo'lakli fayl uzatish** — `.part` faylga oqim, END kelganda renaming
+- **QR kod ko'rsatish va skanerlash** (desktop bilan mos plaintext format)
+- **TURN qo'llab-quvvatlash** — Cloudflare Calls TURN (token‑id + api‑token)
+  va qo'lda TURN (URL/user/pass). Simmetrik NAT (CGNAT, mobile internet)
+  ortida ishlash uchun shart
+- **Til tugmasi** — UZ/EN, har lahza almashtiriladi (DataStore'da saqlanadi)
+- **Yaqindagi portallar** — oxirgi 10 ta, bir tegishda qayta kirish
+- **Joiner uchun avtomatik qayta ulanish** — 8 urinish, exponential backoff
+  (60s gacha), `client/mesh/manager.go attemptReconnect` ga oyna oydek mos
+- **Foreground service** (`MeshService`) — backgroundga ketganda
+  WebSocket/WebRTC ulanishlarini saqlaydi
+- **Adaptive launcher icon** — wormhole motivli, monochrome variant ham
+  bor (Android 13+ themed icons)
 
 ## Hali yo'q / Not yet implemented
 
-- TCP/UDP proxy (`portal expose` / `portal dial`)
-- Servislar paneli (UI)
-- NAT turi aniqlash / NAT type detection
-- Join-by-nick (taxallus orqali so'rov)
-- PCP-1 (Portal Cipher Protocol v1) — desktop'da v0.4.0'da bor;
-  mobile keyingi reliz'da (v0.5.0) PCP-1 ga o'tadi.
-
-Bu rejada / These are planned. Mobile version Portal'ning desktop
-versiyasidan biroz orqada qoladi — bu odatiy hol.
-
----
-
-## v0.4.0 reliz uchun status
-
-Mobile **v0.4.0 GitHub Releases'iga kirmaydi** chunki:
-1. PCP-1 hali mobile'da yo'q (faqat desktop'da). Wire mosligi xaqiqatda
-   bor lekin yangi crypto layer mobile'da ham bo'lishi kerak.
-2. Play Store distributsiyasi alohida pipeline talab qiladi (signing,
-   App Bundle, listing).
-3. Foydalanuvchi tajribasi hali sayqallangani yo'q (icon, splash,
-   permissions ekranlari).
-
-**Reja:** v0.4.1 yoki v0.5.0 bilan birga — Play Store internal testing
-track, keyin closed alpha.
-
-For v0.4.0 release: mobile is **NOT bundled in GitHub Releases**.
-Reasons listed above. Plan is to ship via Play Store internal testing
-track in v0.4.1 or v0.5.0.
+| Mobile | Desktop'dagi nom | Sabab |
+| --- | --- | --- |
+| TCP/UDP proxy ekspoz | `client/proxy/` | UI yo'q; backend yozilishi kerak |
+| Servislar paneli | `ServicesPanel.tsx` | proxy yo'q ekan, UI ham yo'q |
+| NAT turi aniqlash | `client/nat/` | mobile'da STUN classify keyinroq |
+| Join-by-nick | server tomon yangi RPC | server protokoli kengaytirilishi kerak |
+| Loglar viewer + krash hisobotlari | desktop About panel | mobile'da Logcat'dan o'qiladi |
+| PCP-1 (encryption v2) | `client/crypt/pcp/` | desktop v0.4.0'da; mobile v0.5.0 da |
 
 ---
 
-## Build
+## Sinab ko'rish / Quick start
 
-JDK kerak (Android Studio'ning JBR'i tavsiya etiladi):
-JDK required (Android Studio's JBR is recommended):
+### 1. APK ni qurish (manbadan)
 
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 cd mobile
 ./gradlew assembleDebug
-./gradlew installDebug   # connected device/emulator'ga o'rnatish
 ```
 
-Test'lar:
+APK joyi: `app/build/outputs/apk/debug/app-debug.apk` (~50 MB).
+
+Batafsil: [BUILDING.md](BUILDING.md).
+
+### 2. Telefoniga yuklash
 
 ```bash
-./gradlew test                       # host JVM unit tests
-./gradlew connectedAndroidTest       # device required (crypt module needs lazysodium-android)
+adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Toolchain pinlari [CLAUDE.md](CLAUDE.md) da batafsil.
-Toolchain pins detailed in [CLAUDE.md](CLAUDE.md).
+`adb` topilmasa, [INSTALL.md](INSTALL.md) — sideload va USB debugging.
+
+### 3. Birinchi marta ishga tushganda
+
+1. Welcome ekranidan til tanlang (UZ/EN).
+2. Taxallus kiriting.
+3. **Yangi portal yaratish** → 6 xonali ID + kod paydo bo'ladi.
+4. Do'stingiz **Mavjud portalga qo'shilish** ni bosib QR ni skanerlasin
+   yoki ID + kodni yozsin.
+
+Mobile internet (CGNAT) bo'lsa va ulanishlar barbod bo'lsa: Settings →
+Cloudflare TURN qismida Token ID + API Token kiriting (1 TB/oy bepul,
+[Cloudflare Calls](https://developers.cloudflare.com/calls/turn/) dan).
 
 ---
 
-## Sinab ko'rish istagan jasurlar uchun / For brave testers
+## Toolchain pinlari (qisqa)
 
-Hozirgi APK shaxsiy build sifatida ishlatish uchun yetarli darajada
-barqaror. Lekin:
+Mismatchlar build'ni buzadi:
 
-- **Sign qilingan reliz APK yo'q** — debug APK manbadan build
-  qilishingiz kerak.
-- **Auto-update yo'q** — yangi versiya chiqsa qo'lda yangilash kerak.
-- **Crash reporting yo'q** — xato topganingizda iltimos GitHub'da issue
-  oching ([Issue Templates](../.github/ISSUE_TEMPLATE/)).
+| Pin | Qiymat | Joyi |
+| --- | --- | --- |
+| Gradle daemon JDK | 21 | `gradle/gradle-daemon-jvm.properties` |
+| AGP | 9.0.1 (canary) | `gradle/libs.versions.toml` |
+| Kotlin | 2.0.21 | `gradle/libs.versions.toml` |
+| Compose BOM | 2024.09.00 | `gradle/libs.versions.toml` |
+| compileSdk | 36 (minorApiLevel 1) | `app/build.gradle.kts` |
+| minSdk | 26 (Android 8.0) | `app/build.gradle.kts` |
+| WebRTC | `io.getstream:stream-webrtc-android` 1.3.8 | catalog |
 
-The APK is stable enough for personal use as a self-built debug build.
-But: no signed release APK, no auto-update, no crash reporting yet.
-Please file issues if you find bugs.
+To'liq jadval: [BUILDING.md](BUILDING.md#toolchain).
+
+---
+
+## Hujjatlar / Documentation map
+
+```
+mobile/
+├── README.md          ← bu fayl
+├── INSTALL.md         ← APK ni qurilmaga yuklash
+├── BUILDING.md        ← manbadan qurish, troubleshooting
+├── ARCHITECTURE.md    ← paket layout, Go reference moslik jadvali
+└── CLAUDE.md          ← Claude Code uchun loyiha qoidalari
+```
+
+Asosiy loyiha hujjatlari root'da: [`../PROTOCOL.md`](../PROTOCOL.md),
+[`../ARCHITECTURE.md`](../ARCHITECTURE.md), [`../NAT-VA-TURN.md`](../NAT-VA-TURN.md),
+[`../PRIVACY.md`](../PRIVACY.md), [`../SECURITY.md`](../SECURITY.md).
 
 ---
 
 ## Hissa qo'shish / Contributing
 
-Mobile development uchun [CONTRIBUTING.md](../CONTRIBUTING.md) va bu
-papkadagi [CLAUDE.md](CLAUDE.md) ni o'qing. Asosiy qoidalar:
+[`../CONTRIBUTING.md`](../CONTRIBUTING.md) ni o'qing va shu papkadagi
+[CLAUDE.md](CLAUDE.md) ni ham. Asosiy qoidalar:
 
-- Wire protokol o'zgarishi taqiqlanadi (faqat ixtiyoriy maydon qo'shish).
-  Desktop bilan moslik buzilsa, foydalanuvchilar zarar ko'radi.
-- `app/src/main/java/uz/aihealth/portal_mobile/` Go reference'ga oyna
-  oydek mos kelishi kerak (mirror struktura — `protocol/`, `crypt/`,
-  `signaling/`, `peer/`, `mesh/`, `transfer/`).
-
-Read [CONTRIBUTING.md](../CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md) in
-this folder for mobile development. Key rules: no breaking wire
-changes; mirror Go reference structure.
+- **Simli protokol o'zgarishi taqiqlanadi** — faqat ixtiyoriy maydon
+  qo'shish. Renaming/o'chirish desktop bilan moslikni buzadi.
+- **Go reference'ga oyna oydek moslik** — `protocol/`, `crypt/`,
+  `signaling/`, `peer/`, `mesh/`, `transfer/` paketlari `../client/`
+  ostidagi tegishli paketlar bilan bir xil so'zlashishi kerak.
+- **Hujjatlar Uzbekcha** (kod komentariyalari Inglizcha bo'la oladi).

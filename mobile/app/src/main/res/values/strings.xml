@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">portal_mobile</string>
+    <!-- Brand-cased label (Portal, not portal_mobile) so it shows up
+         the same way on the launcher as on the welcome screen. -->
+    <string name="app_name">Portal</string>
 </resources>
