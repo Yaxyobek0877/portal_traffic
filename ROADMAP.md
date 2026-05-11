@@ -72,8 +72,13 @@ Oddiy foydalanuvchi ko'radigan qismlar — Wails + React + TS + Tailwind.
 - [x] **SQLite persistence** — `~/.portal/portal.db` da sozlamalar,
       portal tarixi (oxirgi 50), kontaktlar
 - [x] Welcome ekranida yaqindagi portallar — bir click bilan qayta kirish
-- [ ] UI da avtomatik qayta ulanish ko'rsatkichi (keyin)
-- [ ] Bandwidth grafigi (keyin)
+- [x] **Avtomatik qayta ulanish ko'rsatkichi** — status bar'da transport
+      badge (host / srflx / relay) + peer count; mesh sahifasidagi
+      PeerTable har peer uchun ICE selected-pair tipini ko'rsatadi
+- [x] **Bandwidth metrikasi** — har peer uchun atomic counter + status
+      bar'da yuqi/pastga o'qlar; "Tezligi" tugmasi 32 KB chunk bilan
+      3 sekundlik probe qilib Mbps ko'rsatadi (real-time chart hozircha
+      kechikadi)
 
 ## 5-bosqich — Kuchli imkoniyatlar
 
@@ -93,12 +98,46 @@ Oddiy foydalanuvchi ko'radigan qismlar — Wails + React + TS + Tailwind.
 - [ ] Push-to-talk bilan ovoz kanali (kelajakda)
 - [ ] Demo sifatida o'rnatilgan mini-o'yinlar (kelajakda)
 
+## 6-bosqich — Hisob va Bulut ✅
+
+v0.5.x serial yangilanishlari. Portal endi bitta qurilmaga bog'lanmaydi —
+bir marta hisob ochasiz, va o'sha hisob bilan har joydan o'zingizning
+portallaringizni boshqarasiz.
+
+- [x] **Hisob tizimi** — `signaling.1pro.uz/api/auth/{signup,signin,signout}` +
+      `/api/me`; parol Argon2id bilan hashlanadi, `users.json` atomic
+      write bilan saqlanadi; per-IP lockout brute-force'dan himoyalaydi.
+      Sessiya cookie `__Host-portal_session` (HttpOnly, Secure).
+- [x] **Multi-portal (hisob-vault)** — bir vaqtda bir nechta portalga
+      ulanishingiz mumkin; barchasi sidebar'da turadi va orasida
+      tab bilan o'tasiz.
+- [x] **In-app auto-update** — update banner'dagi "Yangilash" tugmasi
+      yangi releasе'ni yuklab oladi, swap-script bilan binary'ni almashtiradi
+      va dasturni qayta ishga tushiradi. Foydalanuvchi qo'lda DMG / .exe
+      yuklab olib o'rnatishi kerak emas.
+- [x] **Cross-device portallar** — desktop endi sign-in qilingan paytda
+      o'z aktiv portallarini `/api/portals` ga push qiladi. `portal.1pro.uz/admin/dashboard`
+      brauzerdan turib har bir signed-in qurilmangizdagi portallarni ko'rsatadi.
+- [x] **Web sign-in/up** — bosh sahifaning forma'si `/api/auth` ga POST
+      qiladi; allaqachon kirgan tashrif buyuruvchi formani umuman ko'rmaydi.
+      Sign-up'da parol takror + visibility toggle.
+- [x] **Web admin shell (skeleton)** — `/admin/login.html`,
+      `/admin/dashboard.html` static (Cloudflare Pages auto-deploy);
+      real backend wiring (`/api/portals/:id/services`, `service.announce`)
+      keyingi sprintlarda.
+- [x] **Android client** — desktop bilan teng huquqli: sign-in/up,
+      Cloudflare Calls TURN, UZ+EN i18n, brendlangan launcher icon.
+      v0.5.5 da Play Store'dan tashqari APK sifatida tarqatiladi.
+- [ ] iOS client (kelajakda) — Android'dan keyin
+
 ---
 
-5-bosqichdan keyin loyiha asl spetsifikatsiyaga nisbatan funksional
-jihatdan to'liq bo'ladi. Undan keyingi mumkin bo'lgan yo'nalishlar:
+6-bosqichdan keyin loyiha tarmoqlardan tashqari hisob va platforma
+qatlami bilan ham yopilgan bo'ladi. Undan keyingi mumkin bo'lgan
+yo'nalishlar:
 
-- Mobil hamroh ilova (iOS / Android, dastlab faqat ko'rish rejimida)
-- Federated discovery (portal ID larni ixtiyoriy DHT da chop etish, shunda
-  do'stining portalini 6 xonali kodni ulashmasdan topish mumkin)
+- Federated discovery (portal ID larni ixtiyoriy DHT da chop etish,
+  shunda do'stining portalini 6 xonali kodni ulashmasdan topish mumkin)
 - Plugin API — uchinchi tomon ilovalari mesh orqali xizmat ko'rsatishi uchun
+- Push-to-talk ovoz / video kanali
+- Tashqi tarmoqlarga gateway (Tailscale-style subnet routing)
