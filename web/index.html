@@ -177,6 +177,29 @@
     nav.top .links a:not(.cta):not(.cta-outline):not(.gh) { display: none; }
   }
 
+  /* ---------- lang toggle (nav) ---------- */
+  nav.top .lang-toggle {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+  }
+  nav.top .lang-toggle button {
+    padding: 5px 9px;
+    background: transparent;
+    border: none;
+    color: var(--text-faint);
+    cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  nav.top .lang-toggle button:hover { color: var(--text); }
+  nav.top .lang-toggle button.active {
+    background: rgba(139,92,246,.30);
+    color: white;
+  }
+
   /* ---------- hero ---------- */
   section.hero {
     padding: 80px 0 60px;
@@ -875,26 +898,27 @@
       Portal
     </a>
     <div class="links">
-      <a href="#imkoniyatlar">Imkoniyatlar</a>
-      <a href="#yangiliklar">v0.5.x da yangi</a>
-      <a href="#mesh">Mesh</a>
-      <a href="#qadamlar">Qanday ishlaydi</a>
-      <a href="#roadmap">Roadmap</a>
+      <a href="#imkoniyatlar" data-i18n="nav.features">Imkoniyatlar</a>
+      <a href="#yangiliklar" data-i18n="nav.whatsnew">v0.5.x da yangi</a>
+      <a href="#mesh" data-i18n="nav.mesh">Mesh</a>
+      <a href="#qadamlar" data-i18n="nav.how">Qanday ishlaydi</a>
+      <a href="#roadmap" data-i18n="nav.roadmap">Roadmap</a>
       <a class="gh" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">GitHub</a>
-      <!-- Secondary CTA — sends the visitor straight to the login
-           form embedded in the homepage hero (#kirish), rather than
-           jumping to /admin/login (which 404s until the static admin
-           shell is deployed). Visible on every viewport via the
-           cta-outline class. -->
-      <a class="cta-outline" href="#kirish">
+      <!-- Tiny UZ/EN switcher. Persists to portal:lang (same key as
+           the admin dash) so a single choice covers the whole site. -->
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button type="button" data-lang="uz" aria-pressed="true">UZ</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+      <a class="cta-outline" href="/admin/login">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
           <polyline points="10 17 15 12 10 7"/>
           <line x1="15" y1="12" x2="3" y2="12"/>
         </svg>
-        Kirish
+        <span data-i18n="nav.signin">Kirish</span>
       </a>
-      <a class="cta" href="https://github.com/Yaxyobek0877/portal_traffic#install">Yuklab olish</a>
+      <a class="cta" href="https://github.com/Yaxyobek0877/portal_traffic#install" data-i18n="nav.download">Yuklab olish</a>
     </div>
   </div>
 </nav>
@@ -938,54 +962,47 @@
     </div>
 
     <div class="pills">
-      <span class="pill"><span class="dot"></span> signaling.1pro.uz · jonli</span>
-      <span class="pill"><span class="dot"></span> v0.5.0 · jonli reliz</span>
-      <span class="pill amber"><span class="dot"></span> PCP-1 shifrlash</span>
+      <span class="pill"><span class="dot"></span> <span data-i18n="pill.live">signaling.1pro.uz · jonli</span></span>
+      <span class="pill"><span class="dot"></span> <span data-i18n="pill.release">v0.5.0 · jonli reliz</span></span>
+      <span class="pill amber"><span class="dot"></span> <span data-i18n="pill.pcp">PCP-1 shifrlash</span></span>
     </div>
 
-    <h1>To'g'ridan-to'g'ri ulanish.<br/>Orada hech qanday <span class="gradient-text">server yo'q</span>.</h1>
-    <p class="tagline">
+    <h1 data-i18n-html="hero.h1">To'g'ridan-to'g'ri ulanish.<br/>Orada hech qanday <span class="gradient-text">server yo'q</span>.</h1>
+    <p class="tagline" data-i18n-html="hero.tag">
       Portal — qurilmalar o'rtasida xususiy <strong>peer-to-peer mesh</strong> tarmoq quradigan
       desktop dastur. Mahalliy hisob, bir nechta xona bir vaqtda, avtomatik qayta ulanish.
       Chat, fayl, kamera/NVR/o'yin serveri uchun port tunneli — hammasi P2P.
     </p>
 
-    <!-- Prominent download grid — moved above the CTA row per user
-         feedback ("ateparoqda tursa yaxshi edi"). Each tile is its own
-         link to the platform-specific asset on the latest GitHub
-         release; using the /releases/latest/download/<asset> path means
-         the URL stays stable across releases (GitHub rewrites it to the
-         current tag's asset). The mobile tile points at the README
-         since Android currently builds from source. -->
-    <h2 style="font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.18em;color:var(--text-faint);margin:24px 0 12px;text-align:center">
+    <h2 style="font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.18em;color:var(--text-faint);margin:24px 0 12px;text-align:center" data-i18n="hero.dlhead">
       Yuklab olish · Download
     </h2>
     <div class="download-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;max-width:760px;margin:0 auto 28px;font-size:14px">
       <a href="/download/Portal-darwin-arm64.zip" rel="noreferrer" class="download-tile">
         <strong>macOS</strong>
-        <span class="arch">Apple Silicon (M1/M2/M3/M4)</span>
+        <span class="arch" data-i18n="dl.mac.arm.arch">Apple Silicon (M1/M2/M3/M4)</span>
         <span class="asset">.zip · darwin-arm64</span>
       </a>
       <a href="/download/Portal-darwin-amd64.zip" rel="noreferrer" class="download-tile">
         <strong>macOS</strong>
-        <span class="arch">Intel (x86_64)</span>
+        <span class="arch" data-i18n="dl.mac.intel.arch">Intel (x86_64)</span>
         <span class="asset">.zip · darwin-amd64</span>
       </a>
       <a href="/download/Portal-windows-amd64.zip" rel="noreferrer" class="download-tile">
         <strong>Windows</strong>
-        <span class="arch">10 / 11 · 64-bit</span>
+        <span class="arch" data-i18n="dl.win.arch">10 / 11 · 64-bit</span>
         <span class="asset">.exe · windows-amd64</span>
       </a>
       <a href="/download/Portal-linux-amd64.tar.gz" rel="noreferrer" class="download-tile">
         <strong>Linux</strong>
-        <span class="arch">Ubuntu 22.04+ · 64-bit</span>
+        <span class="arch" data-i18n="dl.linux.arch">Ubuntu 22.04+ · 64-bit</span>
         <span class="asset">.tar.gz · linux-amd64</span>
       </a>
     </div>
     <div style="text-align:center;margin-bottom:20px;font-size:12px;color:var(--text-faint)">
-      Barcha relizlar:
+      <span data-i18n="hero.releases">Barcha relizlar:</span>
       <a href="https://github.com/Yaxyobek0877/portal_traffic/releases" rel="noreferrer" style="color:var(--accent);text-decoration:none">github.com/Yaxyobek0877/portal_traffic/releases</a>
-      · <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/mobile/README.md" rel="noreferrer" style="color:var(--text-dim);text-decoration:none">Android (manbadan)</a>
+      · <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/mobile/README.md" rel="noreferrer" style="color:var(--text-dim);text-decoration:none" data-i18n="hero.androidsrc">Android (manbadan)</a>
     </div>
 
     <div class="cta-row">
@@ -995,13 +1012,13 @@
           <polyline points="7 10 12 15 17 10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
-        Reliz sahifasi
+        <span data-i18n="hero.btn.release">Reliz sahifasi</span>
       </a>
       <a class="btn btn-ghost" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
         </svg>
-        GitHub'da ko'rish
+        <span data-i18n="hero.btn.github">GitHub'da ko'rish</span>
       </a>
     </div>
 
@@ -1018,19 +1035,19 @@
   <div class="container">
     <div class="login-shell">
       <div class="login-pitch">
-        <span class="login-soon-badge live"><span class="dot"></span> Mavjud · v0.5.5</span>
-        <h2 style="margin-top:14px">Brauzerdan boshqaring</h2>
-        <p>
+        <span class="login-soon-badge live"><span class="dot"></span> <span data-i18n="login.badge">Mavjud · v0.5.5</span></span>
+        <h2 style="margin-top:14px" data-i18n="login.h2">Brauzerdan boshqaring</h2>
+        <p data-i18n-html="login.p">
           Hisobingizga kirib portal'laringizni, ulangan qurilmalarni va
           ochilgan portlarni <strong>brauzer orqali</strong> nazorat qiling.
           Desktop dasturni ochmasdan ham — telefondan, ish kompyuteringizdan,
           istalgan joydan.
         </p>
         <ul>
-          <li>Faol portallar va ularning ko'rinarli kodlari</li>
-          <li>Online/offline qurilmalar, RTT, ulanish turi (P2P / TURN)</li>
-          <li>Servislarni vaqtinchalik to'xtatish, qayta yoqish</li>
-          <li>Activity log — kim qachon qaysi servisga ulangan</li>
+          <li data-i18n="login.li1">Faol portallar va ularning ko'rinarli kodlari</li>
+          <li data-i18n="login.li2">Online/offline qurilmalar, RTT, ulanish turi (P2P / TURN)</li>
+          <li data-i18n="login.li3">Servislarni vaqtinchalik to'xtatish, qayta yoqish</li>
+          <li data-i18n="login.li4">Activity log — kim qachon qaysi servisga ulangan</li>
         </ul>
       </div>
 
@@ -1042,8 +1059,8 @@
               <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
             </svg>
           </div>
-          <h3>Admin paneliga kirish</h3>
-          <p>Mahalliy hisob — bcrypt parol, sessiya cookie'si <code>__Host-</code> prefiksi bilan.</p>
+          <h3 data-i18n="login.cta.h">Admin paneliga kirish</h3>
+          <p data-i18n-html="login.cta.p">Mahalliy hisob — bcrypt parol, sessiya cookie'si <code>__Host-</code> prefiksi bilan.</p>
         </div>
         <div class="login-cta-actions">
           <a class="btn btn-primary" href="/admin/login">
@@ -1052,7 +1069,7 @@
               <polyline points="10 17 15 12 10 7"/>
               <line x1="15" y1="12" x2="3" y2="12"/>
             </svg>
-            Kirish
+            <span data-i18n="login.cta.in">Kirish</span>
           </a>
           <a class="btn btn-ghost" href="/admin/login#signup">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1061,10 +1078,10 @@
               <line x1="19" y1="8" x2="19" y2="14"/>
               <line x1="16" y1="11" x2="22" y2="11"/>
             </svg>
-            Ro'yxatdan o'tish
+            <span data-i18n="login.cta.up">Ro'yxatdan o'tish</span>
           </a>
         </div>
-        <p class="login-cta-foot">
+        <p class="login-cta-foot" data-i18n="login.cta.foot">
           Akkaunt mahalliy — email kerak emas, parolingiz hech qachon serverga ochiq holda yuborilmaydi.
         </p>
       </aside>
@@ -1075,9 +1092,9 @@
 <!-- =================== imkoniyatlar =================== -->
 <section id="imkoniyatlar">
   <div class="container">
-    <p class="eyebrow reveal">Imkoniyatlar</p>
-    <h2 class="reveal">Bir portal ichida — istalgan narsa.</h2>
-    <p class="lede reveal">Bir marta kod ulashing va do'stlaringiz bilan birga ishlash uchun zarur bo'lgan barcha narsa qo'lingizda. Hech qanday markaziy server, hisob qaydnomasi yoki port forwarding kerak emas.</p>
+    <p class="eyebrow reveal" data-i18n="f.eyebrow">Imkoniyatlar</p>
+    <h2 class="reveal" data-i18n="f.h2">Bir portal ichida — istalgan narsa.</h2>
+    <p class="lede reveal" data-i18n="f.lede">Bir marta kod ulashing va do'stlaringiz bilan birga ishlash uchun zarur bo'lgan barcha narsa qo'lingizda. Hech qanday markaziy server, hisob qaydnomasi yoki port forwarding kerak emas.</p>
 
     <div class="grid">
       <div class="card tilt reveal">
@@ -1086,8 +1103,8 @@
             <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"/><path d="M12 2a15.3 15.3 0 0 0-4 10 15.3 15.3 0 0 0 4 10"/>
           </svg>
         </div>
-        <h3>2 dan 16 qurilmagacha</h3>
-        <p>Portal ID + kod ulashing — do'stlaringiz internetning istalgan joyidan to'g'ridan-to'g'ri qo'shiladi. Router sozlash yo'q, VPN yo'q, port forwarding yo'q.</p>
+        <h3 data-i18n="f1.h">2 dan 16 qurilmagacha</h3>
+        <p data-i18n="f1.p">Portal ID + kod ulashing — do'stlaringiz internetning istalgan joyidan to'g'ridan-to'g'ri qo'shiladi. Router sozlash yo'q, VPN yo'q, port forwarding yo'q.</p>
       </div>
 
       <div class="card tilt reveal">
@@ -1096,8 +1113,8 @@
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
         </div>
-        <h3>Chat va fayl</h3>
-        <p>Guruh chat, shaxsiy xabar, drag-and-drop fayl uzatish. Ma'lumot portal kodidan olingan kalit bilan uchidan-uchiga shifrlanadi.</p>
+        <h3 data-i18n="f2.h">Chat va fayl</h3>
+        <p data-i18n="f2.p">Guruh chat, shaxsiy xabar, drag-and-drop fayl uzatish. Ma'lumot portal kodidan olingan kalit bilan uchidan-uchiga shifrlanadi.</p>
       </div>
 
       <div class="card tilt reveal">
@@ -1106,8 +1123,8 @@
             <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
           </svg>
         </div>
-        <h3>TCP/UDP tunnel</h3>
-        <p>Minecraft serverni <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">localhost:25565</code> da oching, do'stlaringiz <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">10.42.0.3:25565</code> orqali ulanadi.</p>
+        <h3 data-i18n="f3.h">TCP/UDP tunnel</h3>
+        <p data-i18n-html="f3.p">Minecraft serverni <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">localhost:25565</code> da oching, do'stlaringiz <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">10.42.0.3:25565</code> orqali ulanadi.</p>
       </div>
 
       <div class="card tilt reveal">
@@ -1117,8 +1134,8 @@
             <path d="M9 6h6M6 9v6M18 9v6M9 18h6M9 6l9 12M15 6l-9 12"/>
           </svg>
         </div>
-        <h3>Jonli mesh ko'rinish</h3>
-        <p>Kim kim bilan ulangani jonli vizual ko'rinishda. Haqiqiy vaqt RTT, NAT-traversal indikatorlari (to'g'ridan-to'g'ri yoki TURN orqali).</p>
+        <h3 data-i18n="f4.h">Jonli mesh ko'rinish</h3>
+        <p data-i18n="f4.p">Kim kim bilan ulangani jonli vizual ko'rinishda. Haqiqiy vaqt RTT, NAT-traversal indikatorlari (to'g'ridan-to'g'ri yoki TURN orqali).</p>
       </div>
 
       <div class="card tilt reveal">
@@ -1127,8 +1144,8 @@
             <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
           </svg>
         </div>
-        <h3>Ikki qatlam shifrlash</h3>
-        <p>WebRTC DTLS ostida <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/client/crypt/pcp/SPEC.md" style="color:var(--accent-3)">PCP-1</a> — Ed25519 identity + X25519 ephemeral + XChaCha20-Poly1305. Per-pair forward secrecy.</p>
+        <h3 data-i18n="f5.h">Ikki qatlam shifrlash</h3>
+        <p data-i18n-html="f5.p">WebRTC DTLS ostida <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/client/crypt/pcp/SPEC.md" style="color:var(--accent-3)">PCP-1</a> — Ed25519 identity + X25519 ephemeral + XChaCha20-Poly1305. Per-pair forward secrecy.</p>
       </div>
 
       <div class="card tilt reveal">
@@ -1143,8 +1160,8 @@
             <rect x="18" y="18" width="3" height="3"/>
           </svg>
         </div>
-        <h3>QR + portal kod</h3>
-        <p>Yonidagi do'stga QR ni ko'rsating yoki masofadagi do'stga ID + kodni yuboring. Email yoki tashqi ro'yxatdan o'tish yo'q — faqat mahalliy hisob.</p>
+        <h3 data-i18n="f6.h">QR + portal kod</h3>
+        <p data-i18n="f6.p">Yonidagi do'stga QR ni ko'rsating yoki masofadagi do'stga ID + kodni yuboring. Email yoki tashqi ro'yxatdan o'tish yo'q — faqat mahalliy hisob.</p>
       </div>
     </div>
   </div>
@@ -1153,9 +1170,9 @@
 <!-- =================== v0.5.x yangi imkoniyatlar =================== -->
 <section id="yangiliklar" style="background: linear-gradient(180deg, transparent, rgba(139,92,246,.04) 50%, transparent);">
   <div class="container">
-    <p class="eyebrow reveal">v0.5.x da yangi</p>
-    <h2 class="reveal">Bir desktop, <span class="gradient-text">to'liq xona boshqaruvi</span>.</h2>
-    <p class="lede reveal">Oxirgi relizda hisob, multi-portal, avtomatik qayta ulanish va xavfsizlik gate'lari qo'shildi. Hammasi mahalliy — signaling server faqat handshake'da ishtirok etadi.</p>
+    <p class="eyebrow reveal" data-i18n="n.eyebrow">v0.5.x da yangi</p>
+    <h2 class="reveal" data-i18n-html="n.h2">Bir desktop, <span class="gradient-text">to'liq xona boshqaruvi</span>.</h2>
+    <p class="lede reveal" data-i18n="n.lede">Oxirgi relizda hisob, multi-portal, avtomatik qayta ulanish va xavfsizlik gate'lari qo'shildi. Hammasi mahalliy — signaling server faqat handshake'da ishtirok etadi.</p>
 
     <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:32px">
       <div class="card reveal">
@@ -1164,8 +1181,8 @@
             <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
           </svg>
         </div>
-        <h3>Mahalliy hisob</h3>
-        <p>Username + bcrypt parol (8 ta belgi, kuchli). Akkaunt va portal tarixingiz hech qachon serverga jo'natilmaydi.</p>
+        <h3 data-i18n="n1.h">Mahalliy hisob</h3>
+        <p data-i18n="n1.p">Username + bcrypt parol (8 ta belgi, kuchli). Akkaunt va portal tarixingiz hech qachon serverga jo'natilmaydi.</p>
       </div>
 
       <div class="card reveal">
@@ -1175,8 +1192,8 @@
             <circle cx="7" cy="9" r="1.5"/><circle cx="12" cy="9" r="1.5"/><circle cx="17" cy="9" r="1.5"/>
           </svg>
         </div>
-        <h3>Bir nechta xona bir vaqtda</h3>
-        <p>"Fonda ulash" bilan oilaviy + ishxona + o'yin xonalarini parallel oching. Header'dagi switcher bilan o'tib turing.</p>
+        <h3 data-i18n="n2.h">Bir nechta xona bir vaqtda</h3>
+        <p data-i18n="n2.p">"Fonda ulash" bilan oilaviy + ishxona + o'yin xonalarini parallel oching. Header'dagi switcher bilan o'tib turing.</p>
       </div>
 
       <div class="card reveal">
@@ -1185,8 +1202,8 @@
             <path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 10 15 10"/>
           </svg>
         </div>
-        <h3>Avtomatik qayta ulanish</h3>
-        <p>Tizim qayta yuklansa, oldingi sessiyalar va exposed servislar lock'dan chiqishi bilan avtomatik tiklanadi.</p>
+        <h3 data-i18n="n3.h">Avtomatik qayta ulanish</h3>
+        <p data-i18n="n3.p">Tizim qayta yuklansa, oldingi sessiyalar va exposed servislar lock'dan chiqishi bilan avtomatik tiklanadi.</p>
       </div>
 
       <div class="card reveal">
@@ -1196,8 +1213,8 @@
             <path d="M12 8v4M12 16h.01"/>
           </svg>
         </div>
-        <h3>Tasdiqlab yoqish</h3>
-        <p>Har servisga "approval mode" toggle'i. Peer ulanmoqchi bo'lganda sizga modal chiqadi: <em>kim, qaysi servis</em>, ruxsat berasizmi?</p>
+        <h3 data-i18n="n4.h">Tasdiqlab yoqish</h3>
+        <p data-i18n-html="n4.p">Har servisga "approval mode" toggle'i. Peer ulanmoqchi bo'lganda sizga modal chiqadi: <em>kim, qaysi servis</em>, ruxsat berasizmi?</p>
       </div>
 
       <div class="card reveal">
@@ -1206,8 +1223,8 @@
             <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 2v4M16 2v4M2 10h20"/>
           </svg>
         </div>
-        <h3>Qurilma nomi</h3>
-        <p>Bir akkauntdan turli qurilmalardan kirsangiz, room'da <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">texuz · uy</code> ko'rinishida farqlanasiz.</p>
+        <h3 data-i18n="n5.h">Qurilma nomi</h3>
+        <p data-i18n-html="n5.p">Bir akkauntdan turli qurilmalardan kirsangiz, room'da <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">texuz · uy</code> ko'rinishida farqlanasiz.</p>
       </div>
 
       <div class="card reveal">
@@ -1216,8 +1233,8 @@
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
           </svg>
         </div>
-        <h3>LAN qurilmalar (NVR/kamera)</h3>
-        <p>Hikvision NVR'ni LAN'dagi <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">192.168.x.x:554</code> dan mesh orqali do'stga uzating. Mesh-port remap, smart-paste IP:port, health probe.</p>
+        <h3 data-i18n="n6.h">LAN qurilmalar (NVR/kamera)</h3>
+        <p data-i18n-html="n6.p">Hikvision NVR'ni LAN'dagi <code style="font-family:'JetBrains Mono',monospace;color:#22d3ee">192.168.x.x:554</code> dan mesh orqali do'stga uzating. Mesh-port remap, smart-paste IP:port, health probe.</p>
       </div>
 
       <div class="card reveal">
@@ -1226,8 +1243,8 @@
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
         </div>
-        <h3>Tizim startup'i</h3>
-        <p>macOS LaunchAgent / Windows registry / Linux .desktop bilan boot keyin avtomatik ishga tushish — settings'dan toggle.</p>
+        <h3 data-i18n="n7.h">Tizim startup'i</h3>
+        <p data-i18n="n7.p">macOS LaunchAgent / Windows registry / Linux .desktop bilan boot keyin avtomatik ishga tushish — settings'dan toggle.</p>
       </div>
 
       <div class="card reveal">
@@ -1236,8 +1253,8 @@
             <path d="M3 3h18v6H3zM3 15h18v6H3zM7 6h.01M11 6h.01M7 18h.01M11 18h.01"/>
           </svg>
         </div>
-        <h3>Bandwidth probe + path tagi</h3>
-        <p>Har peer kartasida 3-soniyalik bandwidth o'lchov, ICE selected-pair manzillari, LAN/Internet/TURN tagi.</p>
+        <h3 data-i18n="n8.h">Bandwidth probe + path tagi</h3>
+        <p data-i18n="n8.p">Har peer kartasida 3-soniyalik bandwidth o'lchov, ICE selected-pair manzillari, LAN/Internet/TURN tagi.</p>
       </div>
     </div>
   </div>
@@ -1246,9 +1263,9 @@
 <!-- =================== mesh visualization =================== -->
 <section id="mesh" class="mesh-section">
   <div class="container">
-    <p class="eyebrow reveal">Mesh ichida</p>
-    <h2 class="reveal">Har bir peer — boshqa har biriga.</h2>
-    <p class="lede reveal" style="margin-left:auto;margin-right:auto;text-align:left">Tarmoq topologiyasi to'liq mesh: 5 ta qurilmada <strong style="color:var(--text)">10 ta</strong> to'g'ridan-to'g'ri ulanish, 16 ta qurilmada <strong style="color:var(--text)">120 ta</strong>. Server faqat handshake da ishtirok etadi, undan keyin hech qanday rolda emas.</p>
+    <p class="eyebrow reveal" data-i18n="m.eyebrow">Mesh ichida</p>
+    <h2 class="reveal" data-i18n="m.h2">Har bir peer — boshqa har biriga.</h2>
+    <p class="lede reveal" style="margin-left:auto;margin-right:auto;text-align:left" data-i18n-html="m.lede">Tarmoq topologiyasi to'liq mesh: 5 ta qurilmada <strong style="color:var(--text)">10 ta</strong> to'g'ridan-to'g'ri ulanish, 16 ta qurilmada <strong style="color:var(--text)">120 ta</strong>. Server faqat handshake da ishtirok etadi, undan keyin hech qanday rolda emas.</p>
 
     <div class="mesh-stage reveal">
       <svg id="live-mesh" viewBox="0 0 500 400" width="500" height="400" aria-hidden="true">
@@ -1268,15 +1285,15 @@
       <div class="stats-row">
         <div class="stat">
           <div class="num"><span data-count="10" data-suffix="">0</span></div>
-          <div class="label">faol ulanish</div>
+          <div class="label" data-i18n="m.stat1">faol ulanish</div>
         </div>
         <div class="stat">
           <div class="num"><span data-count="0.4" data-suffix="ms">0</span></div>
-          <div class="label">o'rtacha RTT (lokal)</div>
+          <div class="label" data-i18n="m.stat2">o'rtacha RTT (lokal)</div>
         </div>
         <div class="stat">
           <div class="num"><span data-count="4" data-suffix="">0</span></div>
-          <div class="label">data kanal har juftlikka</div>
+          <div class="label" data-i18n="m.stat3">data kanal har juftlikka</div>
         </div>
       </div>
     </div>
@@ -1286,30 +1303,30 @@
 <!-- =================== qadamlar =================== -->
 <section id="qadamlar" style="background: linear-gradient(180deg, transparent, rgba(255,255,255,.015) 50%, transparent);">
   <div class="container">
-    <p class="eyebrow reveal">Qanday ishlaydi</p>
-    <h2 class="reveal">To'rt qadamda <span class="gradient-text">jonli mesh</span>.</h2>
-    <p class="lede reveal">Akkaunt mahalliy — bcrypt-himoyalangan parol bilan, qurilmangizdan tashqariga chiqmaydi. Email yoki tashqi serverda ro'yxatdan o'tish yo'q.</p>
+    <p class="eyebrow reveal" data-i18n="s.eyebrow">Qanday ishlaydi</p>
+    <h2 class="reveal" data-i18n-html="s.h2">To'rt qadamda <span class="gradient-text">jonli mesh</span>.</h2>
+    <p class="lede reveal" data-i18n="s.lede">Akkaunt mahalliy — bcrypt-himoyalangan parol bilan, qurilmangizdan tashqariga chiqmaydi. Email yoki tashqi serverda ro'yxatdan o'tish yo'q.</p>
 
     <div class="steps">
       <div class="step reveal">
-        <h3>Hisob yarating</h3>
-        <p>Birinchi ochishda <strong>username + parol</strong> tanlang (8 ta belgi, kuchli). Keyingi ochishlarda lock screen'dan kirasiz.</p>
+        <h3 data-i18n="s1.h">Hisob yarating</h3>
+        <p data-i18n-html="s1.p">Birinchi ochishda <strong>username + parol</strong> tanlang (8 ta belgi, kuchli). Keyingi ochishlarda lock screen'dan kirasiz.</p>
         <div class="demo">
           <span class="label">user:</span> <span class="id">texuz</span><br/>
           <span class="label">pwd:</span>  <span class="code">••••••••</span>
         </div>
       </div>
       <div class="step reveal">
-        <h3>Portalni oching</h3>
-        <p><strong>"Portal yaratish"</strong> bossangiz yangi xona ID va kod bilan tug'iladi.</p>
+        <h3 data-i18n="s2.h">Portalni oching</h3>
+        <p data-i18n-html="s2.p"><strong>"Portal yaratish"</strong> bossangiz yangi xona ID va kod bilan tug'iladi.</p>
         <div class="demo">
           <span class="label">ID:</span>   <span class="id">428591</span><br/>
           <span class="label">KOD:</span>  <span class="code">739204</span>
         </div>
       </div>
       <div class="step reveal">
-        <h3>Kodni ulashing</h3>
-        <p>Do'stlaringizga raqamlarni yuboring yoki QR kodni ko'rsating.</p>
+        <h3 data-i18n="s3.h">Kodni ulashing</h3>
+        <p data-i18n="s3.p">Do'stlaringizga raqamlarni yuboring yoki QR kodni ko'rsating.</p>
         <div class="demo" style="display:flex;align-items:center;justify-content:center;height:73px">
           <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
@@ -1320,8 +1337,8 @@
         </div>
       </div>
       <div class="step reveal">
-        <h3>Mesh tushadi</h3>
-        <p>Har bir qurilma boshqa har biriga to'g'ridan-to'g'ri ulanadi. Server orqali emas.</p>
+        <h3 data-i18n="s4.h">Mesh tushadi</h3>
+        <p data-i18n="s4.p">Har bir qurilma boshqa har biriga to'g'ridan-to'g'ri ulanadi. Server orqali emas.</p>
         <div class="demo">
           <span class="label">texuz · uy</span> ↔ <span class="label">alice · ish</span> · <span class="id">0.4ms</span><br/>
           <span class="label">texuz · uy</span> ↔ <span class="label">bob · mac</span> · <span class="id">0.6ms</span><br/>
@@ -1335,13 +1352,13 @@
 <!-- =================== install =================== -->
 <section id="install">
   <div class="container">
-    <p class="eyebrow reveal">Boshlash</p>
-    <h2 class="reveal">Uchta buyruq, mesh tayyor.</h2>
-    <p class="lede reveal">Desktop binary tayyor (Wails + React). CLI test harness ham to'liq mesh ni quradi va RTT ni ko'rsatadi — har ikkala yo'l ham ishlaydi.</p>
+    <p class="eyebrow reveal" data-i18n="i.eyebrow">Boshlash</p>
+    <h2 class="reveal" data-i18n="i.h2">Uchta buyruq, mesh tayyor.</h2>
+    <p class="lede reveal" data-i18n="i.lede">Desktop binary tayyor (Wails + React). CLI test harness ham to'liq mesh ni quradi va RTT ni ko'rsatadi — har ikkala yo'l ham ishlaydi.</p>
 
     <div class="install-card reveal">
       <div class="head">
-        <span>terminal · clone va build</span>
+        <span data-i18n="i.head">terminal · clone va build</span>
         <button class="copy" data-copy="git clone https://github.com/Yaxyobek0877/portal_traffic.git
 cd portal_traffic/client
 go run ./cmd/portal-cli -mode create -nick alice">copy</button>
@@ -1358,7 +1375,7 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
     -portal &lt;ID&gt; -code &lt;KOD&gt;</pre>
     </div>
 
-    <p style="color: var(--text-dim); font-size: 14px; margin-top: 12px;">
+    <p style="color: var(--text-dim); font-size: 14px; margin-top: 12px;" data-i18n-html="i.foot">
       Standart endpoint: <code style="font-family:'JetBrains Mono',monospace;color:var(--accent-3)">wss://signaling.1pro.uz/ws</code>.
       O'zingizniki ishlatish uchun <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/PROTOCOL.md" style="color:var(--accent-3)">PROTOCOL.md</a> ga qarang.
     </p>
@@ -1368,70 +1385,70 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
 <!-- =================== roadmap =================== -->
 <section id="roadmap">
   <div class="container">
-    <p class="eyebrow reveal">Joriy holat</p>
-    <h2 class="reveal">Bosqichma-bosqich quriladi.</h2>
-    <p class="lede reveal">Birinchi sakkiz bosqich tugadi — Portal funksional jihatdan to'liq. Har bir bosqich ishlaydigan to'xtash nuqtasi: oldingisi tasdiqlangan tarzda ishlamasdan turib keyingisiga o'tilmaydi.</p>
+    <p class="eyebrow reveal" data-i18n="r.eyebrow">Joriy holat</p>
+    <h2 class="reveal" data-i18n="r.h2">Bosqichma-bosqich quriladi.</h2>
+    <p class="lede reveal" data-i18n="r.lede">Birinchi sakkiz bosqich tugadi — Portal funksional jihatdan to'liq. Har bir bosqich ishlaydigan to'xtash nuqtasi: oldingisi tasdiqlangan tarzda ishlamasdan turib keyingisiga o'tilmaydi.</p>
 
     <div class="roadmap">
       <div class="roadmap-row reveal">
         <span class="num">01</span>
-        <span class="name">Signal magistrali<span class="desc">Portal lifecycle, WebRTC SDP/ICE relay, TLS, rate-limiting</span></span>
-        <span class="status done">tugadi</span>
+        <span class="name"><span data-i18n="r1.n">Signal magistrali</span><span class="desc" data-i18n="r1.d">Portal lifecycle, WebRTC SDP/ICE relay, TLS, rate-limiting</span></span>
+        <span class="status done" data-i18n="r.status.done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">02</span>
-        <span class="name">Client yadrosi<span class="desc">pion/webrtc, multipleks data channel, full mesh, heartbeat</span></span>
-        <span class="status done">tugadi</span>
+        <span class="name"><span data-i18n="r2.n">Client yadrosi</span><span class="desc" data-i18n="r2.d">pion/webrtc, multipleks data channel, full mesh, heartbeat</span></span>
+        <span class="status done" data-i18n="r.status.done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">03</span>
-        <span class="name">Desktop UI<span class="desc">Wails + React, welcome ekrani, animatsiyali mesh diagrammasi, chat, QR</span></span>
-        <span class="status done">tugadi</span>
+        <span class="name"><span data-i18n="r3.n">Desktop UI</span><span class="desc" data-i18n="r3.d">Wails + React, welcome ekrani, animatsiyali mesh diagrammasi, chat, QR</span></span>
+        <span class="status done" data-i18n="r.status.done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">04</span>
-        <span class="name">Sayqal<span class="desc">NAT detection, fayl uzatish, sozlamalar, SQLite, yaqindagi portallar</span></span>
-        <span class="status done">tugadi</span>
+        <span class="name"><span data-i18n="r4.n">Sayqal</span><span class="desc" data-i18n="r4.d">NAT detection, fayl uzatish, sozlamalar, SQLite, yaqindagi portallar</span></span>
+        <span class="status done" data-i18n="r.status.done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">05</span>
-        <span class="name">Kuchli imkoniyatlar<span class="desc">TCP/UDP proxy, secretbox shifrlash, bandwidth metrikasi, peer table</span></span>
-        <span class="status done">tugadi</span>
+        <span class="name"><span data-i18n="r5.n">Kuchli imkoniyatlar</span><span class="desc" data-i18n="r5.d">TCP/UDP proxy, secretbox shifrlash, bandwidth metrikasi, peer table</span></span>
+        <span class="status done" data-i18n="r.status.done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">06</span>
-        <span class="name">v0.4.0 launch<span class="desc">PCP-1 shifrlash, MIT litsenziya, GitHub Actions CI/CD, Privacy/Terms, mobile (Android) beta</span></span>
-        <span class="status done">tugadi</span>
+        <span class="name"><span data-i18n="r6.n">v0.4.0 launch</span><span class="desc" data-i18n="r6.d">PCP-1 shifrlash, MIT litsenziya, GitHub Actions CI/CD, Privacy/Terms, mobile (Android) beta</span></span>
+        <span class="status done" data-i18n="r.status.done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">07</span>
-        <span class="name">v0.5.0 — meeting tajribasi<span class="desc">Mahalliy hisob (vault), multi-portal sessiyalar, background-connect, avtomatik qayta ulanish, per-port approval gate, persistent peers</span></span>
-        <span class="status done">tugadi</span>
+        <span class="name"><span data-i18n="r7.n">v0.5.0 — meeting tajribasi</span><span class="desc" data-i18n="r7.d">Mahalliy hisob (vault), multi-portal sessiyalar, background-connect, avtomatik qayta ulanish, per-port approval gate, persistent peers</span></span>
+        <span class="status done" data-i18n="r.status.done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">08</span>
-        <span class="name">v0.5.1 — desktop polish<span class="desc">App icons (mac/win/linux), qurilma nomi, system startup auto-run, stabil download URL'lari</span></span>
-        <span class="status done">tugadi</span>
+        <span class="name"><span data-i18n="r8.n">v0.5.1 — desktop polish</span><span class="desc" data-i18n="r8.d">App icons (mac/win/linux), qurilma nomi, system startup auto-run, stabil download URL'lari</span></span>
+        <span class="status done" data-i18n="r.status.done">tugadi</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">09</span>
-        <span class="name">Code signing<span class="desc">Apple Developer ID + Authenticode — Gatekeeper / SmartScreen ogohlantirishlarini olib tashlash</span></span>
-        <span class="status wip">jarayonda</span>
+        <span class="name"><span data-i18n="r9.n">Code signing</span><span class="desc" data-i18n="r9.d">Apple Developer ID + Authenticode — Gatekeeper / SmartScreen ogohlantirishlarini olib tashlash</span></span>
+        <span class="status wip" data-i18n="r.status.wip">jarayonda</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">10</span>
-        <span class="name">Cloud auth + xona boshqaruvi<span class="desc">Server-side /api/auth (multi-device login), kod regenerate, "ask admin" join mode, owner-offline portal-survival</span></span>
-        <span class="status next">keyin</span>
+        <span class="name"><span data-i18n="r10.n">Cloud auth + xona boshqaruvi</span><span class="desc" data-i18n="r10.d">Server-side /api/auth (multi-device login), kod regenerate, "ask admin" join mode, owner-offline portal-survival</span></span>
+        <span class="status next" data-i18n="r.status.next">keyin</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">11</span>
-        <span class="name">Mobile (Android) reliz<span class="desc">Play Store internal track, PCP-1 portativ, signed APK</span></span>
-        <span class="status next">keyin</span>
+        <span class="name"><span data-i18n="r11.n">Mobile (Android) reliz</span><span class="desc" data-i18n="r11.d">Play Store internal track, PCP-1 portativ, signed APK</span></span>
+        <span class="status next" data-i18n="r.status.next">keyin</span>
       </div>
       <div class="roadmap-row reveal">
         <span class="num">12</span>
-        <span class="name">Kelajak<span class="desc">Ovoz/video kanali (WebRTC media), iOS, plugin API</span></span>
-        <span class="status next">keyin</span>
+        <span class="name"><span data-i18n="r12.n">Kelajak</span><span class="desc" data-i18n="r12.d">Ovoz/video kanali (WebRTC media), iOS, plugin API</span></span>
+        <span class="status next" data-i18n="r.status.next">keyin</span>
       </div>
     </div>
   </div>
@@ -1441,13 +1458,13 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
 <section>
   <div class="container">
     <div class="big-cta reveal">
-      <h2>Loyihaga qarshing.</h2>
-      <p>Kod ochiq. Issue oching, patch yuboring, yoki o'zingizning fork ni quring.</p>
+      <h2 data-i18n="bigcta.h">Loyihaga qarshing.</h2>
+      <p data-i18n="bigcta.p">Kod ochiq. Issue oching, patch yuboring, yoki o'zingizning fork ni quring.</p>
       <div class="cta-row">
-        <a class="btn btn-primary" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">
+        <a class="btn btn-primary" href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer" data-i18n="bigcta.repo">
           GitHub Repo
         </a>
-        <a class="btn btn-ghost" href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/CONTRIBUTING.md" target="_blank" rel="noreferrer">
+        <a class="btn btn-ghost" href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/CONTRIBUTING.md" target="_blank" rel="noreferrer" data-i18n="bigcta.contrib">
           Hissa qo'shish
         </a>
       </div>
@@ -1460,13 +1477,13 @@ go <span class="k">run</span> ./cmd/portal-cli -mode join -nick bob \
     <div>© 2026 Portal · 1pro.uz · MIT</div>
     <div class="links">
       <a href="https://github.com/Yaxyobek0877/portal_traffic" target="_blank" rel="noreferrer">GitHub</a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/ROADMAP.md" target="_blank" rel="noreferrer">Roadmap</a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/ARCHITECTURE.md" target="_blank" rel="noreferrer">Arxitektura</a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/PROTOCOL.md" target="_blank" rel="noreferrer">Protokol</a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/ROADMAP.md" target="_blank" rel="noreferrer" data-i18n="ft.roadmap">Roadmap</a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/ARCHITECTURE.md" target="_blank" rel="noreferrer" data-i18n="ft.arch">Arxitektura</a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/PROTOCOL.md" target="_blank" rel="noreferrer" data-i18n="ft.proto">Protokol</a>
       <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/client/crypt/pcp/SPEC.md" target="_blank" rel="noreferrer">PCP-1</a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/SECURITY.md" target="_blank" rel="noreferrer">Xavfsizlik</a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/PRIVACY.md" target="_blank" rel="noreferrer">Maxfiylik</a>
-      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/TERMS.md" target="_blank" rel="noreferrer">Shartlar</a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/SECURITY.md" target="_blank" rel="noreferrer" data-i18n="ft.security">Xavfsizlik</a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/PRIVACY.md" target="_blank" rel="noreferrer" data-i18n="ft.privacy">Maxfiylik</a>
+      <a href="https://github.com/Yaxyobek0877/portal_traffic/blob/main/TERMS.md" target="_blank" rel="noreferrer" data-i18n="ft.terms">Shartlar</a>
     </div>
   </div>
 </footer>
