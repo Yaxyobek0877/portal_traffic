@@ -1,32 +1,93 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#8b5cf6"/>
-      <stop offset="60%" stop-color="#6366f1"/>
+      <stop offset="55%" stop-color="#6366f1"/>
       <stop offset="100%" stop-color="#22d3ee"/>
     </linearGradient>
-    <radialGradient id="bgGlow" cx="50%" cy="40%" r="60%">
-      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.25"/>
+    <radialGradient id="glow1" cx="20%" cy="20%" r="55%">
+      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30"/>
       <stop offset="100%" stop-color="#0a0e1a" stop-opacity="0"/>
     </radialGradient>
+    <radialGradient id="glow2" cx="85%" cy="80%" r="55%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#0a0e1a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="40%" stop-color="#a78bfa" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="textGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#c9cfde"/>
+    </linearGradient>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="gridFade" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="80%" stop-color="#000000"/>
+    </radialGradient>
+    <mask id="gridMask">
+      <rect width="1200" height="630" fill="url(#gridFade)"/>
+    </mask>
   </defs>
-  <rect width="1200" height="630" fill="#0a0e1a"/>
-  <rect width="1200" height="630" fill="url(#bgGlow)"/>
 
-  <!-- Wormhole logo -->
-  <g transform="translate(180,200)">
-    <circle cx="100" cy="100" r="92" fill="none" stroke="url(#g)" stroke-width="2" stroke-dasharray="3 9" opacity="0.5"/>
-    <circle cx="100" cy="100" r="74" fill="none" stroke="url(#g)" stroke-width="2.4" stroke-dasharray="6 4" opacity="0.7"/>
-    <circle cx="100" cy="100" r="56" fill="none" stroke="url(#g)" stroke-width="3" stroke-dasharray="2 6" opacity="0.85"/>
-    <circle cx="100" cy="100" r="38" fill="none" stroke="url(#g)" stroke-width="3.6" stroke-dasharray="14 6"/>
-    <circle cx="100" cy="100" r="14" fill="url(#g)" opacity="0.6"/>
-    <circle cx="100" cy="100" r="6"  fill="#fff"/>
+  <!-- Background layers: deep base + two ambient radial gradients + subtle grid -->
+  <rect width="1200" height="630" fill="#0a0e1a"/>
+  <rect width="1200" height="630" fill="url(#glow1)"/>
+  <rect width="1200" height="630" fill="url(#glow2)"/>
+  <rect width="1200" height="630" fill="url(#grid)" mask="url(#gridMask)"/>
+
+  <!-- Wormhole logo: 5 concentric dashed rings + glowing core. The
+       same shape every Portal surface uses (favicon, navbar, this OG). -->
+  <g transform="translate(180,170)">
+    <circle cx="145" cy="145" r="138" fill="none" stroke="url(#g)" stroke-width="1.6" stroke-dasharray="3 9"  opacity="0.45"/>
+    <circle cx="145" cy="145" r="118" fill="none" stroke="url(#g)" stroke-width="2"   stroke-dasharray="6 4"  opacity="0.62"/>
+    <circle cx="145" cy="145" r="94"  fill="none" stroke="url(#g)" stroke-width="2.4" stroke-dasharray="2 6"  opacity="0.78"/>
+    <circle cx="145" cy="145" r="70"  fill="none" stroke="url(#g)" stroke-width="3.2" stroke-dasharray="14 6"/>
+    <circle cx="145" cy="145" r="46"  fill="none" stroke="url(#g)" stroke-width="2.6" opacity="0.7"/>
+    <circle cx="145" cy="145" r="40"  fill="url(#coreGlow)"/>
+    <circle cx="145" cy="145" r="18"  fill="url(#coreGlow)" opacity="0.9"/>
+    <circle cx="145" cy="145" r="8"   fill="#ffffff"/>
   </g>
 
-  <!-- Text -->
-  <text x="460" y="280" fill="white" font-family="Inter, system-ui, sans-serif" font-weight="800" font-size="92" letter-spacing="-3">Portal</text>
-  <text x="460" y="335" fill="#98a2b3" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="28">P2P mesh tarmoq · 1pro.uz</text>
+  <!-- Title block -->
+  <text x="525" y="240" fill="url(#textGrad)" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="800" font-size="108" letter-spacing="-4">Portal</text>
 
-  <text x="460" y="430" fill="white" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="34" opacity="0.95">To'g'ridan-to'g'ri ulanish.</text>
-  <text x="460" y="475" fill="white" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="34" opacity="0.95">Orada hech qanday server yo'q.</text>
+  <!-- "Live" pill under the title -->
+  <g transform="translate(525,272)">
+    <rect width="340" height="32" rx="16" fill="rgba(139,92,246,0.12)" stroke="rgba(139,92,246,0.40)" stroke-width="1"/>
+    <circle cx="18" cy="16" r="4" fill="#22c55e"/>
+    <text x="32" y="22" fill="#c7b8ff" font-family="JetBrains Mono, ui-monospace, monospace" font-weight="600" font-size="14" letter-spacing="0.6">P2P mesh · signaling.1pro.uz</text>
+  </g>
+
+  <!-- Headline (two lines) -->
+  <text x="525" y="378" fill="#ffffff" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="700" font-size="40" letter-spacing="-1.2">To'g'ridan-to'g'ri ulanish.</text>
+  <text x="525" y="428" fill="#ffffff" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="700" font-size="40" letter-spacing="-1.2">Orada hech qanday <tspan fill="url(#g)">server yo'q</tspan>.</text>
+
+  <!-- Feature chips row -->
+  <g transform="translate(525,468)" font-family="JetBrains Mono, ui-monospace, monospace" font-size="14" font-weight="500">
+    <g>
+      <rect width="120" height="28" rx="14" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.10)"/>
+      <text x="14" y="19" fill="#98a2b3">16 peers</text>
+    </g>
+    <g transform="translate(132,0)">
+      <rect width="142" height="28" rx="14" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.10)"/>
+      <text x="14" y="19" fill="#98a2b3">PCP-1 + DTLS</text>
+    </g>
+    <g transform="translate(290,0)">
+      <rect width="170" height="28" rx="14" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.10)"/>
+      <text x="14" y="19" fill="#98a2b3">TCP / UDP tunnel</text>
+    </g>
+    <g transform="translate(476,0)">
+      <rect width="170" height="28" rx="14" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.10)"/>
+      <text x="14" y="19" fill="#98a2b3">Mahalliy hisob</text>
+    </g>
+  </g>
+
+  <!-- Footer URL -->
+  <text x="525" y="560" fill="#5b6479" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="18" letter-spacing="0.3">portal.1pro.uz · MIT · ochiq kod</text>
 </svg>

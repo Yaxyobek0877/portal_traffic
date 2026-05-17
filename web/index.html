@@ -7,20 +7,94 @@
 
 <title>Portal — to'g'ridan-to'g'ri ulanish, orada server yo'q</title>
 <meta name="description" content="Portal — peer-to-peer mesh tarmoq dasturi. Mahalliy hisob, bir nechta portal bir vaqtda, avtomatik qayta ulanish. 16 tagacha qurilma to'g'ridan-to'g'ri ulanadi: chat, fayl, port tunnel (kamera/NVR/o'yin server). Signal serveri faqat handshake uchun." />
+<meta name="keywords" content="P2P, mesh tarmoq, peer-to-peer, WebRTC, NAT traversal, port tunnel, VPN alternativa, mahalliy hisob, signaling server, PCP-1, end-to-end shifrlash, NVR, IP kamera, Minecraft server, Portal 1pro, signaling.1pro.uz, portal.1pro.uz" />
+<meta name="author" content="Portal · 1pro.uz" />
+<meta name="application-name" content="Portal" />
+<meta name="apple-mobile-web-app-title" content="Portal" />
+<link rel="canonical" href="https://portal.1pro.uz/" />
 
-<meta property="og:title" content="Portal — P2P mesh tarmoq" />
-<meta property="og:description" content="To'g'ridan-to'g'ri ulanish. Orada hech qanday server yo'q." />
+<!-- Open Graph (Facebook, Telegram, WhatsApp, LinkedIn, etc.) -->
+<meta property="og:title" content="Portal — to'g'ridan-to'g'ri ulanish, orada server yo'q" />
+<meta property="og:description" content="P2P mesh tarmoq · WebRTC + PCP-1 shifrlash · 16 tagacha qurilma · chat, fayl, port tunnel · mahalliy hisob." />
 <meta property="og:type" content="website" />
-<meta property="og:url" content="https://portal.1pro.uz" />
-<meta property="og:image" content="https://portal.1pro.uz/og.svg" />
-<meta name="twitter:card" content="summary_large_image" />
+<meta property="og:url" content="https://portal.1pro.uz/" />
+<meta property="og:site_name" content="Portal" />
+<meta property="og:locale" content="uz_UZ" />
+<meta property="og:locale:alternate" content="en_US" />
+<meta property="og:image" content="https://portal.1pro.uz/og.png" />
+<meta property="og:image:secure_url" content="https://portal.1pro.uz/og.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Portal — P2P mesh tarmoq" />
 
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Portal — P2P mesh tarmoq" />
+<meta name="twitter:description" content="To'g'ridan-to'g'ri ulanish. Orada hech qanday server yo'q. WebRTC + PCP-1 shifrlash." />
+<meta name="twitter:image" content="https://portal.1pro.uz/og.png" />
+<meta name="twitter:image:alt" content="Portal — P2P mesh tarmoq" />
+
+<!-- Icons + manifest -->
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/manifest.webmanifest" />
+
 <!-- Fonts via bunny.net — same Inter/JetBrains Mono, but the CDN
      doesn't log visitor IPs the way fonts.googleapis.com does, so
      we keep the P2P tool's privacy story consistent end-to-end. -->
 <link rel="preconnect" href="https://fonts.bunny.net" crossorigin />
 <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800|jetbrains-mono:400,500,600&display=swap" rel="stylesheet" />
+
+<!-- JSON-LD: SoftwareApplication schema so Google renders rich result
+     cards (rating slot, install button on Android, screenshot, etc.). -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Portal",
+  "alternateName": "Portal P2P mesh",
+  "description": "Qurilmalar o'rtasida xususiy peer-to-peer mesh tarmoq quradigan desktop dastur. WebRTC + PCP-1 shifrlash, chat, fayl uzatish, TCP/UDP port tunneli.",
+  "url": "https://portal.1pro.uz/",
+  "applicationCategory": "NetworkingApplication",
+  "operatingSystem": "macOS, Windows, Linux, Android",
+  "image": "https://portal.1pro.uz/og.png",
+  "screenshot": "https://portal.1pro.uz/og.png",
+  "softwareVersion": "0.5.6",
+  "license": "https://opensource.org/licenses/MIT",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "1pro.uz",
+    "url": "https://1pro.uz"
+  },
+  "downloadUrl": "https://github.com/Yaxyobek0877/portal_traffic/releases/latest",
+  "softwareHelp": "https://github.com/Yaxyobek0877/portal_traffic",
+  "featureList": [
+    "Peer-to-peer mesh up to 16 devices",
+    "WebRTC + PCP-1 (Ed25519 + X25519 + XChaCha20-Poly1305) double-layer encryption",
+    "Local account with bcrypt password (no email signup)",
+    "TCP/UDP port tunneling for cameras, NVRs, game servers",
+    "Multi-portal sessions with auto-reconnect"
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Portal",
+  "url": "https://portal.1pro.uz/",
+  "inLanguage": ["uz", "en"],
+  "publisher": { "@type": "Organization", "name": "1pro.uz" }
+}
+</script>
 
 <style>
   /* ---------- design tokens ---------- */

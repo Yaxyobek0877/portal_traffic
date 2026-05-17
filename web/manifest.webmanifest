@@ -1,0 +1,19 @@
+{
+  "name": "Portal — P2P mesh tarmoq",
+  "short_name": "Portal",
+  "description": "Qurilmalar o'rtasida xususiy peer-to-peer mesh tarmoq quradigan desktop dastur. Chat, fayl, kamera/NVR/o'yin serveri uchun port tunneli.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0e1a",
+  "theme_color": "#0a0e1a",
+  "lang": "uz",
+  "categories": ["productivity", "utilities", "networking"],
+  "icons": [
+    {"src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any"},
+    {"src": "/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any maskable"},
+    {"src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any maskable"},
+    {"src": "/apple-touch-icon.png", "type": "image/png", "sizes": "180x180", "purpose": "any"}
+  ]
+}

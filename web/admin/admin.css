@@ -298,11 +298,17 @@ a:hover { text-decoration: underline; }
   text-decoration: none;
   color: var(--text);
 }
-.topbar .brand .logo {
-  width: 26px; height: 26px;
-  border-radius: 6px;
-  background: var(--gradient);
-  display: inline-block;
+/* Brand mark — the same concentric-rings wormhole the navbar, favicon
+   and OG image use. Slowly spins so the topbar feels alive without
+   pulling attention from form content. */
+.topbar .brand .mark {
+  width: 30px; height: 30px;
+  flex: 0 0 auto;
+  animation: brandSpin 30s linear infinite;
+}
+@keyframes brandSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .topbar .brand .mark { animation: none; }
 }
 .topbar .right { display: flex; align-items: center; gap: 8px; }
 .user-chip {
