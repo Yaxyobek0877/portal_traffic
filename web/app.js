@@ -539,8 +539,46 @@
     const passToggle = $('loginPasswordToggle');
     const strengthEl = $('strength');
 
-    let mode = 'signin'; // toggled by the two tabs
+    // Initial mode honors the URL hash so a "#signup" link drops the
+    // visitor straight into account creation. The tab buttons (and
+    // hashchange listener below) keep the form in sync after load.
+    let mode = location.hash === '#signup' ? 'signup' : 'signin';
     let pwVisible = false;
+
+    // Per-username lockout countdown. When the server responds with
+    // {error: 'locked_out', lockoutSeconds: N} we freeze the submit
+    // button for N seconds, ticking the displayed message down so the
+    // user has a clear "you can try again in 12s" signal instead of
+    // a frozen-looking form.
+    let lockoutSec = 0;
+    let lockoutTimer = null;
+    const idleBtnText = () =>
+      mode === 'signup' ? "Ro'yxatdan o'tish" : 'Kirish';
+    const refreshLockoutUI = () => {
+      if (lockoutSec > 0) {
+        btnEl.disabled = true;
+        btnText.textContent = `${idleBtnText()} (${lockoutSec}s)`;
+      } else {
+        btnEl.disabled = false;
+        btnText.textContent = idleBtnText();
+      }
+    };
+    const startLockoutTimer = () => {
+      if (lockoutTimer) clearInterval(lockoutTimer);
+      refreshLockoutUI();
+      lockoutTimer = setInterval(() => {
+        lockoutSec = Math.max(0, lockoutSec - 1);
+        if (statusEl?.classList.contains('error') && lockoutSec > 0) {
+          setStatus('error', errMessage('locked_out', lockoutSec));
+        }
+        refreshLockoutUI();
+        if (lockoutSec === 0) {
+          clearInterval(lockoutTimer);
+          lockoutTimer = null;
+          if (statusEl?.classList.contains('error')) clearStatus();
+        }
+      }, 1000);
+    };
 
     const setStatus = (kind, msg) => {
       if (!statusEl) return;
@@ -561,6 +599,7 @@
         case 'password_weak':       return "Parol kuchsiz — pastdagi mezonlarni bajaring.";
         case 'invalid_credentials': return "Foydalanuvchi nomi yoki parol noto'g'ri.";
         case 'locked_out':          return `Juda ko'p urinish. ${lockoutSeconds || 30} soniyadan so'ng qayta urining.`;
+        case 'rate_limited':        return "Juda ko'p so'rov. Bir necha daqiqadan keyin urining.";
         case 'no_session':          return "Sessiya tugagan, qaytadan kiring.";
         case 'network':             return "Server bilan ulanish bo'lmadi. Internet aloqangizni tekshiring.";
         default:                    return "Server xatosi: " + code;
@@ -577,16 +616,24 @@
     const renderStrength = () => {
       if (!strengthEl) return;
       const c = checks(passEl.value || '');
-      strengthEl.querySelectorAll('li[data-r]').forEach((li) => {
-        li.classList.toggle('ok', !!c[li.dataset.r]);
+      strengthEl.querySelectorAll('li[data-rule]').forEach((li) => {
+        li.classList.toggle('ok', !!c[li.dataset.rule]);
       });
     };
 
     const setMode = (m) => {
       mode = m;
-      if (tabSignin) tabSignin.classList.toggle('active', m === 'signin');
-      if (tabSignup) tabSignup.classList.toggle('active', m === 'signup');
-      btnText.textContent = m === 'signup' ? "Ro'yxatdan o'tish" : 'Kirish';
+      if (tabSignin) {
+        tabSignin.classList.toggle('active', m === 'signin');
+        tabSignin.setAttribute('aria-selected', m === 'signin' ? 'true' : 'false');
+      }
+      if (tabSignup) {
+        tabSignup.classList.toggle('active', m === 'signup');
+        tabSignup.setAttribute('aria-selected', m === 'signup' ? 'true' : 'false');
+      }
+      // refreshLockoutUI() handles idle text + active countdown so
+      // switching tabs mid-lockout keeps the "12s" countdown intact.
+      refreshLockoutUI();
       passEl.autocomplete = m === 'signup' ? 'new-password' : 'current-password';
       passEl.placeholder = m === 'signup' ? '8+ belgi, kuchli parol' : '••••••••';
       strengthEl?.classList.toggle('show', m === 'signup');
@@ -614,6 +661,9 @@
       setMode('signup');
       userEl.focus();
     });
+    // Apply hash-derived initial mode so #signup arrivals see the
+    // signup form on first paint (the HTML defaults to signin).
+    if (mode === 'signup') setMode('signup');
 
     if (passToggle) {
       passToggle.addEventListener('click', () => {
@@ -632,11 +682,22 @@
       if (statusEl?.classList.contains('error')) clearStatus();
     });
 
-    // If the user already has a session, jump straight to the dashboard.
-    // Wrapped so any network blip doesn't keep the form hidden.
-    fetch('/api/me', { credentials: 'same-origin' })
-      .then((r) => { if (r.ok) location.href = '/admin/dashboard'; })
-      .catch(() => {});
+    // If the user already has a session AND they didn't come here to
+    // make a new account, jump straight to the dashboard. The hash
+    // check matters because a logged-in user who clicks "Ro'yxatdan
+    // o'tish" expects the signup form to load, not an instant bounce
+    // to the existing account's dashboard.
+    if (location.hash !== '#signup') {
+      fetch('/api/me', { credentials: 'same-origin' })
+        .then((r) => { if (r.ok) location.href = '/admin/dashboard'; })
+        .catch(() => {});
+    }
+
+    // React to back/forward navigation that toggles the hash.
+    window.addEventListener('hashchange', () => {
+      const next = location.hash === '#signup' ? 'signup' : 'signin';
+      if (next !== mode) setMode(next);
+    });
 
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -657,7 +718,7 @@
         const c = checks(p);
         if (!c.length) { setStatus('error', "Parol kamida 8 ta belgi bo'lsin."); passEl.focus(); return; }
         if (!(c.lower && c.upper && c.digit && c.special)) {
-          setStatus('error', "Parolni kuchaytiring — pastdagi mezonlar yoq turishi kerak.");
+          setStatus('error', "Parolni kuchaytiring — pastdagi mezonlar yonib turishi kerak.");
           passEl.focus();
           return;
         }
@@ -683,9 +744,8 @@
           : null;
       } catch (_) {
         setStatus('error', errMessage('network'));
-        btnEl.disabled = false;
         loginForm.classList.remove('busy');
-        btnText.textContent = mode === 'signup' ? "Ro'yxatdan o'tish" : 'Kirish';
+        refreshLockoutUI();
         return;
       }
 
@@ -697,10 +757,15 @@
         setTimeout(() => { location.href = '/admin/dashboard'; }, 350);
         return;
       }
-      setStatus('error', errMessage(body?.error || `http_${res.status}`, body?.lockoutSeconds));
-      btnEl.disabled = false;
+      const code = body?.error || `http_${res.status}`;
+      setStatus('error', errMessage(code, body?.lockoutSeconds));
       loginForm.classList.remove('busy');
-      btnText.textContent = mode === 'signup' ? "Ro'yxatdan o'tish" : 'Kirish';
+      if (code === 'locked_out') {
+        lockoutSec = body?.lockoutSeconds || 30;
+        startLockoutTimer();
+      } else {
+        refreshLockoutUI();
+      }
     });
   }
 })();

@@ -6,9 +6,8 @@
 <title>Portal — Dashboard</title>
 <meta name="robots" content="noindex" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="preconnect" href="https://fonts.bunny.net" crossorigin />
+<link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800|jetbrains-mono:400,500,600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/admin/admin.css?v=0.5.5" />
 </head>
 <body>
@@ -107,7 +106,14 @@
           ? `<span class="pill" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);color:#c7b8ff;font-size:10px;padding:2px 7px;border-radius:999px;margin-left:6px">egasi</span>`
           : "";
         const codeRow = p.isOwner && p.code
-          ? `<div class="meta" style="font-family:JetBrains Mono,monospace;font-size:11px;margin-top:2px">Kod: <span style="color:var(--accent-3);user-select:all">${esc(p.code)}</span></div>`
+          ? `<div class="meta code-row" style="font-family:JetBrains Mono,monospace;font-size:11px;margin-top:2px;display:inline-flex;align-items:center;gap:6px">
+              Kod:
+              <span style="color:var(--accent-3);user-select:all">${esc(p.code)}</span>
+              <button type="button" class="copy-code-btn" data-code="${esc(p.code)}" aria-label="Kodni nusxalash">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span class="copy-label">nusxa</span>
+              </button>
+             </div>`
           : "";
         const labelLine = p.label
           ? `<div style="font-weight:600">${esc(p.label)}</div>`
@@ -137,18 +143,48 @@
 
   // Auto-refresh portals list every 5 seconds so the dashboard reflects
   // peers joining/leaving on other devices without a manual reload.
+  // Skip when the tab is hidden to save battery/bandwidth; refresh
+  // immediately on visibilityChange so a returning user doesn't wait
+  // up to 5s for the next tick.
   let pollTimer = null;
+  async function refreshPortals() {
+    try {
+      const data = await A.api("/api/portals");
+      portals = data?.portals || [];
+      serverNote = data?.note || "";
+      renderPortals();
+    } catch (_) { /* ignore — next tick will retry */ }
+  }
   function startPolling() {
     if (pollTimer) return;
-    pollTimer = setInterval(async () => {
-      try {
-        const data = await A.api("/api/portals");
-        portals = data?.portals || [];
-        serverNote = data?.note || "";
-        renderPortals();
-      } catch (_) { /* ignore — next tick will retry */ }
+    pollTimer = setInterval(() => {
+      if (document.hidden) return;
+      refreshPortals();
     }, 5000);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refreshPortals();
+    });
   }
+
+  // Delegated copy-to-clipboard for the per-portal "Kod: ▢ nusxa"
+  // buttons. We rebuild the list on every poll, so attaching listeners
+  // per-row would leak; one listener on portalsBody handles them all.
+  $("portalsBody").addEventListener("click", async (ev) => {
+    const btn = ev.target.closest(".copy-code-btn");
+    if (!btn) return;
+    const code = btn.dataset.code || "";
+    try {
+      await navigator.clipboard.writeText(code);
+      const lbl = btn.querySelector(".copy-label");
+      const old = lbl ? lbl.textContent : "";
+      if (lbl) lbl.textContent = "✓ nusxa olindi";
+      btn.classList.add("flash");
+      setTimeout(() => {
+        if (lbl) lbl.textContent = old;
+        btn.classList.remove("flash");
+      }, 1400);
+    } catch (_) { /* clipboard blocked — text is still selectable */ }
+  });
 
   // Sign-out: hit the API, then redirect to login. Keep the spinner
   // simple — sign-out is fast and the redirect masks any blip.
@@ -164,7 +200,7 @@
   // returns here after sign-in.
   (async () => {
     try {
-      [me, ] = await Promise.all([A.api("/api/me")]);
+      me = await A.api("/api/me");
     } catch (_) {
       const next = encodeURIComponent("/admin/dashboard");
       location.href = `/admin/login?next=${next}`;

@@ -6,9 +6,8 @@
 <title>Portal — Kirish</title>
 <meta name="robots" content="noindex" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="preconnect" href="https://fonts.bunny.net" crossorigin />
+<link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800|jetbrains-mono:400,500,600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/admin/admin.css?v=0.5.5" />
 </head>
 <body>
@@ -34,8 +33,8 @@
       </div>
 
       <div class="tabs" role="tablist">
-        <button type="button" data-tab="signin" id="tabSignin" role="tab"></button>
-        <button type="button" data-tab="signup" id="tabSignup" role="tab"></button>
+        <button type="button" data-tab="signin" id="tabSignin" role="tab" aria-selected="true"></button>
+        <button type="button" data-tab="signup" id="tabSignup" role="tab" aria-selected="false"></button>
       </div>
 
       <form id="form" autocomplete="on" novalidate>
@@ -54,8 +53,8 @@
             <circle cx="7.5" cy="15.5" r="2.5"/>
             <path d="M9.5 13.5 19 4M14 9l3 3"/>
           </svg>
-          <input type="password" id="password" name="password" maxlength="128" required />
-          <button type="button" class="reveal-btn" id="passwordToggle" tabindex="-1" aria-label="Parolni ko'rsatish">
+          <input type="password" id="password" name="password" maxlength="128" autocomplete="current-password" required />
+          <button type="button" class="reveal-btn" id="passwordToggle" tabindex="-1" aria-label="Parolni ko'rsatish" aria-pressed="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
               <circle cx="12" cy="12" r="3"/>
@@ -69,7 +68,7 @@
             <path d="M20 6 9 17l-5-5"/>
           </svg>
           <input type="password" id="confirm" name="confirm" maxlength="128" autocomplete="new-password" />
-          <button type="button" class="reveal-btn" id="confirmToggle" tabindex="-1" aria-label="Parolni ko'rsatish">
+          <button type="button" class="reveal-btn" id="confirmToggle" tabindex="-1" aria-label="Parolni ko'rsatish" aria-pressed="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
               <circle cx="12" cy="12" r="3"/>
@@ -127,6 +126,8 @@
     $("tabSignup").textContent = A.t("tab.signup");
     $("tabSignin").classList.toggle("active", tab === "signin");
     $("tabSignup").classList.toggle("active", tab === "signup");
+    $("tabSignin").setAttribute("aria-selected", tab === "signin" ? "true" : "false");
+    $("tabSignup").setAttribute("aria-selected", tab === "signup" ? "true" : "false");
 
     $("title").textContent = tab === "signup" ? A.t("tab.signup") : A.t("tab.signin");
     $("subtitle").textContent = tab === "signup"
@@ -217,7 +218,10 @@
   // Password reveal toggles. Both fields get an eye button whose
   // click flips the input's type between password ↔ text. Tabindex
   // is -1 so the toggle never steals focus from the form's tab order.
-  function bindReveal(btnId, inputId, hideLbl, showLbl) {
+  // Labels are looked up from A.t() at click time so they stay
+  // in-language after a UZ↔EN flip.
+  const revealBtns = [];
+  function bindReveal(btnId, inputId) {
     const btn = $(btnId);
     const inp = $(inputId);
     if (!btn || !inp) return;
@@ -225,12 +229,21 @@
     btn.addEventListener("click", () => {
       visible = !visible;
       inp.type = visible ? "text" : "password";
-      btn.setAttribute("aria-label", visible ? hideLbl : showLbl);
+      btn.setAttribute("aria-label", A.t(visible ? "btn.password.hide" : "btn.password.show"));
+      btn.setAttribute("aria-pressed", visible ? "true" : "false");
       btn.classList.toggle("active", visible);
     });
+    revealBtns.push({ btn, get visible() { return visible; } });
   }
-  bindReveal("passwordToggle", "password", "Parolni yashirish", "Parolni ko'rsatish");
-  bindReveal("confirmToggle",  "confirm",  "Parolni yashirish", "Parolni ko'rsatish");
+  bindReveal("passwordToggle", "password");
+  bindReveal("confirmToggle",  "confirm");
+  // Re-paint reveal-button labels on language change so the aria-label
+  // matches the active dictionary even when the user hasn't toggled.
+  A.onPaint(() => {
+    revealBtns.forEach(({ btn, visible }) => {
+      btn.setAttribute("aria-label", A.t(visible ? "btn.password.hide" : "btn.password.show"));
+    });
+  });
 
   // Submit
   $("form").addEventListener("submit", async (e) => {
@@ -257,7 +270,7 @@
 
     const btn = $("submitBtn");
     btn.disabled = true;
-    btn.textContent = "…";
+    btn.textContent = A.t(tab === "signup" ? "btn.busy.signup" : "btn.busy.signin");
 
     try {
       const path = tab === "signup" ? "/api/auth/signup" : "/api/auth/signin";

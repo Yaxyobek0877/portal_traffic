@@ -16,9 +16,11 @@
 <meta name="twitter:card" content="summary_large_image" />
 
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<!-- Fonts via bunny.net — same Inter/JetBrains Mono, but the CDN
+     doesn't log visitor IPs the way fonts.googleapis.com does, so
+     we keep the P2P tool's privacy story consistent end-to-end. -->
+<link rel="preconnect" href="https://fonts.bunny.net" crossorigin />
+<link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800|jetbrains-mono:400,500,600&display=swap" rel="stylesheet" />
 
 <style>
   /* ---------- design tokens ---------- */
@@ -620,6 +622,33 @@
     }
   }
 
+  /* ---------- download tiles ----------
+     Replaces the inline onmouseover/onmouseout JS that used to live
+     on every <a> in the download grid. CSS hover gives the same
+     transition for less surface area and no JS-execution overhead. */
+  .download-tile {
+    color: var(--text);
+    text-decoration: none;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    transition: border-color .15s, background .15s, transform .15s;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .download-tile:hover {
+    border-color: var(--border-2);
+    background: var(--surface-2);
+    transform: translateY(-1px);
+  }
+  .download-tile strong { font-size: 15px; }
+  .download-tile .arch { color: var(--text-dim); font-size: 12px; }
+  .download-tile .asset {
+    color: var(--text-faint);
+    font-size: 11px;
+    font-family: "JetBrains Mono", monospace;
+  }
+
   /* ---------- sections ---------- */
   section { padding: 80px 0; position: relative; }
   section h2 {
@@ -1083,33 +1112,25 @@
       Yuklab olish · Download
     </h2>
     <div class="download-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;max-width:760px;margin:0 auto 28px;font-size:14px">
-      <a href="/download/Portal-darwin-arm64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
-         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
-         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
-        <strong style="font-size:15px">macOS</strong>
-        <span style="color:var(--text-dim);font-size:12px">Apple Silicon (M1/M2/M3/M4)</span>
-        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.zip · darwin-arm64</span>
+      <a href="/download/Portal-darwin-arm64.zip" rel="noreferrer" class="download-tile">
+        <strong>macOS</strong>
+        <span class="arch">Apple Silicon (M1/M2/M3/M4)</span>
+        <span class="asset">.zip · darwin-arm64</span>
       </a>
-      <a href="/download/Portal-darwin-amd64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
-         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
-         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
-        <strong style="font-size:15px">macOS</strong>
-        <span style="color:var(--text-dim);font-size:12px">Intel (x86_64)</span>
-        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.zip · darwin-amd64</span>
+      <a href="/download/Portal-darwin-amd64.zip" rel="noreferrer" class="download-tile">
+        <strong>macOS</strong>
+        <span class="arch">Intel (x86_64)</span>
+        <span class="asset">.zip · darwin-amd64</span>
       </a>
-      <a href="/download/Portal-windows-amd64.zip" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
-         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
-         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
-        <strong style="font-size:15px">Windows</strong>
-        <span style="color:var(--text-dim);font-size:12px">10 / 11 · 64-bit</span>
-        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.exe · windows-amd64</span>
+      <a href="/download/Portal-windows-amd64.zip" rel="noreferrer" class="download-tile">
+        <strong>Windows</strong>
+        <span class="arch">10 / 11 · 64-bit</span>
+        <span class="asset">.exe · windows-amd64</span>
       </a>
-      <a href="/download/Portal-linux-amd64.tar.gz" rel="noreferrer" style="color:var(--text);text-decoration:none;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:4px"
-         onmouseover="this.style.borderColor='var(--border-2)';this.style.background='var(--surface-2)'"
-         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
-        <strong style="font-size:15px">Linux</strong>
-        <span style="color:var(--text-dim);font-size:12px">Ubuntu 22.04+ · 64-bit</span>
-        <span style="color:var(--text-faint);font-size:11px;font-family:JetBrains Mono,monospace">.tar.gz · linux-amd64</span>
+      <a href="/download/Portal-linux-amd64.tar.gz" rel="noreferrer" class="download-tile">
+        <strong>Linux</strong>
+        <span class="arch">Ubuntu 22.04+ · 64-bit</span>
+        <span class="asset">.tar.gz · linux-amd64</span>
       </a>
     </div>
     <div style="text-align:center;margin-bottom:20px;font-size:12px;color:var(--text-faint)">
@@ -1169,8 +1190,8 @@
 
       <form class="login-card" id="webAdminForm" autocomplete="on" novalidate>
         <div class="login-tabs" role="tablist">
-          <button type="button" class="login-tab active" id="tabSignin" role="tab">Kirish</button>
-          <button type="button" class="login-tab" id="tabSignup" role="tab">Ro'yxatdan o'tish</button>
+          <button type="button" class="login-tab active" id="tabSignin" role="tab" aria-selected="true">Kirish</button>
+          <button type="button" class="login-tab" id="tabSignup" role="tab" aria-selected="false">Ro'yxatdan o'tish</button>
         </div>
 
         <div class="login-field">
@@ -1208,11 +1229,11 @@
         </div>
 
         <ul class="strength" id="strength">
-          <li data-r="length"><span class="dot"></span> 8+ belgi</li>
-          <li data-r="lower"><span class="dot"></span> kichik harf</li>
-          <li data-r="upper"><span class="dot"></span> katta harf</li>
-          <li data-r="digit"><span class="dot"></span> raqam</li>
-          <li data-r="special"><span class="dot"></span> maxsus belgi</li>
+          <li data-rule="length"><span class="dot"></span> 8+ belgi</li>
+          <li data-rule="lower"><span class="dot"></span> kichik harf</li>
+          <li data-rule="upper"><span class="dot"></span> katta harf</li>
+          <li data-rule="digit"><span class="dot"></span> raqam</li>
+          <li data-rule="special"><span class="dot"></span> maxsus belgi</li>
         </ul>
 
         <button type="submit" id="loginSubmit">
