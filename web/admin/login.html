@@ -8,7 +8,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <link rel="preconnect" href="https://fonts.bunny.net" crossorigin />
 <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800|jetbrains-mono:400,500,600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/admin/admin.css?v=0.5.7" />
+<link rel="stylesheet" href="/admin/admin.css?v=0.5.8" />
 </head>
 <body>
 
@@ -104,7 +104,7 @@
 
 </div>
 
-<script src="/admin/admin.js?v=0.5.7"></script>
+<script src="/admin/admin.js?v=0.5.8"></script>
 <script>
 (() => {
   const A = window.PortalAdmin;
@@ -141,6 +141,7 @@
     $("password").placeholder = tab === "signup"
       ? A.t("ph.password.signup")
       : A.t("ph.password.signin");
+    $("confirm").placeholder = A.t("ph.password.confirm");
 
     $("confirmField").style.display = tab === "signup" ? "" : "none";
     $("strength").style.display     = tab === "signup" ? "" : "none";
@@ -214,6 +215,21 @@
   $("tabSignin").addEventListener("click", () => switchTab("signin"));
   $("tabSignup").addEventListener("click", () => switchTab("signup"));
   $("password").addEventListener("input", refreshStrength);
+
+  // Live confirm-password match check — flips the confirm field to
+  // a green check (match) or a red border (mismatch) so a typo is
+  // caught before the user submits.
+  function refreshConfirmMatch() {
+    const field = $("confirmField");
+    if (tab !== "signup") { field.classList.remove("match", "mismatch"); return; }
+    const c = $("confirm").value;
+    if (c.length === 0) { field.classList.remove("match", "mismatch"); return; }
+    const ok = c === $("password").value;
+    field.classList.toggle("match", ok);
+    field.classList.toggle("mismatch", !ok);
+  }
+  $("password").addEventListener("input", refreshConfirmMatch);
+  $("confirm").addEventListener("input", refreshConfirmMatch);
 
   // Password reveal toggles. Both fields get an eye button whose
   // click flips the input's type between password ↔ text. Tabindex

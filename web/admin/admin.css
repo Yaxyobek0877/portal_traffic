@@ -104,6 +104,15 @@ a:hover { text-decoration: underline; }
 }
 .field.with-icon:focus-within .icon { color: var(--accent); }
 
+/* Real-time confirm-password match feedback. The signup form's
+   confirm field flips to a green check / red border as the user
+   types, so they catch a typo before submit. Classes are toggled
+   by the page script. */
+.field.with-icon.match input { border-color: rgba(52,211,153,.45); }
+.field.with-icon.match .icon { color: var(--emerald); }
+.field.with-icon.mismatch input { border-color: rgba(248,113,113,.45); }
+.field.with-icon.mismatch .icon { color: var(--rose); }
+
 /* Eye-icon reveal button for password fields. Sits inside the input
    slot at the right edge; tabindex=-1 in HTML so it doesn't break
    keyboard tab order. Click flips the input's type between password
