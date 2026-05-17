@@ -83,22 +83,25 @@ a:hover { text-decoration: underline; }
 .field input::placeholder { color: var(--text-faint); }
 
 .field.with-icon { position: relative; }
-.field.with-icon input { padding-left: 38px; padding-right: 44px; }
+/* Generous left padding so the leading icon never crowds the
+   placeholder. With 18px icon + 14px from edge + ~14px clearance
+   the text starts at 46px and there's a comfortable gap between
+   the icon column and the value. */
+.field.with-icon input { padding-left: 46px; padding-right: 48px; }
 /* Leading icon (user, lock, etc.). Anchored to the input row via
    `bottom` instead of `top` so the icon stays vertically centered
    on the input regardless of label wrapping or font metrics. */
 .field.with-icon .icon {
   position: absolute;
-  left: 12px;
-  bottom: 12px;
-  width: 16px; height: 16px;
+  left: 14px;
+  bottom: 11px;
+  width: 18px; height: 18px;
   color: var(--text-dim);
   pointer-events: none;
   fill: none;
   stroke: currentColor;
+  transition: color .15s ease;
 }
-.field.with-icon input:focus ~ .icon,
-.field.with-icon .icon { transition: color .15s ease; }
 .field.with-icon:focus-within .icon { color: var(--accent); }
 
 /* Eye-icon reveal button for password fields. Sits inside the input
@@ -113,24 +116,32 @@ a:hover { text-decoration: underline; }
   position: absolute;
   right: 6px;
   bottom: 5px;
-  width: 30px; height: 30px;
-  background: transparent;
-  border: 0;
+  width: 32px; height: 32px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-dim);
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
-  transition: color .15s ease, background .15s ease;
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
   z-index: 1;
 }
-.reveal-btn:hover { color: var(--text); background: var(--surface-2); }
-.reveal-btn.active { color: var(--accent); }
+.reveal-btn:hover {
+  color: var(--text);
+  background: var(--surface-2);
+  border-color: var(--border-2);
+}
+.reveal-btn.active {
+  color: var(--accent);
+  border-color: rgba(139,92,246,.4);
+  background: rgba(139,92,246,.08);
+}
 .reveal-btn:focus-visible {
   outline: 2px solid var(--accent-3);
   outline-offset: 2px;
 }
 .reveal-btn svg {
-  width: 16px; height: 16px;
+  width: 18px; height: 18px;
   fill: none;
   stroke: currentColor;
   pointer-events: none;
