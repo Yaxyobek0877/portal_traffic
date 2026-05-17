@@ -16,7 +16,6 @@
   <div class="topbar">
     <a class="brand" href="/"><span class="logo"></span><span>Portal</span></a>
     <div class="right" id="topRight">
-      <!-- lang toggle injected here -->
       <span id="langSlot"></span>
       <span class="divider"></span>
       <button class="icon-btn danger" id="signoutBtn" title="Sign out">
@@ -38,10 +37,11 @@
     <h1 class="dash-greet"><span id="greetTxt">—</span>, <span class="gradient-text" id="greetName">—</span></h1>
     <p class="dash-sub" id="dashSub">—</p>
 
+    <div class="section-title" id="devicesTitle">—</div>
+    <div id="devicesBody"></div>
+
     <div class="section-title" id="portalsTitle">—</div>
-    <div id="portalsBody">
-      <div class="empty" id="portalsEmpty">…</div>
-    </div>
+    <div id="portalsBody"></div>
 
     <div class="alert info" id="note" style="display:none"></div>
   </main>
@@ -54,83 +54,166 @@
   const $ = (id) => document.getElementById(id);
 
   let me = null;
+  let devices = [];
   let portals = [];
   let serverNote = "";
 
-  // Lang toggle in the top bar.
   A.buildLangToggle($("langSlot"));
 
-  function paint() {
-    document.title = A.t("title.dashboard");
-    $("greetTxt").textContent  = A.t("dash.greeting");
-    $("dashSub").textContent   = A.t("dash.subtitle");
-    $("portalsTitle").textContent = A.t("dash.portals.title");
-    $("signoutBtn").title      = A.t("btn.signout");
-
-    if (me) {
-      $("greetName").textContent = me.username;
-      $("usernameLbl").textContent = me.username;
-      $("avatar").textContent = (me.username[0] || "?").toUpperCase();
-    } else {
-      $("greetName").textContent = "—";
-      $("usernameLbl").textContent = "—";
-      $("avatar").textContent = "?";
-    }
-
-    renderPortals();
-  }
-  A.onPaint(paint);
-
-  // HTML escape helper — portal labels and nicknames are user input
-  // so we never render them via innerHTML without escaping.
+  // HTML escape helper — every value rendered into innerHTML must
+  // pass through this. Server-side nicknames are validated to a safe
+  // charset but we don't trust the wire anyway.
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
+  // Human-friendly "N min ago". The server gives us connectedSecs
+  // already so we don't fight clock skew between client and origin.
+  function relTime(secs) {
+    if (secs < 10) return A.t("time.justnow");
+    if (secs < 60) return A.t("time.s").replace("{0}", String(secs));
+    if (secs < 3600) return A.t("time.m").replace("{0}", String(Math.floor(secs / 60)));
+    if (secs < 86400) return A.t("time.h").replace("{0}", String(Math.floor(secs / 3600)));
+    return A.t("time.d").replace("{0}", String(Math.floor(secs / 86400)));
+  }
+
+  function paint() {
+    document.title = A.t("title.dashboard");
+    $("greetTxt").textContent     = A.t("dash.greeting");
+    $("dashSub").textContent      = A.t("dash.subtitle");
+    $("devicesTitle").textContent = A.t("dash.devices.title");
+    $("portalsTitle").textContent = A.t("dash.portals.title");
+    $("signoutBtn").title         = A.t("btn.signout");
+
+    if (me) {
+      $("greetName").textContent   = me.username;
+      $("usernameLbl").textContent = me.username;
+      $("avatar").textContent      = (me.username[0] || "?").toUpperCase();
+    } else {
+      $("greetName").textContent = "—";
+      $("usernameLbl").textContent = "—";
+      $("avatar").textContent = "?";
+    }
+
+    renderDevices();
+    renderPortals();
+  }
+  A.onPaint(paint);
+
+  function renderDevices() {
+    const host = $("devicesBody");
+    if (!devices.length) {
+      host.innerHTML = `
+        <div class="empty empty-cta">
+          <strong>${esc(A.t("dash.devices.empty.h"))}</strong>
+          <p>${esc(A.t("dash.devices.empty.p"))}</p>
+          <a class="btn btn-primary" href="/#kirish">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            ${esc(A.t("dash.devices.download"))}
+          </a>
+        </div>`;
+      return;
+    }
+    const items = devices.map((d) => {
+      const nick = d.nickname || "—";
+      const initial = (nick[0] || "?").toUpperCase();
+      const status = d.portalId
+        ? `${esc(A.t("dash.devices.inportal"))} <a href="#portal-${esc(d.portalId)}" class="device-portal-link">${esc(d.portalId)}</a>`
+        : `<span class="muted">${esc(A.t("dash.devices.idle"))}</span>`;
+      return `
+        <div class="card-row device-row">
+          <span class="avatar gradient-bg">${esc(initial)}</span>
+          <div class="card-row-main">
+            <div class="card-row-title">${esc(nick)}</div>
+            <div class="card-row-meta">
+              <span class="mono">ip:${esc(d.ipHashShort)}</span>
+              · <span>${esc(relTime(d.connectedSecs))}</span>
+              · ${status}
+            </div>
+          </div>
+          <div class="card-row-actions">
+            <button type="button" class="btn-mini danger device-signout" data-peer="${esc(d.peerId)}">
+              ${esc(A.t("dash.devices.signout"))}
+            </button>
+          </div>
+        </div>`;
+    }).join("");
+    host.innerHTML = `<div class="list">${items}</div>`;
+  }
+
   function renderPortals() {
     const host = $("portalsBody");
     if (!portals.length) {
-      host.innerHTML = `<div class="empty">${A.t("dash.portals.empty")}</div>`;
+      host.innerHTML = `
+        <div class="empty">
+          <strong>${esc(A.t("dash.portals.empty.h"))}</strong>
+          <p>${esc(A.t("dash.portals.empty.p"))}</p>
+        </div>`;
     } else {
       const items = portals.map((p) => {
         const ownerNick = p.ownerNickname || "—";
         const initial = (ownerNick[0] || "?").toUpperCase();
-        const youOrThey = p.isOwner ? "Siz" : ownerNick;
-        const peerNote = `${p.peerCount} / ${p.capacity || 16} a'zo`;
+        const youOrThey = p.isOwner ? esc(A.t("dash.portals.you")) : esc(ownerNick);
+        const peerNote = `${p.peerCount} / ${p.capacity || 16} ${esc(A.t("dash.portals.members"))}`;
         const lockBadge = p.isLocked
-          ? `<span class="pill" style="background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.4);color:#fda4af;font-size:10px;padding:2px 7px;border-radius:999px;margin-left:6px">qulflangan</span>`
+          ? `<span class="pill-mini danger">${esc(A.t("dash.portals.locked"))}</span>`
           : "";
         const ownerBadge = p.isOwner
-          ? `<span class="pill" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);color:#c7b8ff;font-size:10px;padding:2px 7px;border-radius:999px;margin-left:6px">egasi</span>`
+          ? `<span class="pill-mini accent">${esc(A.t("dash.portals.owner"))}</span>`
           : "";
         const codeRow = p.isOwner && p.code
-          ? `<div class="meta code-row" style="font-family:JetBrains Mono,monospace;font-size:11px;margin-top:2px;display:inline-flex;align-items:center;gap:6px">
-              Kod:
-              <span style="color:var(--accent-3);user-select:all">${esc(p.code)}</span>
-              <button type="button" class="copy-code-btn" data-code="${esc(p.code)}" aria-label="Kodni nusxalash">
+          ? `<div class="code-row mono">${esc(A.t("dash.portals.code"))} <span class="code-value">${esc(p.code)}</span>
+              <button type="button" class="copy-code-btn" data-code="${esc(p.code)}" aria-label="copy">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                <span class="copy-label">nusxa</span>
+                <span class="copy-label">${esc(A.t("dash.copy.label"))}</span>
               </button>
              </div>`
           : "";
         const labelLine = p.label
-          ? `<div style="font-weight:600">${esc(p.label)}</div>`
+          ? `<div class="card-row-label">${esc(p.label)}</div>`
           : "";
+
+        // Members list with kick buttons (owner only).
+        const members = (p.members || []).map((m) => {
+          const tag = m.isSelf ? ` <span class="muted">(${esc(A.t("dash.portals.you"))})</span>` : "";
+          const kickBtn = (p.isOwner && !m.isSelf)
+            ? `<button type="button" class="btn-mini danger portal-kick" data-portal="${esc(p.portalId)}" data-peer="${esc(m.peerId)}" data-nick="${esc(m.nickname || "")}">${esc(A.t("dash.portals.kick"))}</button>`
+            : "";
+          return `<li><span class="mono">${esc(m.nickname || "—")}</span>${tag}${kickBtn}</li>`;
+        }).join("");
+        const membersBlock = members
+          ? `<ul class="member-list">${members}</ul>`
+          : "";
+
+        const lockBtn = p.isOwner
+          ? `<button type="button" class="btn-mini portal-lock" data-portal="${esc(p.portalId)}" data-locked="${p.isLocked ? "true" : "false"}">
+              ${esc(p.isLocked ? A.t("dash.portals.unlock") : A.t("dash.portals.lock"))}
+            </button>`
+          : "";
+
         return `
-          <div class="list-item" style="display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)">
-            <span class="avatar" style="width:36px;height:36px;border-radius:50%;background:var(--gradient);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:white;flex:0 0 auto">${esc(initial)}</span>
-            <div style="flex:1;min-width:0">
+          <div class="card-row portal-row" id="portal-${esc(p.portalId)}">
+            <span class="avatar gradient-bg">${esc(initial)}</span>
+            <div class="card-row-main">
               ${labelLine}
-              <div><span class="pid" style="font-family:JetBrains Mono,monospace;color:var(--text)">${esc(p.portalId)}</span>${ownerBadge}${lockBadge}</div>
-              <div class="meta">${esc(youOrThey)} · ${peerNote}</div>
+              <div class="card-row-title">
+                <span class="mono">${esc(p.portalId)}</span>
+                ${ownerBadge}${lockBadge}
+              </div>
+              <div class="card-row-meta">${youOrThey} · ${peerNote}</div>
               ${codeRow}
+              ${membersBlock}
             </div>
-          </div>
-        `;
+            <div class="card-row-actions">${lockBtn}</div>
+          </div>`;
       }).join("");
-      host.innerHTML = `<div class="list" style="display:flex;flex-direction:column;gap:10px">${items}</div>`;
+      host.innerHTML = `<div class="list">${items}</div>`;
     }
 
     if (serverNote) {
@@ -141,78 +224,104 @@
     }
   }
 
-  // Auto-refresh portals list every 5 seconds so the dashboard reflects
-  // peers joining/leaving on other devices without a manual reload.
-  // Skip when the tab is hidden to save battery/bandwidth; refresh
-  // immediately on visibilityChange so a returning user doesn't wait
-  // up to 5s for the next tick.
-  let pollTimer = null;
-  async function refreshPortals() {
+  async function refresh() {
     try {
-      const data = await A.api("/api/portals");
-      portals = data?.portals || [];
-      serverNote = data?.note || "";
+      const [d, ps] = await Promise.all([
+        A.api("/api/devices").catch(() => ({ devices: [] })),
+        A.api("/api/portals").catch(() => ({ portals: [] })),
+      ]);
+      devices = d?.devices || [];
+      portals = ps?.portals || [];
+      serverNote = ps?.note || "";
+      renderDevices();
       renderPortals();
-    } catch (_) { /* ignore — next tick will retry */ }
+    } catch (_) { /* next tick will retry */ }
   }
+
+  // 5-second poll; skip when tab is hidden to save the battery.
+  let pollTimer = null;
   function startPolling() {
     if (pollTimer) return;
-    pollTimer = setInterval(() => {
-      if (document.hidden) return;
-      refreshPortals();
-    }, 5000);
+    pollTimer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) refreshPortals();
+      if (!document.hidden) refresh();
     });
   }
 
-  // Delegated copy-to-clipboard for the per-portal "Kod: ▢ nusxa"
-  // buttons. We rebuild the list on every poll, so attaching listeners
-  // per-row would leak; one listener on portalsBody handles them all.
-  $("portalsBody").addEventListener("click", async (ev) => {
-    const btn = ev.target.closest(".copy-code-btn");
-    if (!btn) return;
-    const code = btn.dataset.code || "";
-    try {
-      await navigator.clipboard.writeText(code);
-      const lbl = btn.querySelector(".copy-label");
-      const old = lbl ? lbl.textContent : "";
-      if (lbl) lbl.textContent = "✓ nusxa olindi";
-      btn.classList.add("flash");
-      setTimeout(() => {
-        if (lbl) lbl.textContent = old;
-        btn.classList.remove("flash");
-      }, 1400);
-    } catch (_) { /* clipboard blocked — text is still selectable */ }
+  // ---------- delegated click handlers ----------
+  document.addEventListener("click", async (ev) => {
+    // Copy portal code.
+    const copyBtn = ev.target.closest(".copy-code-btn");
+    if (copyBtn) {
+      const code = copyBtn.dataset.code || "";
+      try {
+        await navigator.clipboard.writeText(code);
+        const lbl = copyBtn.querySelector(".copy-label");
+        const old = lbl ? lbl.textContent : "";
+        if (lbl) lbl.textContent = A.t("dash.copy.copied");
+        copyBtn.classList.add("flash");
+        setTimeout(() => {
+          if (lbl) lbl.textContent = old;
+          copyBtn.classList.remove("flash");
+        }, 1400);
+      } catch (_) { /* clipboard blocked — value stays user-selectable */ }
+      return;
+    }
+
+    // Sign out a device.
+    const sob = ev.target.closest(".device-signout");
+    if (sob) {
+      if (!confirm(A.t("dash.devices.signout.confirm"))) return;
+      sob.disabled = true;
+      try {
+        await A.api("/api/devices/signout", { method: "POST", body: { peerId: sob.dataset.peer } });
+        refresh();
+      } catch (_) { sob.disabled = false; }
+      return;
+    }
+
+    // Toggle lock.
+    const lk = ev.target.closest(".portal-lock");
+    if (lk) {
+      const want = lk.dataset.locked !== "true"; // flip
+      lk.disabled = true;
+      try {
+        await A.api("/api/portals/lock", { method: "POST", body: { portalId: lk.dataset.portal, locked: want } });
+        refresh();
+      } catch (_) { lk.disabled = false; }
+      return;
+    }
+
+    // Kick member.
+    const k = ev.target.closest(".portal-kick");
+    if (k) {
+      const nick = k.dataset.nick || k.dataset.peer;
+      if (!confirm(A.t("dash.portals.kick.confirm").replace("{0}", nick))) return;
+      k.disabled = true;
+      try {
+        await A.api("/api/portals/kick", { method: "POST", body: { portalId: k.dataset.portal, peerId: k.dataset.peer } });
+        refresh();
+      } catch (_) { k.disabled = false; }
+      return;
+    }
   });
 
-  // Sign-out: hit the API, then redirect to login. Keep the spinner
-  // simple — sign-out is fast and the redirect masks any blip.
+  // Sign-out of the dashboard session.
   $("signoutBtn").addEventListener("click", async () => {
-    try {
-      await A.api("/api/auth/signout", { method: "POST" });
-    } catch (_) { /* ignore — cookie expiry will catch it eventually */ }
+    try { await A.api("/api/auth/signout", { method: "POST" }); }
+    catch (_) {}
     location.href = "/admin/login";
   });
 
-  // Bootstrap: load /me + /portals in parallel. If /me fails we're
-  // not signed in → bounce to login with a `next=` so the user
-  // returns here after sign-in.
+  // Bootstrap.
   (async () => {
     try {
       me = await A.api("/api/me");
     } catch (_) {
-      const next = encodeURIComponent("/admin/dashboard");
-      location.href = `/admin/login?next=${next}`;
+      location.href = `/admin/login?next=${encodeURIComponent("/admin/dashboard")}`;
       return;
     }
-    try {
-      const data = await A.api("/api/portals");
-      portals = data?.portals || [];
-      serverNote = data?.note || "";
-    } catch (_) {
-      portals = [];
-    }
+    await refresh();
     paint();
     startPolling();
   })();

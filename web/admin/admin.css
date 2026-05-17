@@ -380,23 +380,109 @@ a:hover { text-decoration: underline; }
 }
 
 /* ---------- card list (dashboard) ---------- */
-.list { display: grid; gap: 8px; margin-top: 12px; }
-.list-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px;
+.list { display: grid; gap: 10px; margin-top: 12px; }
+
+/* card-row: the unified shape for a device or portal entry in the
+   dashboard. left avatar + flexible main column + right actions. */
+.card-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  text-align: left;
-  transition: background .12s, border-color .12s;
-  font-family: inherit; color: inherit; font-size: inherit;
+  border-radius: 12px;
+  transition: background .12s ease, border-color .12s ease;
 }
-/* No cursor:pointer here — list-items aren't clickable yet (no
-   detail view shipped). Re-introduce together with a click handler
-   when the portal detail panel lands. */
-.list-item:hover { background: var(--surface-2); border-color: var(--border-2); }
-.list-item .pid { font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--accent); }
-.list-item .meta { color: var(--text-faint); font-size: 12px; }
+.card-row:hover { background: var(--surface-2); border-color: var(--border-2); }
+.card-row .avatar.gradient-bg {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--gradient);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; color: white;
+  flex: 0 0 auto;
+}
+.card-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.card-row-label { font-weight: 600; font-size: 14px; }
+.card-row-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; }
+.card-row-meta { color: var(--text-faint); font-size: 12px; line-height: 1.5; }
+.card-row-meta a { color: var(--accent-3); }
+.card-row-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex: 0 0 auto; }
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--text); }
+.muted { color: var(--text-faint); }
+
+.pill-mini {
+  display: inline-flex; align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+}
+.pill-mini.accent {
+  background: rgba(139,92,246,.12);
+  border-color: rgba(139,92,246,.4);
+  color: #c7b8ff;
+}
+.pill-mini.danger {
+  background: rgba(244,63,94,.12);
+  border-color: rgba(244,63,94,.4);
+  color: #fda4af;
+}
+
+.btn-mini {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.btn-mini:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border-2);
+  color: var(--text);
+}
+.btn-mini:disabled { opacity: .55; cursor: progress; }
+.btn-mini.danger { color: #fda4af; border-color: rgba(244,63,94,.25); }
+.btn-mini.danger:hover:not(:disabled) {
+  background: rgba(244,63,94,.08);
+  border-color: rgba(244,63,94,.45);
+  color: #ffd5d9;
+}
+
+.member-list {
+  list-style: none;
+  padding: 6px 0 0;
+  margin: 4px 0 0;
+  border-top: 1px dashed var(--border);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.member-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 12px;
+  padding: 4px 0;
+}
+.member-list li .mono { color: var(--text); font-size: 12px; }
+
+.code-row {
+  font-size: 11px;
+  margin-top: 4px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.code-row .code-value {
+  color: var(--accent-3);
+  user-select: all;
+}
+
+/* Copy-to-clipboard chip — used inside .code-row to grab a portal
+   code with a single click. */
 .copy-code-btn {
   background: transparent;
   border: 1px solid var(--border);
@@ -412,14 +498,21 @@ a:hover { text-decoration: underline; }
 .copy-code-btn:hover { color: var(--text); border-color: var(--border-2); background: var(--surface); }
 .copy-code-btn.flash { color: var(--accent-3); border-color: rgba(34,211,238,.4); background: rgba(34,211,238,.08); }
 .copy-code-btn svg { width: 12px; height: 12px; }
+
+/* Empty state — generic dashed box, optional CTA variant for the
+   devices section which doubles as an onboarding nudge. */
 .empty {
-  padding: 32px 16px;
+  padding: 24px 16px;
   border: 1px dashed var(--border);
   border-radius: var(--radius-xs);
   color: var(--text-faint);
   font-size: 13px;
   text-align: center;
 }
+.empty strong { color: var(--text); display: block; font-size: 14px; margin-bottom: 6px; }
+.empty p { margin: 0 0 12px; color: var(--text-dim); }
+.empty.empty-cta { padding: 32px 16px; }
+.empty.empty-cta .btn { display: inline-flex; }
 
 /* ---------- centered auth shell ----------
    Pattern note: we want the auth card centered when the viewport
