@@ -274,7 +274,8 @@
 
     try {
       const path = tab === "signup" ? "/api/auth/signup" : "/api/auth/signin";
-      await A.api(path, { method: "POST", body: { username, password } });
+      const remember = $("remember").checked;
+      await A.api(path, { method: "POST", body: { username, password, remember } });
       // Server set the session cookie; head to the dashboard.
       // We don't need to do anything client-side for "remember me" —
       // the cookie's lifetime already covers it.

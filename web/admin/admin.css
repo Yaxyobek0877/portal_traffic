@@ -177,7 +177,15 @@ a:hover { text-decoration: underline; }
   background: var(--surface-2);
   border-color: var(--border-2);
 }
-.btn-block { width: 100%; padding-top: 12px; padding-bottom: 12px; }
+.btn-block {
+  width: 100%;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  /* Breathing room after the remember-me row above. Without this the
+     button sits flush against the hint text and the form reads as
+     one squashed block. */
+  margin-top: 16px;
+}
 
 /* ---------- panel ---------- */
 .panel {
@@ -240,20 +248,28 @@ a:hover { text-decoration: underline; }
 
 /* ---------- remember me ---------- */
 .remember {
-  display: flex; align-items: flex-start; gap: 8px;
-  margin-top: 12px;
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-top: 14px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
   user-select: none;
 }
 .remember input[type=checkbox] {
-  margin: 2px 0 0;
-  width: 14px; height: 14px;
+  /* margin-top:3px keeps the checkbox visually centered with the
+     first line of the label instead of sitting above it. */
+  margin: 3px 0 0;
+  width: 15px; height: 15px;
   accent-color: var(--accent);
   cursor: pointer;
+  flex: 0 0 auto;
 }
-.remember span { color: var(--text-dim); line-height: 1.4; }
-.remember .hint { display: block; color: var(--text-faint); font-size: 11px; margin-top: 2px; }
+.remember span { color: var(--text); line-height: 1.4; }
+.remember .hint {
+  display: block;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  margin-top: 3px;
+}
 
 /* ---------- nav top ---------- */
 .topbar {
