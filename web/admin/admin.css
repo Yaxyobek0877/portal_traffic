@@ -84,35 +84,57 @@ a:hover { text-decoration: underline; }
 
 .field.with-icon { position: relative; }
 .field.with-icon input { padding-left: 38px; padding-right: 44px; }
+/* Leading icon (user, lock, etc.). Anchored to the input row via
+   `bottom` instead of `top` so the icon stays vertically centered
+   on the input regardless of label wrapping or font metrics. */
 .field.with-icon .icon {
   position: absolute;
   left: 12px;
-  top: 32px;
+  bottom: 12px;
   width: 16px; height: 16px;
-  color: var(--text-faint);
+  color: var(--text-dim);
   pointer-events: none;
+  fill: none;
+  stroke: currentColor;
 }
+.field.with-icon input:focus ~ .icon,
+.field.with-icon .icon { transition: color .15s ease; }
+.field.with-icon:focus-within .icon { color: var(--accent); }
 
 /* Eye-icon reveal button for password fields. Sits inside the input
    slot at the right edge; tabindex=-1 in HTML so it doesn't break
    keyboard tab order. Click flips the input's type between password
-   and text. .active class is added when revealed for a subtle hint. */
+   and text. .active class is added when revealed for a subtle hint.
+   The svg has explicit fill:none + stroke:currentColor so a stale
+   user-agent stylesheet (or a global `svg { fill: currentColor }`)
+   can't accidentally render the eye as a filled blob — defensive
+   styling for what we hand to the browser. */
 .reveal-btn {
   position: absolute;
   right: 6px;
-  top: 26px;
+  bottom: 5px;
   width: 30px; height: 30px;
   background: transparent;
   border: 0;
   border-radius: 6px;
-  color: var(--text-faint);
+  color: var(--text-dim);
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
   transition: color .15s ease, background .15s ease;
+  z-index: 1;
 }
-.reveal-btn:hover { color: var(--text); background: var(--surface); }
+.reveal-btn:hover { color: var(--text); background: var(--surface-2); }
 .reveal-btn.active { color: var(--accent); }
-.reveal-btn svg { width: 16px; height: 16px; }
+.reveal-btn:focus-visible {
+  outline: 2px solid var(--accent-3);
+  outline-offset: 2px;
+}
+.reveal-btn svg {
+  width: 16px; height: 16px;
+  fill: none;
+  stroke: currentColor;
+  pointer-events: none;
+}
 
 /* ---------- buttons ---------- */
 .btn {
@@ -280,11 +302,17 @@ a:hover { text-decoration: underline; }
 .icon-btn:hover { background: var(--surface); color: var(--text); border-color: var(--border); }
 .icon-btn.danger:hover { color: var(--rose); border-color: rgba(248,113,113,.25); background: rgba(248,113,113,.06); }
 
-/* ---------- tabs ---------- */
+/* ---------- tabs ----------
+   Two-tab segmented control (Sign in / Sign up). The active tab gets
+   the full brand gradient so it reads as clearly "selected" even on
+   top of the page's ambient radial gradients — a translucent purple
+   (rgba(...,.30)) used to bleed into the body backdrop and made the
+   two tabs look nearly identical. */
 .tabs {
   display: flex; gap: 4px;
   padding: 4px;
   background: rgba(0,0,0,.3);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   margin-bottom: 16px;
 }
@@ -299,10 +327,21 @@ a:hover { text-decoration: underline; }
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
-  transition: background .12s, color .12s;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease, transform .15s ease;
 }
-.tabs button.active { background: rgba(139,92,246,.30); color: white; }
-.tabs button:hover:not(.active) { background: rgba(255,255,255,.04); }
+.tabs button.active {
+  background: var(--gradient);
+  color: white;
+  box-shadow: 0 4px 14px -4px rgba(139,92,246,.55);
+}
+.tabs button:hover:not(.active) {
+  background: rgba(255,255,255,.05);
+  color: var(--text);
+}
+.tabs button:focus-visible {
+  outline: 2px solid var(--accent-3);
+  outline-offset: 2px;
+}
 
 /* ---------- card list (dashboard) ---------- */
 .list { display: grid; gap: 8px; margin-top: 12px; }
