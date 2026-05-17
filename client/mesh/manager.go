@@ -63,6 +63,17 @@ type Config struct {
 	// over after a successful /api/auth/signin.
 	CloudAuthToken string
 
+	// Device-identification fields, passed to the signaling server
+	// via a one-shot device.identify message right after the WS
+	// upgrade. None of these are load-bearing for portal flow —
+	// they only feed the web dashboard's /api/devices view so a
+	// user can tell which of their machines is online. All optional.
+	ClientID   string // stable 32-hex per-install UUID (logsink.LoadOrMintClientID)
+	DeviceName string // user-set label: "mac" / "uy" / "ish"
+	Platform   string // runtime.GOOS
+	Arch       string // runtime.GOARCH
+	AppVersion string // current binary version, e.g. "0.5.6"
+
 	// Optional TURN server. If TurnURL is non-empty it's appended
 	// to ICEServers along with the credentials. Required for
 	// peers behind symmetric NAT or CGNAT — without TURN those
@@ -366,6 +377,19 @@ func (m *Manager) dial(ctx context.Context) error {
 		return err
 	}
 	m.sig = c
+	// Best-effort device self-id immediately after the upgrade so the
+	// /api/devices view on the dashboard can label this connection
+	// before any portal action runs. Failure here is non-fatal — the
+	// connection stays usable; the dashboard just renders a more
+	// minimal row.
+	if m.cfg.ClientID != "" || m.cfg.DeviceName != "" || m.cfg.Platform != "" {
+		if err := c.SendDeviceIdentify(
+			m.cfg.ClientID, m.cfg.DeviceName,
+			m.cfg.Platform, m.cfg.Arch, m.cfg.AppVersion,
+		); err != nil {
+			m.logger.Debug("device.identify send failed", "err", err)
+		}
+	}
 	return nil
 }
 
@@ -533,6 +557,18 @@ func (m *Manager) attemptReconnect() bool {
 		m.mu.Unlock()
 		if old != nil {
 			_ = old.Close()
+		}
+
+		// Same self-id we send on first dial — repeated here so the
+		// dashboard sees the reconnected session immediately, with
+		// the correct platform/version labels.
+		if m.cfg.ClientID != "" || m.cfg.DeviceName != "" || m.cfg.Platform != "" {
+			if err := m.sig.SendDeviceIdentify(
+				m.cfg.ClientID, m.cfg.DeviceName,
+				m.cfg.Platform, m.cfg.Arch, m.cfg.AppVersion,
+			); err != nil {
+				m.logger.Debug("device.identify (reconnect) send failed", "err", err)
+			}
 		}
 
 		if err := m.sig.JoinPortal(joinedID, joinedCode, m.cfg.Nickname); err != nil {

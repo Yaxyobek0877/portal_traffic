@@ -438,6 +438,27 @@ a:hover { text-decoration: underline; }
   color: #fda4af;
 }
 
+/* Platform chip — small coloured tag on each device row. We picked
+   per-OS hues that map roughly to each vendor's signature accent
+   without going full brand-mark (gray for "other" keeps unknown
+   platforms from blending into the gradient backdrop). */
+.platform-chip {
+  display: inline-flex; align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+}
+.platform-chip.k-mac     { color:#a5b4fc; background:rgba(165,180,252,.10); border-color:rgba(165,180,252,.30); }
+.platform-chip.k-win     { color:#7dd3fc; background:rgba(125,211,252,.10); border-color:rgba(125,211,252,.30); }
+.platform-chip.k-linux   { color:#fbbf24; background:rgba(251,191,36,.10);  border-color:rgba(251,191,36,.30); }
+.platform-chip.k-android { color:#86efac; background:rgba(134,239,172,.10); border-color:rgba(134,239,172,.30); }
+.platform-chip.k-ios     { color:#e9d5ff; background:rgba(233,213,255,.10); border-color:rgba(233,213,255,.30); }
+
 .btn-mini {
   background: var(--surface);
   border: 1px solid var(--border);

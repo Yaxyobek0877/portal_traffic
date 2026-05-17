@@ -118,6 +118,19 @@
   }
   A.onPaint(paint);
 
+  // Platform → display label + a one-letter category icon. The
+  // category is what colours the platform chip in admin.css.
+  function platformLabel(p) {
+    switch ((p || "").toLowerCase()) {
+      case "darwin":  return { label: "macOS",   kind: "mac" };
+      case "windows": return { label: "Windows", kind: "win" };
+      case "linux":   return { label: "Linux",   kind: "linux" };
+      case "android": return { label: "Android", kind: "android" };
+      case "ios":     return { label: "iOS",     kind: "ios" };
+      default:        return { label: p || "—",  kind: "other" };
+    }
+  }
+
   function renderDevices() {
     const host = $("devicesBody");
     if (!devices.length) {
@@ -137,17 +150,35 @@
       return;
     }
     const items = devices.map((d) => {
-      const nick = d.nickname || "—";
-      const initial = (nick[0] || "?").toUpperCase();
+      // Prefer the user-set deviceName ("uy", "mac") when present; the
+      // nickname here is the portal-scoped form like "texuz.uy" and
+      // less informative for a device list.
+      const label = d.deviceName || d.nickname || "—";
+      const initial = (label[0] || "?").toUpperCase();
+      const pf = platformLabel(d.platform);
+      const platformChip = d.platform
+        ? `<span class="platform-chip k-${esc(pf.kind)}">${esc(pf.label)}</span>`
+        : "";
+      const versionChip = d.version
+        ? `<span class="mono muted">v${esc(d.version)}</span>`
+        : "";
+      const clientIdShort = d.clientId
+        ? `<span class="mono muted" title="${esc(d.clientId)}">id:${esc(d.clientId.slice(0, 8))}</span>`
+        : "";
       const status = d.portalId
-        ? `${esc(A.t("dash.devices.inportal"))} <a href="#portal-${esc(d.portalId)}" class="device-portal-link">${esc(d.portalId)}</a>`
+        ? `${esc(A.t("dash.devices.inportal"))} <a href="#portal-${esc(d.portalId)}" class="device-portal-link mono">${esc(d.portalId)}</a>`
         : `<span class="muted">${esc(A.t("dash.devices.idle"))}</span>`;
       return `
-        <div class="card-row device-row">
+        <div class="card-row device-row" data-platform="${esc(pf.kind)}">
           <span class="avatar gradient-bg">${esc(initial)}</span>
           <div class="card-row-main">
-            <div class="card-row-title">${esc(nick)}</div>
+            <div class="card-row-title">
+              ${esc(label)}
+              ${platformChip}
+            </div>
             <div class="card-row-meta">
+              ${versionChip}${versionChip ? " · " : ""}
+              ${clientIdShort}${clientIdShort ? " · " : ""}
               <span class="mono">ip:${esc(d.ipHashShort)}</span>
               · <span>${esc(relTime(d.connectedSecs))}</span>
               · ${status}

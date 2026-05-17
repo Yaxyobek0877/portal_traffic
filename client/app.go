@@ -221,6 +221,13 @@ type App struct {
 	// connection (legacy behaviour).
 	cloudMu   sync.RWMutex
 	cloudAuth cloudAuthState
+
+	// clientID is the stable per-install identifier the log uploader
+	// and the device.identify message both reference. Minted once on
+	// Startup and reused for the life of the process so the dashboard
+	// can correlate "the WS connection that just appeared" with "the
+	// log bundle this same client posted earlier".
+	clientID string
 }
 
 type cloudAuthState struct {
@@ -340,9 +347,9 @@ func (a *App) startLogSink() {
 		return
 	}
 
-	clientID, err := logsink.LoadOrMintClientID()
-	if err != nil {
-		a.logger.Warn("logsink: client id mint failed", "err", err)
+	clientID := a.ClientID()
+	if clientID == "" {
+		// ClientID() already logged the mint failure.
 		return
 	}
 
@@ -360,6 +367,31 @@ func (a *App) startLogSink() {
 		Logger:    a.logger,
 	})
 	a.mu.Unlock()
+}
+
+// ClientID returns the stable per-install identifier, minting one on
+// first call. Re-used by the log uploader and by the device.identify
+// message the mesh sends right after a WS upgrade, so any cross-check
+// (logs ↔ live sessions) keys on the same ID.
+func (a *App) ClientID() string {
+	a.mu.RLock()
+	id := a.clientID
+	a.mu.RUnlock()
+	if id != "" {
+		return id
+	}
+	minted, err := logsink.LoadOrMintClientID()
+	if err != nil {
+		a.logger.Warn("client id mint failed", "err", err)
+		return ""
+	}
+	a.mu.Lock()
+	if a.clientID == "" {
+		a.clientID = minted
+	}
+	id = a.clientID
+	a.mu.Unlock()
+	return id
 }
 
 // Shutdown cleans up every session, the SQLite store, and the
@@ -2217,6 +2249,16 @@ func (a *App) bringUpSession(nickname string, makeActive bool, isOwner bool) (*p
 		// ID, making the dashboard list it across every device the
 		// same account is signed into.
 		CloudAuthToken: a.CloudAuthToken(),
+		// Device identity — sent as a one-shot device.identify message
+		// right after the WS upgrade so /api/devices on the dashboard
+		// can render "💻 mac · v0.5.6" instead of an opaque peer UUID.
+		// All fields are best-effort; the server treats missing ones
+		// as empty and falls back to nickname display.
+		ClientID:   a.ClientID(),
+		DeviceName: a.CurrentDeviceName(),
+		Platform:   stdruntime.GOOS,
+		Arch:       stdruntime.GOARCH,
+		AppVersion: Version,
 	})
 	s.fwd = proxy.New(s.mesh, a.logger.With("session", s.localID))
 	s.mesh.SetProxyHandler(s.fwd)

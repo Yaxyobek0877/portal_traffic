@@ -118,6 +118,25 @@ func (c *Client) Close() error {
 // Outbound (typed senders)
 // ----------------------------------------------------------------------------
 
+// SendDeviceIdentify ships per-install metadata to the server right
+// after the WebSocket comes up. It's strictly informational — the
+// server attaches the fields to its Connection record so /api/devices
+// can render "💻 texuz · mac (v0.5.6)" instead of an opaque peer ID.
+// Legacy server builds drop unknown message types harmlessly.
+func (c *Client) SendDeviceIdentify(clientID, deviceName, platform, arch, version string) error {
+	c.logger.Debug("send device.identify",
+		"client_id", clientID, "device_name", deviceName,
+		"platform", platform, "arch", arch, "version", version)
+	return c.send(protocol.DeviceIdentify{
+		Type:       protocol.TypeDeviceIdentify,
+		ClientID:   clientID,
+		DeviceName: deviceName,
+		Platform:   platform,
+		Arch:       arch,
+		Version:    version,
+	})
+}
+
 // CreatePortal sends portal.create. Returns the marshaling error only;
 // the server response arrives as a Created event.
 func (c *Client) CreatePortal(nick string, publicNick bool, capacity int) error {

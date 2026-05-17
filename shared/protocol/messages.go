@@ -27,6 +27,7 @@ const (
 	TypePortalKick           = "portal.kick"
 	TypePortalLock           = "portal.lock"
 	TypeNickSetVisibility    = "nick.set_visibility"
+	TypeDeviceIdentify       = "device.identify" // optional self-id sent right after WS upgrade
 
 	// Server → Client (responses / pushes)
 	TypePortalCreated      = "portal.created"
@@ -179,6 +180,25 @@ type PortalLock struct {
 }
 
 // NickSetVisibility updates the sender's nickname directory entry.
+// DeviceIdentify is sent by the client immediately after a successful
+// WebSocket upgrade so the server can attach human-readable metadata
+// to the connection. None of the fields are load-bearing for portal
+// flow — they only show up in /api/devices so the web dashboard can
+// render "💻 texuz · mac (v0.5.6)" instead of an opaque peer UUID.
+// All fields are optional; the server treats missing values as "".
+//
+// ClientID is the stable per-install UUID the client also passes as
+// X-Client-ID on /logs/upload. When two WS sessions show up with the
+// same ClientID, the dashboard can dedupe / group them.
+type DeviceIdentify struct {
+	Type       string `json:"type"`         // TypeDeviceIdentify
+	ClientID   string `json:"client_id"`    // 32-hex stable per-install ID
+	DeviceName string `json:"device_name"`  // user-set label: "mac", "uy", "ish"
+	Platform   string `json:"platform"`     // runtime.GOOS: darwin / windows / linux / android / ios
+	Arch       string `json:"arch"`         // runtime.GOARCH: amd64 / arm64 / ...
+	Version    string `json:"version"`      // app version, e.g. "0.5.6"
+}
+
 type NickSetVisibility struct {
 	Type       string `json:"type"`
 	Nickname   string `json:"nickname"`
