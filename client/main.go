@@ -32,7 +32,7 @@ import (
 // stuck at "0.5.4", which made the in-app updater see itself as
 // permanently outdated against the GitHub `releases/latest` tag and
 // re-prompt for install on every relaunch.
-const Version = "0.5.6"
+const Version = "0.5.7"
 
 // keep slog import alive even if main.go shrinks
 var _ = slog.LevelInfo

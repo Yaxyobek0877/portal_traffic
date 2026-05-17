@@ -7,7 +7,48 @@ ga rioya qiladi.
 
 ## [Unreleased]
 
-v0.5.6 dan keyingi ishlanma bu yerga yoziladi.
+v0.5.7 dan keyingi ishlanma bu yerga yoziladi.
+
+## [0.5.7] — 2026-05-17
+
+Mahalliy-only desktop ilovaga **web tomondan boshqaruv plane** keldi.
+Endi portal.1pro.uz/admin/dashboard sayti har qurilmaning online
+holatini, qaysi xona ichidaligini va platform/version metadata'sini
+ko'rsatadi, va istalgan qurilmada TCP/UDP portni masofadan ochib
+qo'yish mumkin — target localhost, LAN IP yoki **tashqi domen**
+bo'lishi mumkin. Ushbu reliz hech qanday breaking change qilmaydi;
+yangi WS xabarlari eski server tomonidan ko'rilmasa, mavjud
+portal/chat/transfer oqimlari xuddi avvalgidek ishlaydi.
+
+### Added — Qo'shildi
+
+- **`device.identify` WS xabari.** Mesh signaling.Client WS upgrade
+  bo'lgan zahoti shu xabarni yuboradi: `client_id` (stable
+  per-install UUID), `device_name` (foydalanuvchi qo'yadigan label —
+  "uy", "ish"), `runtime.GOOS`, `runtime.GOARCH`, app `Version`.
+  Server ushbu maydonlarni Connection record'iga yopishtirib, web
+  dashboard `/api/devices` view'da ko'rsatadi. Reconnect loop ham
+  shu xabarni qayta yuboradi — tarmoq uzilishi keyin ham dashboard
+  to'g'ri label bilan ko'radi.
+- **Cmd plane — `cmd.service_expose` / `cmd.service_unexpose` /
+  `cmd.ack`.** Web dashboard'dan "Port ochish" tugmasi bosilganda
+  server WS orqali to'g'ridan-to'g'ri qurilmaga buyruq yuboradi.
+  signaling.Client buyruqni `App.handleRemoteCommand` ga uzatadi;
+  u esa `ExposeService` ni chaqiradi (oddiy UI yo'liga aynan mos
+  keladi: storage persist + mesh announce + Wails event). Target
+  bo'sh = `localhost:port`, to'liq = LAN IP yoki tashqi domen
+  (`example.com:443`).
+- **mesh.Config.ClientID / DeviceName / Platform / Arch / AppVersion
+  / CommandHandler.** Yangi maydonlar; App layer device-identify va
+  command-handler hayoti'ni sozlaydi.
+
+### Improved — Yaxshilandi
+
+- **App.ClientID() yagona helper.** Logsink uchun va device-identify
+  uchun bir xil 32-hex stable ID ishlatiladi — server log'lari
+  `device identified` event'da bu ID'ni yozadi va `/logs/upload`
+  papkasi ham shu ID bilan nomlanadi, demak log fayl ↔ live sessiya
+  oson kross-reference qilinadi.
 
 ## [0.5.6] — 2026-05-11
 
