@@ -24,6 +24,7 @@ import (
 
 	"github.com/pion/webrtc/v4"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"portal_traffic/shared/protocol"
 
 	"portal_traffic_client/crashreport"
 	"portal_traffic_client/lanscan"
@@ -367,6 +368,30 @@ func (a *App) startLogSink() {
 		Logger:    a.logger,
 	})
 	a.mu.Unlock()
+}
+
+// handleRemoteCommand dispatches a server-pushed cmd.* payload to the
+// matching local action. Wired into mesh.Config.CommandHandler so the
+// signaling client invokes us inside its read goroutine; we return
+// the error verbatim and the signaling client turns it into a cmd.ack.
+//
+// Every command runs through the same App-level helpers (ExposeService,
+// UnexposeService) the desktop UI uses, so the resulting state — the
+// persisted row, the mesh announcement, the Wails event surface —
+// matches a user-triggered action exactly. The user's other desktop
+// sessions see the new service via the normal Wails refresh flow.
+func (a *App) handleRemoteCommand(cmd any) error {
+	switch c := cmd.(type) {
+	case protocol.CmdServiceExpose:
+		a.logger.Info("remote command: expose service",
+			"name", c.Name, "protocol", c.Protocol, "port", c.Port, "target", c.Target)
+		return a.ExposeService(c.Name, c.Protocol, c.Port, c.Target)
+	case protocol.CmdServiceUnexpose:
+		a.logger.Info("remote command: unexpose service", "port", c.Port, "protocol", c.Protocol)
+		return a.UnexposeService(c.Port)
+	default:
+		return fmt.Errorf("unsupported command: %T", cmd)
+	}
 }
 
 // ClientID returns the stable per-install identifier, minting one on
@@ -2259,6 +2284,14 @@ func (a *App) bringUpSession(nickname string, makeActive bool, isOwner bool) (*p
 		Platform:   stdruntime.GOOS,
 		Arch:       stdruntime.GOARCH,
 		AppVersion: Version,
+		// Command handler — server pushes cmd.service_expose /
+		// cmd.service_unexpose when the web dashboard asks this
+		// device to open or close a tunneled port. We dispatch to
+		// the existing local APIs so the result is identical to a
+		// user-triggered action: storage gets the row, the active
+		// mesh sessions announce it, the Wails event flow updates
+		// the desktop UI in real time.
+		CommandHandler: a.handleRemoteCommand,
 	})
 	s.fwd = proxy.New(s.mesh, a.logger.With("session", s.localID))
 	s.mesh.SetProxyHandler(s.fwd)

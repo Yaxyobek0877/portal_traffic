@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.bunny.net" crossorigin />
 <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800|jetbrains-mono:400,500,600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/admin/admin.css?v=0.5.9" />
+<link rel="stylesheet" href="/admin/admin.css?v=0.6.0" />
 </head>
 <body>
 
@@ -63,7 +63,7 @@
   </main>
 </div>
 
-<script src="/admin/admin.js?v=0.5.9"></script>
+<script src="/admin/admin.js?v=0.6.0"></script>
 <script>
 (() => {
   const A = window.PortalAdmin;
@@ -185,6 +185,9 @@
             </div>
           </div>
           <div class="card-row-actions">
+            <button type="button" class="btn-mini device-expose" data-peer="${esc(d.peerId)}" data-label="${esc(label)}">
+              ${esc(A.t("dash.devices.expose"))}
+            </button>
             <button type="button" class="btn-mini danger device-signout" data-peer="${esc(d.peerId)}">
               ${esc(A.t("dash.devices.signout"))}
             </button>
@@ -192,6 +195,101 @@
         </div>`;
     }).join("");
     host.innerHTML = `<div class="list">${items}</div>`;
+  }
+
+  // ---------- Expose-service modal ----------
+  // A tiny inline-template modal so we don't ship a dialog library
+  // for what amounts to four inputs. Mounted into <body> on demand,
+  // removed on close. Submits to /api/devices/expose, then refreshes
+  // the device list so the new "in portal: NNN" badge appears once
+  // the device's own announce-service flow propagates.
+  function openExposeModal(peerId, deviceLabel) {
+    const wrap = document.createElement("div");
+    wrap.className = "modal-backdrop";
+    wrap.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="expose-title">
+        <div class="modal-head">
+          <h3 id="expose-title">${esc(A.t("dash.expose.title"))}</h3>
+          <button type="button" class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <p class="modal-intro">${esc(A.t("dash.expose.intro"))}</p>
+        <p class="modal-target"><span class="mono">${esc(deviceLabel)}</span></p>
+        <form class="modal-form">
+          <label class="modal-field">
+            <span>${esc(A.t("dash.expose.name"))}</span>
+            <input type="text" name="name" maxlength="40" placeholder="${esc(A.t("dash.expose.name.ph"))}" />
+          </label>
+          <div class="modal-row">
+            <label class="modal-field">
+              <span>${esc(A.t("dash.expose.proto"))}</span>
+              <select name="protocol">
+                <option value="tcp" selected>TCP</option>
+                <option value="udp">UDP</option>
+              </select>
+            </label>
+            <label class="modal-field">
+              <span>${esc(A.t("dash.expose.port"))}</span>
+              <input type="number" name="port" min="1" max="65535" required placeholder="${esc(A.t("dash.expose.port.ph"))}" />
+            </label>
+          </div>
+          <label class="modal-field">
+            <span>${esc(A.t("dash.expose.target"))}</span>
+            <input type="text" name="target" maxlength="120" placeholder="${esc(A.t("dash.expose.target.ph"))}" />
+          </label>
+          <div class="modal-status" role="status" aria-live="polite"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn-mini modal-cancel">${esc(A.t("dash.expose.cancel"))}</button>
+            <button type="submit" class="btn-mini accent modal-submit">${esc(A.t("dash.expose.submit"))}</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+    const close = () => { wrap.remove(); };
+    wrap.addEventListener("click", (ev) => { if (ev.target === wrap) close(); });
+    wrap.querySelector(".modal-close").addEventListener("click", close);
+    wrap.querySelector(".modal-cancel").addEventListener("click", close);
+
+    // Escape closes too.
+    const onEsc = (ev) => { if (ev.key === "Escape") { close(); document.removeEventListener("keydown", onEsc); } };
+    document.addEventListener("keydown", onEsc);
+
+    wrap.querySelector("input[name=name]").focus();
+
+    const form = wrap.querySelector(".modal-form");
+    const status = wrap.querySelector(".modal-status");
+    const submit = wrap.querySelector(".modal-submit");
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const data = new FormData(form);
+      const body = {
+        peerId: peerId,
+        name: (data.get("name") || "").toString().trim(),
+        protocol: data.get("protocol") || "tcp",
+        port: parseInt(data.get("port") || "0", 10),
+        target: (data.get("target") || "").toString().trim(),
+      };
+      submit.disabled = true;
+      status.className = "modal-status";
+      status.textContent = "…";
+      try {
+        await A.api("/api/devices/expose", { method: "POST", body });
+        status.className = "modal-status ok";
+        status.textContent = A.t("dash.expose.success");
+        refresh();
+        setTimeout(close, 900);
+      } catch (err) {
+        status.className = "modal-status err";
+        // Map a few common backend errors to friendlier text.
+        const code = err.code || "";
+        const friendlyKey = "dash.expose.err." + code;
+        const dictHit = A.t(friendlyKey);
+        status.textContent = dictHit === friendlyKey ? (err.code || "error") : dictHit;
+        submit.disabled = false;
+      }
+    });
   }
 
   function renderPortals() {
@@ -312,6 +410,13 @@
           copyBtn.classList.remove("flash");
         }, 1400);
       } catch (_) { /* clipboard blocked — value stays user-selectable */ }
+      return;
+    }
+
+    // Expose service on a device.
+    const expBtn = ev.target.closest(".device-expose");
+    if (expBtn) {
+      openExposeModal(expBtn.dataset.peer || "", expBtn.dataset.label || "");
       return;
     }
 

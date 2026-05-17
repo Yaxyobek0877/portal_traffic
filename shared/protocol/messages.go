@@ -45,6 +45,18 @@ const (
 	TypeWebRTCAnswer = "webrtc.answer"
 	TypeWebRTCICE    = "webrtc.ice"
 
+	// Server → Client commands.
+	// Pushed by the signaling server when the web dashboard asks a
+	// specific device to do something on its owner's behalf
+	// (currently: expose/unexpose a TCP/UDP service). The client
+	// runs the action and ACKs back via TypeCmdAck.
+	TypeCmdServiceExpose   = "cmd.service_expose"
+	TypeCmdServiceUnexpose = "cmd.service_unexpose"
+	// Client → Server response, matched against the original command's
+	// RequestID. The HTTP handler that started the round-trip blocks
+	// on the ack channel up to a short timeout and returns the result.
+	TypeCmdAck = "cmd.ack"
+
 	// P2P-only (sent over the `control` data channel after WebRTC is up).
 	// Documented here so client and any future debug tooling share definitions.
 	TypePing                = "ping"
@@ -380,6 +392,45 @@ type ServiceListRequest struct {
 type ServiceListResponse struct {
 	Type     string          `json:"type"`
 	Services []ServiceExpose `json:"services"`
+}
+
+// ----------------------------------------------------------------------------
+// Server → Client commands
+// ----------------------------------------------------------------------------
+
+// CmdServiceExpose tells a specific device to register a TCP/UDP
+// service so peers in the same portal can reach it. Target may be
+// "" (= localhost:Port), a LAN IP ("192.168.1.50:554") or a remote
+// host ("example.com:443") — the device's proxy dials the target
+// when peers open the stream, no separate config needed.
+//
+// The server attaches RequestID on send. The client must echo it
+// back in a TypeCmdAck once the action completes (or fails).
+type CmdServiceExpose struct {
+	Type      string `json:"type"`
+	RequestID string `json:"request_id"`
+	Name      string `json:"name"`
+	Protocol  string `json:"protocol"` // "tcp" | "udp"
+	Port      int    `json:"port"`
+	Target    string `json:"target,omitempty"` // host:port — "" means localhost:Port
+}
+
+// CmdServiceUnexpose asks the device to remove an existing service.
+type CmdServiceUnexpose struct {
+	Type      string `json:"type"`
+	RequestID string `json:"request_id"`
+	Port      int    `json:"port"`
+	Protocol  string `json:"protocol"`
+}
+
+// CmdAck is the client's reply to any cmd.* sent by the server.
+// OK=false plus a non-empty Error means the action failed and the
+// HTTP caller should surface the message to the user.
+type CmdAck struct {
+	Type      string `json:"type"`
+	RequestID string `json:"request_id"`
+	OK        bool   `json:"ok"`
+	Error     string `json:"error,omitempty"`
 }
 
 // ----------------------------------------------------------------------------

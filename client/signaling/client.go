@@ -47,6 +47,16 @@ type Event struct {
 	Raw []byte
 }
 
+// CommandHandler is invoked when the server pushes a cmd.* over the
+// WS. The handler should run the action and return the result; the
+// client wraps the return into a cmd.ack and sends it back.
+//
+// The cmd argument is one of:
+//   - protocol.CmdServiceExpose
+//   - protocol.CmdServiceUnexpose
+// The handler returns ok=true on success or an error to surface.
+type CommandHandler func(cmd any) error
+
 // Client is the typed WebSocket client.
 type Client struct {
 	url    string
@@ -56,6 +66,12 @@ type Client struct {
 	connMu sync.Mutex // protects writes to conn
 
 	events chan Event
+
+	// cmdHandler is invoked from the read pump for inbound cmd.*
+	// frames. Optional — without one, commands are acked with
+	// "no_handler" so the server doesn't hang.
+	cmdMu      sync.RWMutex
+	cmdHandler CommandHandler
 
 	closed    atomic.Bool
 	closeOnce sync.Once
@@ -117,6 +133,27 @@ func (c *Client) Close() error {
 // ----------------------------------------------------------------------------
 // Outbound (typed senders)
 // ----------------------------------------------------------------------------
+
+// SetCommandHandler registers a handler invoked for inbound cmd.*
+// messages (currently cmd.service_expose / cmd.service_unexpose).
+// Safe to call before Dial returns — the read pump won't dispatch
+// until at least one frame has arrived.
+func (c *Client) SetCommandHandler(fn CommandHandler) {
+	c.cmdMu.Lock()
+	c.cmdHandler = fn
+	c.cmdMu.Unlock()
+}
+
+// SendAck replies to a server-initiated command. Plain JSON write —
+// no reply expected.
+func (c *Client) SendAck(requestID string, ok bool, errMsg string) error {
+	return c.send(protocol.CmdAck{
+		Type:      protocol.TypeCmdAck,
+		RequestID: requestID,
+		OK:        ok,
+		Error:     errMsg,
+	})
+}
 
 // SendDeviceIdentify ships per-install metadata to the server right
 // after the WebSocket comes up. It's strictly informational — the
@@ -251,6 +288,17 @@ func (c *Client) readPump() {
 			}
 			return
 		}
+		// Commands take a fast-path: they're side effects on the local
+		// device, not portal-state events, so they bypass the Events
+		// channel entirely. Bad payloads ack with the error string so
+		// the server's HTTP caller still gets a response.
+		if t, err := protocol.TypeOf(raw); err == nil {
+			switch t {
+			case protocol.TypeCmdServiceExpose, protocol.TypeCmdServiceUnexpose:
+				c.handleCommand(t, raw)
+				continue
+			}
+		}
 		ev, err := c.decodeEvent(raw)
 		if err != nil {
 			c.logger.Warn("signaling decode error", "err", err, "raw", string(raw))
@@ -261,6 +309,56 @@ func (c *Client) readPump() {
 		// they can hold us up — that's correct backpressure.
 		c.events <- ev
 	}
+}
+
+// handleCommand decodes a cmd.* frame, runs it through the registered
+// handler in a goroutine (so the read pump isn't blocked), and writes
+// the ack back. Always sends an ack — even when no handler is set —
+// so the HTTP caller on the server side never times out silently.
+func (c *Client) handleCommand(msgType string, raw []byte) {
+	var reqID string
+	var payload any
+	switch msgType {
+	case protocol.TypeCmdServiceExpose:
+		v := &protocol.CmdServiceExpose{}
+		if err := json.Unmarshal(raw, v); err != nil {
+			c.logger.Warn("cmd.service_expose decode failed", "err", err)
+			return
+		}
+		c.logger.Info("recv cmd.service_expose",
+			"request_id", v.RequestID, "name", v.Name,
+			"protocol", v.Protocol, "port", v.Port, "target", v.Target)
+		reqID = v.RequestID
+		payload = *v
+	case protocol.TypeCmdServiceUnexpose:
+		v := &protocol.CmdServiceUnexpose{}
+		if err := json.Unmarshal(raw, v); err != nil {
+			c.logger.Warn("cmd.service_unexpose decode failed", "err", err)
+			return
+		}
+		c.logger.Info("recv cmd.service_unexpose",
+			"request_id", v.RequestID, "port", v.Port, "protocol", v.Protocol)
+		reqID = v.RequestID
+		payload = *v
+	default:
+		return
+	}
+
+	c.cmdMu.RLock()
+	fn := c.cmdHandler
+	c.cmdMu.RUnlock()
+
+	go func() {
+		var ackErr string
+		if fn == nil {
+			ackErr = "no_handler"
+		} else if err := fn(payload); err != nil {
+			ackErr = err.Error()
+		}
+		if err := c.SendAck(reqID, ackErr == "", ackErr); err != nil {
+			c.logger.Debug("cmd.ack write failed", "err", err)
+		}
+	}()
 }
 
 // decodeEvent inspects the type field and unmarshals into the matching

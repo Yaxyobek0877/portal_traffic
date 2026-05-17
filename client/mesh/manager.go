@@ -74,6 +74,14 @@ type Config struct {
 	Arch       string // runtime.GOARCH
 	AppVersion string // current binary version, e.g. "0.5.6"
 
+	// CommandHandler receives server-pushed cmd.* messages
+	// (web dashboard → device control plane). Set by the App layer
+	// so the handler can call ExposeService / SetExposeEnabled.
+	// Nil leaves the signaling Client's default behaviour, which
+	// acks "no_handler" so the HTTP caller gets a deterministic
+	// error rather than a silent timeout.
+	CommandHandler signaling.CommandHandler
+
 	// Optional TURN server. If TurnURL is non-empty it's appended
 	// to ICEServers along with the credentials. Required for
 	// peers behind symmetric NAT or CGNAT — without TURN those
@@ -377,6 +385,13 @@ func (m *Manager) dial(ctx context.Context) error {
 		return err
 	}
 	m.sig = c
+	// Command handler covers server-pushed cmd.* messages from the
+	// web dashboard. Set BEFORE the first frame is dispatched so we
+	// never miss an early expose request. Nil is fine — the client
+	// auto-acks "no_handler" in that case.
+	if m.cfg.CommandHandler != nil {
+		c.SetCommandHandler(m.cfg.CommandHandler)
+	}
 	// Best-effort device self-id immediately after the upgrade so the
 	// /api/devices view on the dashboard can label this connection
 	// before any portal action runs. Failure here is non-fatal — the
@@ -559,6 +574,12 @@ func (m *Manager) attemptReconnect() bool {
 			_ = old.Close()
 		}
 
+		// Re-attach the command handler — the new client instance
+		// otherwise starts handler-less and would auto-ack
+		// "no_handler" for inbound expose requests after a reconnect.
+		if m.cfg.CommandHandler != nil {
+			m.sig.SetCommandHandler(m.cfg.CommandHandler)
+		}
 		// Same self-id we send on first dial — repeated here so the
 		// dashboard sees the reconnected session immediately, with
 		// the correct platform/version labels.
